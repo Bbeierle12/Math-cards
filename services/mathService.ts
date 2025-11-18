@@ -1011,6 +1011,219 @@ const generateIntegralsBasicProblem = (): Problem => {
   };
 };
 
+const generateIntegrationSubstitutionProblem = (): Problem => {
+  // ∫ 2x(x^2 + c)^n dx  -> use u = x^2 + c
+  const n = randInt(2, 4);
+  const c = randInt(1, 5);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'integration-substitution',
+    problemText: `∫ 2x(x² + ${c})^${n} dx\nWhat substitution u should you use?`,
+    answerType: 'expression',
+    correctAnswer: `x^2+${c}`,
+    explanationPrompt: `Explain how to use u-substitution for ∫ 2x(x² + ${c})^${n} dx.`,
+    hint: 'Look for a function whose derivative is also in the integrand.',
+  };
+};
+
+// ===========================
+// MORE TRIGONOMETRY
+// ===========================
+
+const generateTrigIdentitiesProblem = (): Problem => {
+  const identities = [
+    { question: 'sin²θ + cos²θ = ?', answer: '1', name: 'Pythagorean identity' },
+    { question: 'tan θ = ?', answer: 'sinθ/cosθ', name: 'tangent identity' },
+    { question: '1 + tan²θ = ?', answer: 'sec^2θ', name: 'Pythagorean identity' },
+    { question: 'sin(90° - θ) = ?', answer: 'cosθ', name: 'cofunction identity' },
+    { question: 'cos(90° - θ) = ?', answer: 'sinθ', name: 'cofunction identity' },
+  ];
+
+  const chosen = randChoice(identities);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'trig-identities',
+    problemText: `Complete the identity: ${chosen.question}`,
+    answerType: 'expression',
+    correctAnswer: chosen.answer,
+    explanationPrompt: `Explain the ${chosen.name}: ${chosen.question}`,
+    hint: `This is a ${chosen.name}.`,
+  };
+};
+
+const generateTrigEquationsProblem = (): Problem => {
+  const angle = randChoice([30, 45, 60]);
+  const ratio = randChoice(['sin', 'cos', 'tan']);
+
+  const values: { [key: string]: { [key: string]: number } } = {
+    '30': { sin: 0.5, cos: 0.866, tan: 0.577 },
+    '45': { sin: 0.707, cos: 0.707, tan: 1 },
+    '60': { sin: 0.866, cos: 0.5, tan: 1.732 },
+  };
+
+  const value = values[angle.toString()][ratio];
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'trig-equations',
+    problemText: `Solve for θ (0° ≤ θ ≤ 90°): ${ratio}(θ) = ${value.toFixed(3)}`,
+    answerType: 'numeric',
+    correctAnswer: angle,
+    explanationPrompt: `Solve the equation ${ratio}(θ) = ${value.toFixed(3)}.`,
+    hint: 'Think about special angles: 30°, 45°, 60°.',
+  };
+};
+
+const generateInverseTrigProblem = (): Problem => {
+  const values = [
+    { value: 0.5, func: 'sin', angle: 30 },
+    { value: 0.707, func: 'sin', angle: 45 },
+    { value: 0.866, func: 'sin', angle: 60 },
+    { value: 0.5, func: 'cos', angle: 60 },
+    { value: 0.707, func: 'cos', angle: 45 },
+    { value: 0.866, func: 'cos', angle: 30 },
+    { value: 1, func: 'tan', angle: 45 },
+  ];
+
+  const chosen = randChoice(values);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'inverse-trig',
+    problemText: `Evaluate: ${chosen.func}⁻¹(${chosen.value.toFixed(3)}) in degrees`,
+    answerType: 'numeric',
+    correctAnswer: chosen.angle,
+    explanationPrompt: `Explain how to find ${chosen.func}⁻¹(${chosen.value.toFixed(3)}).`,
+    hint: `Which angle has ${chosen.func} = ${chosen.value.toFixed(3)}?`,
+  };
+};
+
+// ===========================
+// ALGEBRA 2 (ADDITIONAL)
+// ===========================
+
+const generateRationalExpressionsProblem = (): Problem => {
+  // Simplify (ax)/(bx) = a/b
+  const a = randInt(2, 9);
+  const b = randInt(2, 9);
+  const gcdVal = gcd(a, b);
+  const simplified = simplifyFraction(a, b);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'rational-expressions',
+    problemText: `Simplify: (${a}x)/(${b}x). What is the simplified numerator?`,
+    answerType: 'numeric',
+    correctAnswer: simplified.numerator,
+    explanationPrompt: `Explain how to simplify (${a}x)/(${b}x).`,
+    hint: 'Cancel common factors in the numerator and denominator.',
+  };
+};
+
+// ===========================
+// PRE-CALCULUS
+// ===========================
+
+const generateFunctionsProblem = (): Problem => {
+  const a = randInt(2, 5);
+  const b = randInt(1, 8);
+  const x = randInt(-5, 5);
+  const result = a * x + b;
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'functions',
+    problemText: `If f(x) = ${a}x + ${b}, find f(${x})`,
+    answerType: 'numeric',
+    correctAnswer: result,
+    explanationPrompt: `Explain how to evaluate f(${x}) when f(x) = ${a}x + ${b}.`,
+    hint: `Substitute ${x} for x in the function.`,
+  };
+};
+
+const generatePolynomialFunctionsProblem = (): Problem => {
+  // Find roots of (x-a)(x-b)
+  const a = randInt(-5, 5);
+  const b = randInt(-5, 5);
+  const sum = -(a + b);
+  const product = a * b;
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'polynomial-functions',
+    problemText: `Find a root of: x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0`,
+    answerType: 'numeric',
+    correctAnswer: a,
+    explanationPrompt: `Find the roots of x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0.`,
+    hint: 'Factor the polynomial or use the quadratic formula.',
+  };
+};
+
+const generateRationalFunctionsProblem = (): Problem => {
+  // Vertical asymptote at x = a for 1/(x-a)
+  const a = randInt(-8, 8);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'rational-functions',
+    problemText: `Find the vertical asymptote of f(x) = 1/(x ${a >= 0 ? '-' : '+'}${Math.abs(a)})`,
+    answerType: 'numeric',
+    correctAnswer: a,
+    explanationPrompt: `Explain how to find vertical asymptotes of rational functions.`,
+    hint: 'Set the denominator equal to zero.',
+  };
+};
+
+const generateExponentialFunctionsProblem = (): Problem => {
+  // Growth: P(t) = P₀ * 2^t
+  const initialValue = randInt(100, 500);
+  const time = randInt(1, 4);
+  const finalValue = initialValue * Math.pow(2, time);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'exponential-functions',
+    problemText: `A population starts at ${initialValue} and doubles every period. What is the population after ${time} period(s)?`,
+    answerType: 'numeric',
+    correctAnswer: finalValue,
+    explanationPrompt: `Explain exponential growth with P(t) = ${initialValue} * 2^t.`,
+    hint: `Use the formula P(t) = P₀ * 2^t`,
+  };
+};
+
+const generateConicSectionsProblem = (): Problem => {
+  const r = randInt(3, 10);
+  const h = randInt(-5, 5);
+  const k = randInt(-5, 5);
+
+  const problemTypes = [
+    {
+      type: 'circle-radius',
+      text: `Find the radius of the circle: (x${h >= 0 ? '-' : '+'}${Math.abs(h)})² + (y${k >= 0 ? '-' : '+'}${Math.abs(k)})² = ${r * r}`,
+      answer: r,
+    },
+    {
+      type: 'circle-center-x',
+      text: `Find the x-coordinate of the center: (x${h >= 0 ? '-' : '+'}${Math.abs(h)})² + (y${k >= 0 ? '-' : '+'}${Math.abs(k)})² = ${r * r}`,
+      answer: h,
+    },
+  ];
+
+  const chosen = randChoice(problemTypes);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'conic-sections',
+    problemText: chosen.text,
+    answerType: 'numeric',
+    correctAnswer: chosen.answer,
+    explanationPrompt: `Explain the standard form of a circle equation.`,
+    hint: 'Standard form: (x-h)² + (y-k)² = r², center (h,k), radius r',
+  };
+};
+
 // ===========================
 // MAIN GENERATOR FUNCTION
 // ===========================
@@ -1072,6 +1285,8 @@ export const generateProblem = (topicId: TopicId): Problem => {
     // Algebra 2
     case 'complex-numbers':
       return generateComplexNumbersProblem();
+    case 'rational-expressions':
+      return generateRationalExpressionsProblem();
     case 'radicals':
       return generateRadicalsProblem();
     case 'logarithms':
@@ -1084,6 +1299,24 @@ export const generateProblem = (topicId: TopicId): Problem => {
       return generateTrigRatiosProblem();
     case 'trig-special-angles':
       return generateTrigSpecialAnglesProblem();
+    case 'trig-identities':
+      return generateTrigIdentitiesProblem();
+    case 'trig-equations':
+      return generateTrigEquationsProblem();
+    case 'inverse-trig':
+      return generateInverseTrigProblem();
+
+    // Pre-Calculus
+    case 'functions':
+      return generateFunctionsProblem();
+    case 'polynomial-functions':
+      return generatePolynomialFunctionsProblem();
+    case 'rational-functions':
+      return generateRationalFunctionsProblem();
+    case 'exponential-functions':
+      return generateExponentialFunctionsProblem();
+    case 'conic-sections':
+      return generateConicSectionsProblem();
 
     // Calculus
     case 'limits':
@@ -1096,6 +1329,8 @@ export const generateProblem = (topicId: TopicId): Problem => {
       return generateChainRuleProblem();
     case 'integrals-basic':
       return generateIntegralsBasicProblem();
+    case 'integration-substitution':
+      return generateIntegrationSubstitutionProblem();
 
     default:
       throw new Error(`Problem generator not yet implemented for topic: ${topicId}`);
