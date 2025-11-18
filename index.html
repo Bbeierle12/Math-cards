@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Practice System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Navigation Header -->
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">Math Practice</h1>
+            <nav class="nav">
+                <button class="nav-btn" id="homeBtn">Home</button>
+                <button class="nav-btn" id="statsBtn">Stats</button>
+                <button class="nav-btn" id="settingsBtn">Settings</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Level Selection Screen -->
+            <section id="levelSelectScreen" class="screen active">
+                <h2 class="screen-title">Choose Your Level</h2>
+                <div class="level-grid" id="levelGrid">
+                    <!-- Levels will be dynamically generated -->
+                </div>
+            </section>
+
+            <!-- Topic Selection Screen -->
+            <section id="topicSelectScreen" class="screen">
+                <button class="back-btn" id="backToLevels">&larr; Back to Levels</button>
+                <h2 class="screen-title" id="topicScreenTitle">Select Topic</h2>
+                <div class="topic-grid" id="topicGrid">
+                    <!-- Topics will be dynamically generated -->
+                </div>
+            </section>
+
+            <!-- Practice Screen -->
+            <section id="practiceScreen" class="screen">
+                <div class="practice-header">
+                    <button class="back-btn" id="backToTopics">&larr; Back to Topics</button>
+                    <div class="practice-info">
+                        <span id="currentTopic" class="topic-label"></span>
+                        <span id="problemCounter" class="counter">Problem 1</span>
+                    </div>
+                    <div class="practice-stats">
+                        <span id="sessionAccuracy" class="stat">Accuracy: 100%</span>
+                        <span id="sessionTimer" class="stat timer">0:00</span>
+                    </div>
+                </div>
+
+                <div class="problem-container">
+                    <div class="problem-display" id="problemDisplay">
+                        <!-- Problem text will be displayed here -->
+                    </div>
+
+                    <div class="answer-section">
+                        <div id="answerInputContainer" class="answer-input-container">
+                            <!-- Input fields will be dynamically generated based on answer type -->
+                        </div>
+
+                        <div class="button-group">
+                            <button class="btn btn-primary" id="checkBtn">Check Answer</button>
+                            <button class="btn btn-secondary" id="skipBtn">Skip</button>
+                            <button class="btn btn-secondary" id="hintBtn">Hint</button>
+                        </div>
+                    </div>
+
+                    <div id="feedbackContainer" class="feedback-container hidden">
+                        <!-- Feedback will be shown here -->
+                    </div>
+
+                    <div id="explanationContainer" class="explanation-container hidden">
+                        <!-- Explanation will be shown here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Stats Screen -->
+            <section id="statsScreen" class="screen">
+                <button class="back-btn" id="backFromStats">&larr; Back</button>
+                <h2 class="screen-title">Your Progress</h2>
+
+                <div class="stats-overview">
+                    <div class="stat-card">
+                        <h3>Total Problems</h3>
+                        <p class="stat-value" id="totalProblems">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Overall Accuracy</h3>
+                        <p class="stat-value" id="overallAccuracy">0%</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Current Streak</h3>
+                        <p class="stat-value" id="currentStreak">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Longest Streak</h3>
+                        <p class="stat-value" id="longestStreak">0</p>
+                    </div>
+                </div>
+
+                <div class="progress-by-level">
+                    <h3>Progress by Level</h3>
+                    <div id="levelProgressContainer">
+                        <!-- Level-specific progress will be shown here -->
+                    </div>
+                </div>
+
+                <div class="achievements">
+                    <h3>Achievements</h3>
+                    <div id="achievementsContainer">
+                        <!-- Achievements will be shown here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Screen -->
+            <section id="settingsScreen" class="screen">
+                <button class="back-btn" id="backFromSettings">&larr; Back</button>
+                <h2 class="screen-title">Settings</h2>
+
+                <div class="settings-group">
+                    <h3>Practice Mode</h3>
+                    <label class="setting-item">
+                        <input type="radio" name="practiceMode" value="guided" checked>
+                        <span>Guided Path (Unlock sequentially)</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="radio" name="practiceMode" value="free">
+                        <span>Free Practice (All topics unlocked)</span>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Display Options</h3>
+                    <label class="setting-item">
+                        <input type="checkbox" id="showTimer" checked>
+                        <span>Show Timer</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="showHints" checked>
+                        <span>Show Hint Button</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="showExplanations" checked>
+                        <span>Show Explanations After Answer</span>
+                    </label>
+                </div>
+
+                <div class="settings-group">
+                    <h3>Data Management</h3>
+                    <button class="btn btn-secondary" id="exportDataBtn">Export Progress</button>
+                    <button class="btn btn-secondary" id="importDataBtn">Import Progress</button>
+                    <button class="btn btn-danger" id="resetDataBtn">Reset All Progress</button>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Math Practice System - Built with passion for learning</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="problemGenerator.js"></script>
+    <script src="answerValidator.js"></script>
+    <script src="progressionSystem.js"></script>
+    <script src="storageManager.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
