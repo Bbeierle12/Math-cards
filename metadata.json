@@ -1,0 +1,5 @@
+{
+  "name": "Math Mastery",
+  "description": "An adaptive learning platform that generates math problems across various topics, validates answers, and tracks user progress. It starts with basic arithmetic and progressively unlocks more advanced topics like algebra, geometry, and calculus as the user demonstrates mastery.",
+  "requestFramePermissions": []
+}
