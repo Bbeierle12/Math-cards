@@ -17,9 +17,12 @@ interface PracticeSessionProps {
 export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
+  const [fractionNumerator, setFractionNumerator] = useState('');
+  const [fractionDenominator, setFractionDenominator] = useState('');
   const [answerStatus, setAnswerStatus] = useState<'idle' | 'correct' | 'incorrect'>('idle');
   const [explanation, setExplanation] = useState<string>('');
   const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
   const topicProgress = useMemo(() => {
     return userProgress.topicProgress[topicId] || { correct: 0, attempted: 0, mastery: false };
@@ -36,8 +39,11 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
   const generateNewProblem = useCallback(() => {
     setCurrentProblem(generateProblem(topicId));
     setUserAnswer('');
+    setFractionNumerator('');
+    setFractionDenominator('');
     setAnswerStatus('idle');
     setExplanation('');
+    setShowHint(false);
   }, [topicId]);
 
   useEffect(() => {
@@ -46,9 +52,19 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
 
   const handleCheckAnswer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentProblem || userAnswer.trim() === '') return;
+    if (!currentProblem) return;
 
-    const isCorrect = validateAnswer(currentProblem, userAnswer);
+    // Format answer based on problem type
+    let formattedAnswer = '';
+    if (currentProblem.answerType === 'fraction') {
+      if (!fractionNumerator.trim() || !fractionDenominator.trim()) return;
+      formattedAnswer = `${fractionNumerator}/${fractionDenominator}`;
+    } else {
+      if (!userAnswer.trim()) return;
+      formattedAnswer = userAnswer;
+    }
+
+    const isCorrect = validateAnswer(currentProblem, formattedAnswer);
     setAnswerStatus(isCorrect ? 'correct' : 'incorrect');
 
     setUserProgress(prevProgress => {
@@ -137,28 +153,89 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       </div>
 
       <form onSubmit={handleCheckAnswer}>
-        <input
-          type="number"
-          step="any"
-          value={userAnswer}
-          onChange={(e) => setUserAnswer(e.target.value)}
-          disabled={answerStatus !== 'idle'}
-          placeholder="Your answer..."
-          autoFocus
-          className={`w-full text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
-            ${answerStatus === 'incorrect' ? 'border-red-500 animate-shake' : 'border-slate-600'}
-          `}
-        />
-        {answerStatus === 'idle' ? (
-          <button type="submit" disabled={!userAnswer.trim()} className="w-full mt-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:transform-none">
-            Check Answer
-          </button>
+        {/* Render input based on answer type */}
+        {currentProblem.answerType === 'fraction' ? (
+          <div className="flex flex-col items-center gap-2">
+            <input
+              type="number"
+              value={fractionNumerator}
+              onChange={(e) => setFractionNumerator(e.target.value)}
+              disabled={answerStatus !== 'idle'}
+              placeholder="Numerator"
+              autoFocus
+              className={`w-48 text-xl p-3 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
+                ${answerStatus === 'incorrect' ? 'border-red-500' : 'border-slate-600'}
+              `}
+            />
+            <div className="w-48 h-0.5 bg-slate-400"></div>
+            <input
+              type="number"
+              value={fractionDenominator}
+              onChange={(e) => setFractionDenominator(e.target.value)}
+              disabled={answerStatus !== 'idle'}
+              placeholder="Denominator"
+              className={`w-48 text-xl p-3 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
+                ${answerStatus === 'incorrect' ? 'border-red-500 animate-shake' : 'border-slate-600'}
+              `}
+            />
+          </div>
         ) : (
-          <button type="button" onClick={generateNewProblem} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105">
-            Next Question
-          </button>
+          <input
+            type={currentProblem.answerType === 'numeric' || currentProblem.answerType === 'decimal-tolerance' ? 'number' : 'text'}
+            step="any"
+            value={userAnswer}
+            onChange={(e) => setUserAnswer(e.target.value)}
+            disabled={answerStatus !== 'idle'}
+            placeholder="Your answer..."
+            autoFocus
+            className={`w-full text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
+              ${answerStatus === 'incorrect' ? 'border-red-500 animate-shake' : 'border-slate-600'}
+            `}
+          />
         )}
+
+        <div className="flex gap-2 mt-4">
+          {answerStatus === 'idle' ? (
+            <>
+              <button
+                type="submit"
+                disabled={
+                  currentProblem.answerType === 'fraction'
+                    ? !fractionNumerator.trim() || !fractionDenominator.trim()
+                    : !userAnswer.trim()
+                }
+                className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:transform-none"
+              >
+                Check Answer
+              </button>
+              {currentProblem.hint && (
+                <button
+                  type="button"
+                  onClick={() => setShowHint(!showHint)}
+                  className="px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-transform transform hover:scale-105"
+                  title="Show hint"
+                >
+                  💡
+                </button>
+              )}
+            </>
+          ) : (
+            <button type="button" onClick={generateNewProblem} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105">
+              Next Question
+            </button>
+          )}
+        </div>
       </form>
+
+      {/* Show hint if requested */}
+      {showHint && currentProblem.hint && answerStatus === 'idle' && (
+        <div className="mt-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 animate-fade-in-up">
+          <p className="text-amber-300 text-sm flex items-center">
+            <LightbulbIcon className="w-4 h-4 mr-2 inline" />
+            <strong>Hint:</strong> <span className="ml-2">{currentProblem.hint}</span>
+          </p>
+        </div>
+      )}
       
       {answerStatus !== 'idle' && (
         <div className={`mt-6 p-4 rounded-lg text-center 
