@@ -245,6 +245,12 @@ export const CURRICULUM: Level[] = [
     title: 'Calculus',
     topics: [
       {
+        id: 'calculus-formulas',
+        title: 'Calculus Formulas',
+        description: 'Reference sheet for derivatives and integrals.',
+        type: 'reference'
+      },
+      {
         id: 'limits',
         title: 'Limits',
         description: 'Evaluate limits of functions.'

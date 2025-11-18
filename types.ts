@@ -46,6 +46,7 @@ export type TopicId =
   'exponential-functions' |
   'conic-sections' |
   // Calculus
+  'calculus-formulas' |
   'limits' |
   'derivatives-basic' |
   'derivatives-product-quotient' |

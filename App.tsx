@@ -7,6 +7,7 @@ import useLocalStorage from './hooks/useLocalStorage';
 import StatsDisplay from './components/StatsDisplay';
 import MultiplicationTableView from './components/MultiplicationTableView';
 import UnitCircleView from './components/UnitCircleView';
+import CalculusFormulaSheet from './components/CalculusFormulaSheet';
 
 export default function App() {
   const [selectedTopicId, setSelectedTopicId] = useState<TopicId | null>(null);
@@ -83,6 +84,9 @@ export default function App() {
         }
         if (selectedTopicId === 'unit-circle') {
             return <UnitCircleView topicId={selectedTopicId} onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'calculus-formulas') {
+            return <CalculusFormulaSheet onComplete={handleSessionComplete} />
         }
     }
     return <PracticeSession
