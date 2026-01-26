@@ -6,6 +6,8 @@ import PracticeSession from './components/PracticeSession';
 import useLocalStorage from './hooks/useLocalStorage';
 import StatsDisplay from './components/StatsDisplay';
 import MultiplicationTableView from './components/MultiplicationTableView';
+import UnitCircleView from './components/UnitCircleView';
+import CalculusFormulaSheet from './components/CalculusFormulaSheet';
 
 export default function App() {
   const [selectedTopicId, setSelectedTopicId] = useState<TopicId | null>(null);
@@ -76,7 +78,16 @@ export default function App() {
           />
     }
     if (selectedTopic.type === 'reference') {
-        return <MultiplicationTableView topicId={selectedTopicId} onComplete={handleSessionComplete} />
+        // Render specific reference views based on topic
+        if (selectedTopicId === 'multiplication-tables') {
+            return <MultiplicationTableView topicId={selectedTopicId} onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'unit-circle') {
+            return <UnitCircleView topicId={selectedTopicId} onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'calculus-formulas') {
+            return <CalculusFormulaSheet onComplete={handleSessionComplete} />
+        }
     }
     return <PracticeSession
             topicId={selectedTopicId}
