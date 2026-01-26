@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { TopicId, Problem, UserProgress } from '../types';
+import { TopicId, Problem, UserProgress, FractionAnswer, CoordinateAnswer } from '../types';
 import { generateProblem, validateAnswer } from '../services/mathService';
-import { getExplanation } from '../services/geminiService';
 import { CURRICULUM, MASTERY_THRESHOLD } from '../constants';
 import ProgressBar from './ProgressBar';
 import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon } from './Icons';
@@ -14,14 +13,20 @@ interface PracticeSessionProps {
   setUserProgress: (value: UserProgress | ((prev: UserProgress) => UserProgress)) => void;
 }
 
+function formatAnswer(answer: Problem['correctAnswer']): string {
+  if (typeof answer === 'number' || typeof answer === 'string') return String(answer);
+  if (Array.isArray(answer)) return answer.map((v, i) => `x${i + 1}=${v}`).join(', ');
+  if ('numerator' in answer && 'denominator' in answer) return `${(answer as FractionAnswer).numerator}/${(answer as FractionAnswer).denominator}`;
+  if ('x' in answer && 'y' in answer) return `(${(answer as CoordinateAnswer).x}, ${(answer as CoordinateAnswer).y})`;
+  return String(answer);
+}
+
 export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
   const [fractionNumerator, setFractionNumerator] = useState('');
   const [fractionDenominator, setFractionDenominator] = useState('');
   const [answerStatus, setAnswerStatus] = useState<'idle' | 'correct' | 'incorrect'>('idle');
-  const [explanation, setExplanation] = useState<string>('');
-  const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
   const topicProgress = useMemo(() => {
@@ -42,7 +47,6 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     setFractionNumerator('');
     setFractionDenominator('');
     setAnswerStatus('idle');
-    setExplanation('');
     setShowHint(false);
   }, [topicId]);
 
@@ -50,7 +54,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     generateNewProblem();
   }, [generateNewProblem]);
 
-  const handleCheckAnswer = async (e: React.FormEvent) => {
+  const handleCheckAnswer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProblem) return;
 
@@ -98,18 +102,6 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
         return newProgress;
     });
 
-    if (!isCorrect) {
-      setIsLoadingExplanation(true);
-      try {
-        const expl = await getExplanation(currentProblem);
-        setExplanation(expl);
-      } catch (error) {
-        console.error("Failed to get explanation:", error);
-        setExplanation("Sorry, couldn't fetch an explanation. Please try again.");
-      } finally {
-        setIsLoadingExplanation(false);
-      }
-    }
   };
 
   if (!currentProblem) {
@@ -242,20 +234,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
           ${answerStatus === 'correct' ? 'bg-green-500/20 text-green-300 animate-pop' : 'bg-red-500/20 text-red-300 animate-fade-in-up'}`}
         >
           <p className="font-bold text-lg">{answerStatus === 'correct' ? 'Correct!' : 'Not quite.'}</p>
-           {answerStatus === 'incorrect' && <p>The correct answer is: <span className="font-bold">{currentProblem.correctAnswer}</span></p>}
-        </div>
-      )}
-
-      {explanation && (
-        <div className="mt-6 p-4 rounded-lg bg-slate-700/70 border border-slate-600 animate-fade-in-up">
-            <h3 className="font-bold text-lg text-amber-300 flex items-center mb-2"><LightbulbIcon className="w-5 h-5 mr-2"/> Explanation</h3>
-            <div className="prose prose-invert prose-sm text-slate-300" dangerouslySetInnerHTML={{__html: explanation}}></div>
-        </div>
-      )}
-      {isLoadingExplanation && (
-        <div className="mt-6 flex justify-center items-center p-4 animate-fade-in-up">
-             <LoaderIcon className="w-8 h-8 animate-spin text-amber-300" />
-             <p className="ml-3 text-amber-300">Generating explanation...</p>
+           {answerStatus === 'incorrect' && <p>The correct answer is: <span className="font-bold">{formatAnswer(currentProblem.correctAnswer)}</span></p>}
         </div>
       )}
 

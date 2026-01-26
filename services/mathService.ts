@@ -19,7 +19,7 @@ const randChoice = <T>(arr: T[]): T => {
 const formatNum = (n: number) => (n < 0 ? `(${n})` : n);
 
 // Helper to simplify fractions (GCD)
-const gcd = (a: number, b: number): number => {
+export const gcd = (a: number, b: number): number => {
   a = Math.abs(a);
   b = Math.abs(b);
   while (b !== 0) {
@@ -31,7 +31,7 @@ const gcd = (a: number, b: number): number => {
 };
 
 // Helper to simplify a fraction
-const simplifyFraction = (num: number, den: number): FractionAnswer => {
+export const simplifyFraction = (num: number, den: number): FractionAnswer => {
   const divisor = gcd(num, den);
   return { numerator: num / divisor, denominator: den / divisor };
 };
