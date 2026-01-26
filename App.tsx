@@ -110,7 +110,7 @@ export default function App() {
         {renderContent()}
       </main>
        <footer className="w-full max-w-4xl text-center mt-12 text-slate-500 text-sm">
-        <p>Built with React, TypeScript, and Tailwind CSS. Powered by Gemini.</p>
+        <p>Built with React, TypeScript, and Tailwind CSS.</p>
       </footer>
     </div>
   );
