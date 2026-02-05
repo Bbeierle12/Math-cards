@@ -1,6 +1,6 @@
 import React from 'react';
 import { TopicId, UserProgress } from '../types';
-import { CURRICULUM } from '../constants';
+import { CURRICULUM, MASTERY_THRESHOLD } from '../constants';
 import ProgressBar from './ProgressBar';
 import { LockIcon, PlayIcon, BookOpenIcon, TrophyIcon } from './Icons';
 
@@ -22,7 +22,7 @@ export default function TopicSelector({ onSelectTopic, userProgress, unlockedTop
               const isPractice = topic.type !== 'reference';
               const progress = userProgress.topicProgress[topic.id];
               const isMastered = progress?.mastery;
-              const masteryPercent = progress ? (progress.correct / 10) * 100 : 0;
+              const masteryPercent = progress ? (progress.correct / MASTERY_THRESHOLD) * 100 : 0;
 
               return (
                 <button
@@ -52,7 +52,7 @@ export default function TopicSelector({ onSelectTopic, userProgress, unlockedTop
                       ) : (
                         <>
                           <ProgressBar percentage={masteryPercent} />
-                          <div className="text-xs text-slate-300 mt-1 text-right">{progress?.correct || 0} / 10</div>
+                          <div className="text-xs text-slate-300 mt-1 text-right">{progress?.correct || 0} / {MASTERY_THRESHOLD}</div>
                         </>
                       )}
                     </div>

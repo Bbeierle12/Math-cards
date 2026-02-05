@@ -45,10 +45,16 @@ describe('simplifyFraction', () => {
     expect(result.denominator).toBe(2);
   });
 
-  it('handles negative denominator', () => {
+  it('handles negative denominator by normalizing sign', () => {
     const result = simplifyFraction(4, -8);
+    expect(result.numerator).toBe(-1);
+    expect(result.denominator).toBe(2);
+  });
+
+  it('handles double negative by normalizing to positive', () => {
+    const result = simplifyFraction(-4, -8);
     expect(result.numerator).toBe(1);
-    expect(result.denominator).toBe(-2);
+    expect(result.denominator).toBe(2);
   });
 });
 

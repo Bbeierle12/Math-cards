@@ -56,7 +56,7 @@ export default function App() {
           }
         } else {
           const prevTopic = level.topics[index - 1];
-          if (userProgress.topicProgress[prevTopic.id]?.mastery || prevTopic.type === 'reference' && unlocked.has(prevTopic.id)) {
+          if (userProgress.topicProgress[prevTopic.id]?.mastery || (prevTopic.type === 'reference' && unlocked.has(prevTopic.id))) {
             unlocked.add(topic.id);
           }
         }

@@ -33,7 +33,14 @@ export const gcd = (a: number, b: number): number => {
 // Helper to simplify a fraction
 export const simplifyFraction = (num: number, den: number): FractionAnswer => {
   const divisor = gcd(num, den);
-  return { numerator: num / divisor, denominator: den / divisor };
+  let simplifiedNum = num / divisor;
+  let simplifiedDen = den / divisor;
+  // Normalize so the denominator is always positive
+  if (simplifiedDen < 0) {
+    simplifiedNum = -simplifiedNum;
+    simplifiedDen = -simplifiedDen;
+  }
+  return { numerator: simplifiedNum, denominator: simplifiedDen };
 };
 
 // ===========================
@@ -328,12 +335,16 @@ const generateSystemsOfEquationsProblem = (): Problem => {
   const x = randInt(2, 8);
   const y = randInt(2, 8);
 
-  const a1 = randInt(1, 5);
-  const b1 = randInt(1, 5);
-  const c1 = a1 * x + b1 * y;
+  let a1: number, b1: number, a2: number, b2: number;
+  // Ensure the system is not linearly dependent (determinant != 0)
+  do {
+    a1 = randInt(1, 5);
+    b1 = randInt(1, 5);
+    a2 = randInt(1, 5);
+    b2 = randInt(1, 5);
+  } while (a1 * b2 - a2 * b1 === 0);
 
-  const a2 = randInt(1, 5);
-  const b2 = randInt(1, 5);
+  const c1 = a1 * x + b1 * y;
   const c2 = a2 * x + b2 * y;
 
   return {
@@ -448,13 +459,13 @@ const generateQuadraticEquationsProblem = (): Problem => {
 // ===========================
 
 const generateAnglesProblem = (): Problem => {
-  const angle1 = randInt(30, 150);
-  const problemTypes = [
-    { type: 'complement', angle2: 90 - angle1, question: 'complementary' },
-    { type: 'supplement', angle2: 180 - angle1, question: 'supplementary' },
-  ];
-
-  const chosen = randChoice(problemTypes);
+  const problemType = randChoice(['complement', 'supplement'] as const);
+  // Complementary: angle must be 1-89 so complement is positive
+  // Supplementary: angle must be 1-179 so supplement is positive
+  const angle1 = problemType === 'complement' ? randInt(1, 89) : randInt(1, 179);
+  const chosen = problemType === 'complement'
+    ? { type: 'complement', angle2: 90 - angle1, question: 'complementary' }
+    : { type: 'supplement', angle2: 180 - angle1, question: 'supplementary' };
 
   return {
     id: crypto.randomUUID(),
