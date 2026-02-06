@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './src/index.css';
 import App from './App';
+import { SettingsProvider } from './contexts/SettingsContext';
 
 function mount() {
   const rootElement = document.getElementById('root');
@@ -12,7 +13,9 @@ function mount() {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
-      <App />
+      <SettingsProvider>
+        <App />
+      </SettingsProvider>
     </React.StrictMode>
   );
 }

@@ -47,9 +47,11 @@ export const simplifyFraction = (num: number, den: number): FractionAnswer => {
 // BASIC ARITHMETIC
 // ===========================
 
-const generateAdditionProblem = (): Problem => {
-  const a = randInt(-10, 10);
-  const b = randInt(-10, 10);
+const generateAdditionProblem = (opts?: NumberRangeOptions): Problem => {
+  const min = opts?.allowNegatives === false ? Math.max(0, opts?.numberRange?.min ?? 0) : (opts?.numberRange?.min ?? -10);
+  const max = opts?.numberRange?.max ?? 10;
+  const a = randInt(min, max);
+  const b = randInt(min, max);
   return {
     id: crypto.randomUUID(),
     topicId: 'addition',
@@ -61,9 +63,11 @@ const generateAdditionProblem = (): Problem => {
   };
 };
 
-const generateSubtractionProblem = (): Problem => {
-  const a = randInt(-10, 10);
-  const b = randInt(-10, 10);
+const generateSubtractionProblem = (opts?: NumberRangeOptions): Problem => {
+  const min = opts?.allowNegatives === false ? Math.max(0, opts?.numberRange?.min ?? 0) : (opts?.numberRange?.min ?? -10);
+  const max = opts?.numberRange?.max ?? 10;
+  const a = randInt(min, max);
+  const b = randInt(min, max);
   return {
     id: crypto.randomUUID(),
     topicId: 'subtraction',
@@ -75,9 +79,11 @@ const generateSubtractionProblem = (): Problem => {
   };
 };
 
-const generateMultiplicationProblem = (): Problem => {
-  const a = randInt(-10, 10);
-  const b = randInt(-10, 10);
+const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
+  const min = opts?.allowNegatives === false ? Math.max(0, opts?.numberRange?.min ?? 0) : (opts?.numberRange?.min ?? -10);
+  const max = opts?.numberRange?.max ?? 10;
+  const a = randInt(min, max);
+  const b = randInt(min, max);
   return {
     id: crypto.randomUUID(),
     topicId: 'multiplication',
@@ -89,12 +95,14 @@ const generateMultiplicationProblem = (): Problem => {
   };
 };
 
-const generateDivisionProblem = (): Problem => {
+const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
+  const min = opts?.allowNegatives === false ? Math.max(1, opts?.numberRange?.min ?? 1) : (opts?.numberRange?.min ?? -10);
+  const max = opts?.numberRange?.max ?? 10;
   let b = 0;
   while (b === 0) {
-    b = randInt(-10, 10);
+    b = randInt(min, max);
   }
-  const result = randInt(-10, 10);
+  const result = randInt(min, max);
   const a = b * result;
   return {
     id: crypto.randomUUID(),
@@ -1239,17 +1247,23 @@ const generateConicSectionsProblem = (): Problem => {
 // MAIN GENERATOR FUNCTION
 // ===========================
 
-export const generateProblem = (topicId: TopicId): Problem => {
+interface NumberRangeOptions {
+  numberRange?: { min: number; max: number };
+  allowNegatives?: boolean;
+}
+
+export const generateProblem = (topicId: TopicId, numberRange?: { min: number; max: number }, allowNegatives?: boolean): Problem => {
+  const opts: NumberRangeOptions = { numberRange, allowNegatives };
   switch (topicId) {
     // Basic Arithmetic
     case 'addition':
-      return generateAdditionProblem();
+      return generateAdditionProblem(opts);
     case 'subtraction':
-      return generateSubtractionProblem();
+      return generateSubtractionProblem(opts);
     case 'multiplication':
-      return generateMultiplicationProblem();
+      return generateMultiplicationProblem(opts);
     case 'division':
-      return generateDivisionProblem();
+      return generateDivisionProblem(opts);
 
     // Pre-Algebra
     case 'simple-linear-equations':

@@ -1,4 +1,4 @@
-import { Level } from './types';
+import { Level, UserSettings } from './types';
 
 export const CURRICULUM: Level[] = [
   {
@@ -306,3 +306,22 @@ export const PRACTICE_MODES = {
   STANDARD: 'standard',
   THOUGHTFUL: 'thoughtful',
 } as const;
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  practiceMode: 'standard',
+  problemsPerSession: 0,
+  showHintsAutomatically: false,
+  showExplanationOnIncorrect: false,
+  masteryThreshold: 10,
+  numberRange: { min: -10, max: 10 },
+  allowNegatives: true,
+  unlockMode: 'sequential',
+  timerEnabled: false,
+  timerDurationSeconds: 60,
+  autoAdvanceOnCorrect: false,
+  theme: 'dark',
+  animationsEnabled: true,
+  fontSize: 'medium',
+  soundEnabled: false,
+  hapticFeedback: false,
+};

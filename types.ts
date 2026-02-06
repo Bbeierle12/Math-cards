@@ -119,3 +119,31 @@ export interface UserProgress {
   currentStreak: number;
   longestStreak: number;
 }
+
+export interface UserSettings {
+  // Practice Preferences
+  practiceMode: 'standard' | 'speed-drill' | 'thoughtful';
+  problemsPerSession: number; // 0 = unlimited
+  showHintsAutomatically: boolean;
+  showExplanationOnIncorrect: boolean;
+
+  // Difficulty & Progression
+  masteryThreshold: number;
+  numberRange: { min: number; max: number };
+  allowNegatives: boolean;
+  unlockMode: 'sequential' | 'free';
+
+  // Timer / Speed Drill
+  timerEnabled: boolean;
+  timerDurationSeconds: number;
+  autoAdvanceOnCorrect: boolean;
+
+  // Appearance
+  theme: 'dark' | 'light' | 'system';
+  animationsEnabled: boolean;
+  fontSize: 'small' | 'medium' | 'large';
+
+  // Audio & Feedback
+  soundEnabled: boolean;
+  hapticFeedback: boolean;
+}
