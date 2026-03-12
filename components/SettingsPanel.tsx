@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserSettings, UserProgress } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 import { XIcon } from './Icons';
 
 interface SettingsPanelProps {
@@ -8,6 +9,8 @@ interface SettingsPanelProps {
   onClose: () => void;
   userProgress: UserProgress;
   setUserProgress: (value: UserProgress | ((prev: UserProgress) => UserProgress)) => void;
+  onSignInClick?: () => void;
+  onEditProfileClick?: () => void;
 }
 
 function Toggle({ checked, onChange, label, description }: {
@@ -159,8 +162,9 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
   );
 }
 
-export default function SettingsPanel({ isOpen, onClose, userProgress, setUserProgress }: SettingsPanelProps) {
+export default function SettingsPanel({ isOpen, onClose, userProgress, setUserProgress, onSignInClick, onEditProfileClick }: SettingsPanelProps) {
   const { settings, updateSettings, resetSettings } = useSettings();
+  const { user, userProfile, signOut } = useAuth();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
 
@@ -202,6 +206,53 @@ export default function SettingsPanel({ isOpen, onClose, userProgress, setUserPr
         </div>
 
         <div className="px-6 py-2">
+          <Section title="Account">
+            {user ? (
+              <div className="space-y-3 py-2">
+                <div className="flex items-center gap-3">
+                  {(userProfile?.photoURL || user.user_metadata?.avatar_url) ? (
+                    <img src={userProfile?.photoURL || user.user_metadata?.avatar_url} alt="" className="w-10 h-10 rounded-full" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-cyan-600 flex items-center justify-center text-sm font-bold text-white">
+                      {(userProfile?.displayName || user.user_metadata?.display_name || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-200 truncate">{userProfile?.displayName || user.user_metadata?.display_name}</div>
+                    <div className="text-xs text-slate-400 truncate">{user.email}</div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); onEditProfileClick?.(); }}
+                    className="flex-1 py-2 px-3 rounded-lg text-sm font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                  >
+                    Edit Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => signOut()}
+                    className="flex-1 py-2 px-3 rounded-lg text-sm font-medium bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 py-2">
+                <p className="text-sm text-slate-400">Sign in to sync your progress across devices.</p>
+                <button
+                  type="button"
+                  onClick={() => { onClose(); onSignInClick?.(); }}
+                  className="w-full py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors"
+                >
+                  Sign In
+                </button>
+              </div>
+            )}
+          </Section>
+
           <Section title="Practice Preferences">
             <SegmentedControl
               value={settings.practiceMode}

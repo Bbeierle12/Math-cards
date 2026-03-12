@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './src/index.css';
 import App from './App';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 function mount() {
   const rootElement = document.getElementById('root');
@@ -13,9 +14,11 @@ function mount() {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
-      <SettingsProvider>
-        <App />
-      </SettingsProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <App />
+        </SettingsProvider>
+      </AuthProvider>
     </React.StrictMode>
   );
 }

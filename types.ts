@@ -138,6 +138,15 @@ export interface UserProgress {
   longestStreak: number;
 }
 
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string | null;
+  createdAt: number;
+  lastLoginAt: number;
+}
+
 export interface UserSettings {
   // Practice Preferences
   practiceMode: 'standard' | 'speed-drill' | 'thoughtful';

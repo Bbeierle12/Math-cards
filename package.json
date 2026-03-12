@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.1",
     "katex": "^0.16.38",
     "mathjs": "^15.1.1",
     "react": "^19.2.0",
