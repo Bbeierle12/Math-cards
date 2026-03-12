@@ -1,5 +1,6 @@
 import { TopicId, Problem, ProblemAnswer, FractionAnswer } from '../types';
 import { PYTHAGOREAN_TRIPLES, SPECIAL_ANGLES } from '../constants';
+import { parse, simplify, evaluate, MathNode } from 'mathjs';
 
 // ===========================
 // UTILITY FUNCTIONS
@@ -25,6 +26,55 @@ const formatTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}
 const formatDecimal = (n: number): string => {
   const s = n.toFixed(1);
   return s.endsWith('.0') ? String(Math.round(n)) : s;
+};
+
+// Normalize expression string for mathjs parsing
+const normalizeMathExpr = (s: string): string =>
+  s.replace(/\s/g, '')
+   .replace(/[²]/g, '^2').replace(/[³]/g, '^3').replace(/[⁴]/g, '^4').replace(/[⁵]/g, '^5')
+   .replace(/\|([^|]+)\|/g, 'abs($1)')    // |x| → abs(x)
+   .replace(/·/g, '*');                     // · → *
+
+// Check if two math expressions are algebraically equal using mathjs.
+// Uses symbolic simplification and numeric spot-checking.
+const expressionsAlgebraicallyEqual = (userExpr: string, correctExpr: string): boolean => {
+  try {
+    const normUser = normalizeMathExpr(userExpr);
+    const normCorrect = normalizeMathExpr(correctExpr);
+
+    // Skip non-math text answers (convergence, divergence, etc.)
+    if (/^[a-z]+$/i.test(normUser) || /^[a-z]+$/i.test(normCorrect)) return false;
+
+    // Try symbolic simplification: simplify(user - correct) === 0
+    try {
+      const diff = simplify(`(${normUser}) - (${normCorrect})`);
+      const diffStr = diff.toString();
+      if (diffStr === '0') return true;
+    } catch { /* symbolic simplification may fail on some expressions */ }
+
+    // Numeric spot-check: evaluate both expressions at several x values
+    const testPoints = [0.5, 1, 1.5, 2, 2.7, 3.1];
+    let allMatch = true;
+    let anyEvaluated = false;
+
+    for (const x of testPoints) {
+      try {
+        const userVal = evaluate(normUser, { x });
+        const correctVal = evaluate(normCorrect, { x });
+        if (typeof userVal === 'number' && typeof correctVal === 'number') {
+          anyEvaluated = true;
+          if (Math.abs(userVal - correctVal) > 0.001) {
+            allMatch = false;
+            break;
+          }
+        }
+      } catch { /* some points may cause evaluation errors (division by zero, etc.) */ }
+    }
+
+    if (anyEvaluated && allMatch) return true;
+  } catch { /* if parsing fails entirely, fall through */ }
+
+  return false;
 };
 
 // Helper to simplify fractions (GCD)
@@ -2188,7 +2238,7 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
 
       // Check additional acceptable answers
       if (problem.acceptableAnswers) {
-        return problem.acceptableAnswers.some(alt => {
+        const matched = problem.acceptableAnswers.some(alt => {
           const cleanAlt = normalizeExpr(String(alt));
           if (cleanAlt === cleanUser) return true;
           const parsedAlt = parseInequality(cleanAlt);
@@ -2199,7 +2249,15 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
           }
           return false;
         });
+        if (matched) return true;
       }
+
+      // mathjs algebraic equivalence: try to simplify (user - correct) to 0,
+      // or evaluate both at several random points and compare
+      if (expressionsAlgebraicallyEqual(userAnswer, problem.correctAnswer as string)) {
+        return true;
+      }
+
       return false;
     }
 
