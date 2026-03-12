@@ -46,8 +46,18 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Partial Fractions</p>
               <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
-                <p>1/((x−a)(x−b)) = A/(x−a) + B/(x−b)</p>
-                <p>1/((x−a)²) = A/(x−a) + B/(x−a)²</p>
+                <p>Distinct linear: A/(x−a) + B/(x−b)</p>
+                <p>Repeated linear: A/(x−a) + B/(x−a)²</p>
+                <p>Irreducible quadratic: (Ax+B)/(x²+bx+c)</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Trig Sub Examples</p>
+              <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
+                <p>∫ √(a²−x²) dx → x = a sin(θ), dx = a cos(θ) dθ</p>
+                <p>∫ dx/(x²√(x²−a²)) → x = a sec(θ)</p>
+                <p>∫ dx/√(x²+a²) → x = a tan(θ)</p>
               </div>
             </div>
 
@@ -102,6 +112,12 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
               <p className="font-semibold text-cyan-300">Comparison Test</p>
               <p className="font-mono text-sm text-slate-200 mt-1">If 0 ≤ aₙ ≤ bₙ: Σbₙ converges → Σaₙ converges</p>
             </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Nth-Term (Divergence) Test</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">If lim a<sub>n</sub> ≠ 0, then Σ aₙ diverges</p>
+              <p className="text-xs text-slate-400 mt-1">Warning: lim aₙ = 0 does NOT guarantee convergence</p>
+            </div>
           </div>
         </div>
 
@@ -146,6 +162,19 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">arctan(x)</span>
               <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)</span>
+            </div>
+          </div>
+
+          <h4 className="text-sm font-bold text-cyan-200 mt-4 mb-2">Error Bounds</h4>
+          <div className="space-y-2 text-sm">
+            <div className="bg-slate-800/50 p-2 rounded">
+              <span className="text-slate-300 font-semibold">Lagrange Remainder</span>
+              <p className="font-mono text-green-300 mt-1">|Rₙ(x)| ≤ M|x−a|<sup>n+1</sup>/(n+1)!</p>
+              <p className="text-xs text-slate-400 mt-1">where M = max|f<sup>(n+1)</sup>(c)| on the interval</p>
+            </div>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <span className="text-slate-300 font-semibold">Alternating Series Remainder</span>
+              <p className="font-mono text-green-300 mt-1">|Error| ≤ |a<sub>n+1</sub>| (first omitted term)</p>
             </div>
           </div>
         </div>
@@ -210,6 +239,16 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             <p className="font-semibold text-amber-300 mb-2">Geometric Sequence</p>
             <p className="text-sm text-slate-300">aₙ = a₁ · rⁿ⁻¹, Sum = a₁(1−rⁿ)/(1−r)</p>
           </div>
+
+          <div className="bg-slate-800/50 p-4 rounded">
+            <p className="font-semibold text-amber-300 mb-2">Monotone Convergence Theorem</p>
+            <p className="text-sm text-slate-300">A bounded, monotonic sequence converges</p>
+          </div>
+
+          <div className="bg-slate-800/50 p-4 rounded">
+            <p className="font-semibold text-amber-300 mb-2">Sequence Convergence</p>
+            <p className="text-sm text-slate-300">If lim(n→∞) aₙ = L (finite), the sequence converges to L</p>
+          </div>
         </div>
       </div>
 
@@ -233,6 +272,43 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Integration of Power Series</p>
             <p className="text-slate-300 mt-1">∫ Σ cₙxⁿ dx = Σ cₙxⁿ⁺¹/(n+1) + C (same R)</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Applications of Integration */}
+      <div className="mt-6 bg-slate-900/50 rounded-lg p-5">
+        <h3 className="text-xl font-bold text-amber-300 mb-4">Applications of Integration</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div className="bg-slate-800/50 p-3 rounded">
+            <p className="font-semibold text-cyan-300">Disk Method</p>
+            <p className="font-mono text-slate-200 mt-1">V = π ∫ₐᵇ [f(x)]² dx</p>
+            <p className="text-xs text-slate-400 mt-1">Revolve y=f(x) around x-axis</p>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded">
+            <p className="font-semibold text-cyan-300">Washer Method</p>
+            <p className="font-mono text-slate-200 mt-1">V = π ∫ₐᵇ ([R(x)]² − [r(x)]²) dx</p>
+            <p className="text-xs text-slate-400 mt-1">R = outer radius, r = inner radius</p>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded">
+            <p className="font-semibold text-cyan-300">Shell Method</p>
+            <p className="font-mono text-slate-200 mt-1">V = 2π ∫ₐᵇ x · f(x) dx</p>
+            <p className="text-xs text-slate-400 mt-1">Revolve around y-axis using vertical shells</p>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded">
+            <p className="font-semibold text-cyan-300">Arc Length (y = f(x))</p>
+            <p className="font-mono text-slate-200 mt-1">L = ∫ₐᵇ √(1 + [f'(x)]²) dx</p>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded">
+            <p className="font-semibold text-cyan-300">Surface Area of Revolution</p>
+            <p className="font-mono text-slate-200 mt-1">S = 2π ∫ₐᵇ f(x)√(1 + [f'(x)]²) dx</p>
+            <p className="text-xs text-slate-400 mt-1">Revolve y=f(x) around x-axis</p>
+          </div>
+          <div className="bg-slate-800/50 p-3 rounded">
+            <p className="font-semibold text-cyan-300">Work</p>
+            <p className="font-mono text-slate-200 mt-1">W = ∫ₐᵇ F(x) dx</p>
+            <p className="text-xs text-slate-400 mt-1">F(x) = force as a function of position</p>
           </div>
         </div>
       </div>

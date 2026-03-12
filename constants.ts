@@ -371,6 +371,16 @@ export const CURRICULUM: Level[] = [
         id: 'polar-coordinates',
         title: 'Polar Coordinates',
         description: 'Convert and graph in polar coordinate systems.'
+      },
+      {
+        id: 'integration-applications',
+        title: 'Applications of Integration',
+        description: 'Volume (disk/washer/shell), arc length, and surface area of revolution.'
+      },
+      {
+        id: 'trig-substitution',
+        title: 'Trigonometric Substitution',
+        description: 'Evaluate integrals using trig substitution techniques.'
       }
     ]
   }

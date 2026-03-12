@@ -69,7 +69,10 @@ export type TopicId =
   'power-series' |
   'taylor-maclaurin' |
   'parametric-equations' |
-  'polar-coordinates';
+  'polar-coordinates' |
+  // Calculus 2 - Additional
+  'integration-applications' |
+  'trig-substitution';
 
 export type AnswerType =
   | 'numeric'           // Single number: 42

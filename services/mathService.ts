@@ -1484,46 +1484,69 @@ const generateTrigIntegralsProblem = (): Problem => {
 };
 
 const generatePartialFractionsProblem = (): Problem => {
-  // ∫ 1/((x-a)(x-b)) dx → decompose to A/(x-a) + B/(x-b)
-  // Using distinct small integers for a and b
-  let a = randInt(1, 5);
-  let b = randInt(-5, -1);
+  const problemType = randChoice(['distinct-linear', 'repeated-linear', 'quadratic']);
 
-  // 1/((x-a)(x-b)) = [1/(a-b)]·[1/(x-a) - 1/(x-b)]
-  // Ask: what is A in the decomposition A/(x-a) + B/(x-b)?
-  // A = 1/(a-b)
+  if (problemType === 'distinct-linear') {
+    const a = randInt(1, 5);
+    const b = randInt(-5, -1);
+    const diff = a - b;
+    const askA = randChoice([true, false]);
 
-  const diff = a - b; // always positive since a>0, b<0
-
-  const problems = [
-    {
-      text: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $A$? (as a fraction like $\\frac{1}{${diff}}$)`,
-      answer: `1/${diff}`,
-      alts: [`1/${diff}`],
+    if (askA) {
+      return {
+        id: crypto.randomUUID(),
+        topicId: 'partial-fractions',
+        problemText: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $A$? (as a fraction like $\\frac{1}{${diff}}$)`,
+        answerType: 'expression',
+        correctAnswer: `1/${diff}`,
+        acceptableAnswers: [`1/${diff}`],
+        explanationPrompt: `Set x = ${a}: 1/(${a} − (${b})) = A → A = 1/${diff}`,
+        hint: `Multiply both sides by $(x - ${a})$ and set $x = ${a}$.`,
+      };
+    } else {
+      return {
+        id: crypto.randomUUID(),
+        topicId: 'partial-fractions',
+        problemText: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $B$?`,
+        answerType: 'expression',
+        correctAnswer: `-1/${diff}`,
+        acceptableAnswers: [`-1/${diff}`],
+        explanationPrompt: `Set x = ${b}: 1/(${b} − ${a}) = B → B = -1/${diff}`,
+        hint: `Multiply both sides by $(x + ${Math.abs(b)})$ and set $x = ${b}$.`,
+      };
+    }
+  } else if (problemType === 'repeated-linear') {
+    const a = randInt(1, 4);
+    const n = randInt(2, 5);
+    // n/((x-a)^2) = A/(x-a) + B/(x-a)^2. Multiply by (x-a)^2: n = A(x-a) + B
+    // Set x=a: B = n. Compare coefficients: A = 0.
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'partial-fractions',
+      problemText: `Decompose: $\\frac{${n}}{(x - ${a})^2} = \\frac{A}{x - ${a}} + \\frac{B}{(x - ${a})^2}$\nWhat is $B$?`,
+      answerType: 'numeric',
+      correctAnswer: n,
+      explanationPrompt: `Multiply both sides by (x-${a})²: ${n} = A(x-${a}) + B. Set x=${a}: B = ${n}.`,
+      hint: `Multiply both sides by $(x - ${a})^2$ and set $x = ${a}$.`,
+    };
+  } else {
+    // Irreducible quadratic: 1/((x-a)(x^2+1)) = A/(x-a) + (Bx+C)/(x^2+1)
+    const a = randInt(1, 3);
+    const denom = a * a + 1;
+    // Multiply by (x-a): at x=a, 1/(a^2+1) = A
+    const answerNum = 1;
+    const answerDen = denom;
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'partial-fractions',
+      problemText: `Decompose: $\\frac{1}{(x - ${a})(x^2 + 1)} = \\frac{A}{x - ${a}} + \\frac{Bx + C}{x^2 + 1}$\nWhat is $A$? (as a fraction)`,
+      answerType: 'expression',
+      correctAnswer: `1/${answerDen}`,
+      acceptableAnswers: [`1/${answerDen}`],
+      explanationPrompt: `Multiply by (x-${a}), set x=${a}: 1/(${a}²+1) = A → A = 1/${answerDen}`,
       hint: `Multiply both sides by $(x - ${a})$ and set $x = ${a}$.`,
-      explanation: `Set x = ${a}: 1/(${a} − (${b})) = A → A = 1/${diff}`,
-    },
-    {
-      text: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $B$?`,
-      answer: `-1/${diff}`,
-      alts: [`-1/${diff}`],
-      hint: `Multiply both sides by $(x + ${Math.abs(b)})$ and set $x = ${b}$.`,
-      explanation: `Set x = ${b}: 1/(${b} − ${a}) = B → B = -1/${diff}`,
-    },
-  ];
-
-  const chosen = randChoice(problems);
-
-  return {
-    id: crypto.randomUUID(),
-    topicId: 'partial-fractions',
-    problemText: chosen.text,
-    answerType: 'expression',
-    correctAnswer: chosen.answer,
-    acceptableAnswers: chosen.alts,
-    explanationPrompt: chosen.explanation,
-    hint: chosen.hint,
-  };
+    };
+  }
 };
 
 const generateImproperIntegralsProblem = (): Problem => {
@@ -1596,7 +1619,7 @@ const generateImproperIntegralsProblem = (): Problem => {
 };
 
 const generateSequencesProblem = (): Problem => {
-  const problemType = randChoice(['arithmetic', 'geometric', 'convergence']);
+  const problemType = randChoice(['arithmetic', 'geometric', 'convergence', 'bounded-monotone']);
 
   if (problemType === 'arithmetic') {
     const a1 = randInt(1, 10);
@@ -1629,6 +1652,43 @@ const generateSequencesProblem = (): Problem => {
       correctAnswer: answer,
       explanationPrompt: `Use $a_n = a_1 \\cdot r^{n-1} = ${a1} \\cdot ${r}^{${n - 1}} = ${answer}$`,
       hint: `Formula: $a_n = a_1 \\cdot r^{n-1}$`,
+    };
+  } else if (problemType === 'bounded-monotone') {
+    const seqs: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+      {
+        text: 'The sequence $a_n = \\frac{n}{n+1}$ is increasing and bounded above by $1$.\nBy the Monotone Convergence Theorem, does it converge? If so, to what?',
+        answer: '1',
+        alts: ['converges to 1', 'converges', 'yes'],
+        hint: 'A bounded, monotonically increasing sequence must converge. Find the limit.',
+        explanation: 'lim(n→∞) n/(n+1) = 1. The sequence is increasing and bounded above by 1, so by the MCT it converges to 1.',
+      },
+      {
+        text: 'The sequence $a_n = \\frac{1}{n!}$ is decreasing and bounded below by $0$.\nBy the Monotone Convergence Theorem, does it converge? If so, to what?',
+        answer: '0',
+        alts: ['converges to 0', 'converges', 'yes'],
+        hint: 'A bounded, monotonically decreasing sequence must converge.',
+        explanation: 'The sequence is decreasing (n! grows) and bounded below by 0. By MCT it converges. lim 1/n! = 0.',
+      },
+      {
+        text: 'Is the sequence $a_n = (-1)^n \\cdot \\frac{1}{n}$ monotonic?',
+        answer: 'no',
+        alts: ['not monotonic', 'no it is not', 'neither'],
+        hint: 'Check: does $a_{n+1} \\geq a_n$ always, or $a_{n+1} \\leq a_n$ always?',
+        explanation: 'The terms alternate sign: 1, -1/2, 1/3, -1/4, ... This is not monotonically increasing or decreasing, so the MCT does not apply directly.',
+      },
+    ];
+
+    const chosen = randChoice(seqs);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'sequences',
+      problemText: chosen.text,
+      answerType: 'expression',
+      correctAnswer: chosen.answer,
+      acceptableAnswers: chosen.alts,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
     };
   } else {
     // Convergence of sequences
@@ -1734,6 +1794,22 @@ const generateSeriesConvergenceProblem = (): Problem => {
       alts: ['diverge', 'divergent'],
       hint: 'For a geometric series, check if $|r| < 1$.',
       explanation: '|r| = 3/2 > 1, so the geometric series diverges.',
+    },
+    {
+      text: 'Apply the Nth-Term Test: $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{n}{n+1}$.\nDoes it converge or diverge?',
+      answer: 'diverges',
+      type: 'expression',
+      alts: ['diverge', 'divergent'],
+      hint: 'Find $\\lim_{n \\to \\infty} a_n$. If it is not $0$, the series diverges.',
+      explanation: 'lim n/(n+1) = 1 ≠ 0, so by the Nth-Term Test, the series diverges.',
+    },
+    {
+      text: 'Apply the Nth-Term Test: $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{1}{n^2}$.\nDoes the Nth-Term Test tell us it converges?',
+      answer: 'no',
+      type: 'expression',
+      alts: ['no', 'inconclusive', 'not enough info'],
+      hint: '$\\lim a_n = 0$, but does that guarantee convergence?',
+      explanation: 'lim 1/n² = 0. The Nth-Term Test is inconclusive when lim=0. (It does converge, but by the p-series test, not the NTT.)',
     },
   ];
 
@@ -1866,6 +1942,20 @@ const generateTaylorMaclaurinProblem = (): Problem => {
       alts: ['0.5', '1/2!'],
       hint: 'The coefficient of $x^n$ in $e^x$ is $\\frac{1}{n!}$',
       explanation: 'eˣ = Σ xⁿ/n!, so coefficient of x² is 1/2! = 1/2.',
+    },
+    {
+      text: 'Using the Lagrange error bound, estimate the max error when approximating $e^x$ by its 3rd-degree Maclaurin polynomial at $x = 0.5$.\n(Round to 4 decimal places)',
+      answer: '0.0026',
+      alts: ['0.003', '1/384'],
+      hint: 'The Lagrange remainder: $|R_n(x)| \\leq \\frac{M|x|^{n+1}}{(n+1)!}$ where $M = \\max|f^{(n+1)}(c)|$ on $[0, x]$.',
+      explanation: 'For eˣ, all derivatives are eˣ. M = e^0.5 ≈ 1.649. |R₃(0.5)| ≤ 1.649·(0.5)⁴/4! = 1.649·0.0625/24 ≈ 0.0043. (Using M=e^0.5). With M=1 (crude bound): 0.0625/24 ≈ 0.0026.',
+    },
+    {
+      text: 'The alternating series $\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{n}$ is approximated by its first 4 terms.\nWhat is the maximum error?',
+      answer: '0.2',
+      alts: ['1/5', '0.2'],
+      hint: 'For an alternating series, the error is bounded by the absolute value of the first omitted term.',
+      explanation: 'First 4 terms sum: 1 - 1/2 + 1/3 - 1/4. The first omitted term is 1/5 = 0.2. By the Alternating Series Remainder, |error| ≤ 1/5 = 0.2.',
     },
   ];
 
@@ -2036,6 +2126,122 @@ const generatePolarCoordinatesProblem = (): Problem => {
   }
 };
 
+const generateIntegrationApplicationsProblem = (): Problem => {
+  const problemType = randChoice(['disk', 'washer', 'shell', 'arc-length', 'surface-area']);
+
+  if (problemType === 'disk') {
+    const a = randInt(2, 5);
+    const vol = Math.round((Math.PI * Math.pow(a, 3) / 3) * 100) / 100;
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'integration-applications',
+      problemText: `Find the volume of the solid formed by revolving $y = x$ around the x-axis from $x = 0$ to $x = ${a}$.\n(Use the disk method. Round to 2 decimal places.)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: vol,
+      tolerance: 0.1,
+      explanationPrompt: `V = π∫₀^${a} x² dx = π[x³/3]₀^${a} = ${a * a * a}π/3 ≈ ${vol}`,
+      hint: 'Disk method: $V = \\pi \\int_a^b [f(x)]^2\\,dx$. Here $f(x) = x$.',
+    };
+  } else if (problemType === 'washer') {
+    const vol = Math.round((2 * Math.PI / 15) * 1000) / 1000;
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'integration-applications',
+      problemText: `Find the volume of the solid formed by revolving the region between $y = x$ and $y = x^2$ (from $x=0$ to $x=1$) around the x-axis.\n(Round to 3 decimal places.)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: vol,
+      tolerance: 0.01,
+      explanationPrompt: `Washer: V = π∫₀¹ (x² − x⁴)dx = π[x³/3 − x⁵/5]₀¹ = π(1/3 − 1/5) = 2π/15 ≈ ${vol}`,
+      hint: 'Washer method: $V = \\pi \\int [R(x)]^2 - [r(x)]^2\\,dx$. Which function is farther from the x-axis on $[0,1]$?',
+    };
+  } else if (problemType === 'shell') {
+    const a = randInt(1, 3);
+    const vol = Math.round((Math.PI * Math.pow(a, 4) / 2) * 100) / 100;
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'integration-applications',
+      problemText: `Use the shell method to find the volume when $y = x^2$ (from $x=0$ to $x=${a}$) is revolved around the y-axis.\n(Round to 2 decimal places.)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: vol,
+      tolerance: 0.1,
+      explanationPrompt: `Shell: V = 2π∫₀^${a} x·x² dx = 2π[x⁴/4]₀^${a} = π·${Math.pow(a, 4)}/2 ≈ ${vol}`,
+      hint: 'Shell method: $V = 2\\pi \\int_a^b x \\cdot f(x)\\,dx$. Here $f(x) = x^2$.',
+    };
+  } else if (problemType === 'arc-length') {
+    const a = randInt(2, 6);
+    const answer = Math.round(a * Math.sqrt(2) * 100) / 100;
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'integration-applications',
+      problemText: `Find the arc length of $y = x$ from $x = 0$ to $x = ${a}$.\n(Round to 2 decimal places.)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: answer,
+      tolerance: 0.05,
+      explanationPrompt: `L = ∫₀^${a} √(1 + [f'(x)]²) dx = ∫₀^${a} √(1+1) dx = ${a}√2 ≈ ${answer}`,
+      hint: 'Arc length: $L = \\int_a^b \\sqrt{1 + [f\'(x)]^2}\\,dx$. Find $f\'(x)$ first.',
+    };
+  } else {
+    const a = randInt(2, 4);
+    const answer = Math.round(Math.PI * Math.sqrt(2) * a * a * 100) / 100;
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'integration-applications',
+      problemText: `Find the surface area when $y = x$ from $x = 0$ to $x = ${a}$ is revolved around the x-axis.\n(Round to 2 decimal places.)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: answer,
+      tolerance: 0.5,
+      explanationPrompt: `S = 2π∫₀^${a} x√(1+1) dx = 2π√2·[x²/2]₀^${a} = π√2·${a * a} ≈ ${answer}`,
+      hint: 'Surface area: $S = 2\\pi \\int f(x)\\sqrt{1 + [f\'(x)]^2}\\,dx$.',
+    };
+  }
+};
+
+const generateTrigSubstitutionProblem = (): Problem => {
+  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+    {
+      text: 'For $\\displaystyle\\int \\sqrt{4 - x^2}\\,dx$, what substitution should you use?',
+      answer: 'x=2sin(theta)',
+      alts: ['x = 2sin(θ)', 'x=2sin(θ)', 'x = 2sinθ', 'x=2sinθ', 'x = 2 sin(theta)', 'x = 2*sin(theta)'],
+      hint: 'The integrand has the form $\\sqrt{a^2 - x^2}$ with $a = 2$.',
+      explanation: 'For √(a²−x²), use x = a sin(θ). Here a = 2, so x = 2sin(θ).',
+    },
+    {
+      text: 'For $\\displaystyle\\int \\frac{dx}{\\sqrt{x^2 + 9}}$, what substitution should you use?',
+      answer: 'x=3tan(theta)',
+      alts: ['x = 3tan(θ)', 'x=3tan(θ)', 'x = 3tanθ', 'x=3tanθ', 'x = 3 tan(theta)', 'x = 3*tan(theta)'],
+      hint: 'The integrand has the form $\\sqrt{x^2 + a^2}$ with $a = 3$.',
+      explanation: 'For √(x²+a²), use x = a tan(θ). Here a = 3, so x = 3tan(θ).',
+    },
+    {
+      text: 'For $\\displaystyle\\int \\frac{dx}{x^2\\sqrt{x^2 - 16}}$, what substitution should you use?',
+      answer: 'x=4sec(theta)',
+      alts: ['x = 4sec(θ)', 'x=4sec(θ)', 'x = 4secθ', 'x=4secθ', 'x = 4 sec(theta)', 'x = 4*sec(theta)'],
+      hint: 'The integrand has the form $\\sqrt{x^2 - a^2}$ with $a = 4$.',
+      explanation: 'For √(x²−a²), use x = a sec(θ). Here a = 4, so x = 4sec(θ).',
+    },
+    {
+      text: 'Evaluate: $\\displaystyle\\int_0^1 \\sqrt{1 - x^2}\\,dx$\n(This is a quarter-circle area)',
+      answer: 'pi/4',
+      alts: ['π/4', 'pi/4', '0.785', '0.7854'],
+      hint: 'Substitute $x = \\sin(\\theta)$, or recognize this as the area of a quarter unit circle.',
+      explanation: '∫₀¹ √(1−x²) dx = area of quarter circle of radius 1 = π/4 ≈ 0.7854.',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'trig-substitution',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
 // ===========================
 // MAIN GENERATOR FUNCTION
 // ===========================
@@ -2171,6 +2377,10 @@ export const generateProblem = (topicId: TopicId, numberRange?: { min: number; m
       return generateParametricEquationsProblem();
     case 'polar-coordinates':
       return generatePolarCoordinatesProblem();
+    case 'integration-applications':
+      return generateIntegrationApplicationsProblem();
+    case 'trig-substitution':
+      return generateTrigSubstitutionProblem();
 
     default:
       throw new Error(`Problem generator not yet implemented for topic: ${topicId}`);
