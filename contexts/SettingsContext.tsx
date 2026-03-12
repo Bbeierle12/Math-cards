@@ -1,9 +1,7 @@
-import React, { createContext, useContext, useCallback, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useCallback } from 'react';
 import { UserSettings } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { useAuth } from './AuthContext';
-import { getUserSettings, setUserSettings as cloudSetSettings } from '../services/supabaseService';
 
 interface SettingsContextValue {
   settings: UserSettings;
@@ -29,50 +27,16 @@ function deepMergeSettings(stored: Partial<UserSettings>, defaults: UserSettings
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [rawSettings, setRawSettings] = useLocalStorage<Partial<UserSettings>>('userSettings', {});
-  const { user } = useAuth();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasSyncedRef = useRef(false);
-
-  useEffect(() => {
-    if (!user) {
-      hasSyncedRef.current = false;
-      return;
-    }
-    if (hasSyncedRef.current) return;
-    hasSyncedRef.current = true;
-
-    getUserSettings(user.id).then(cloudSettings => {
-      if (cloudSettings && Object.keys(cloudSettings).length > 0) {
-        setRawSettings(cloudSettings as Partial<UserSettings>);
-      } else {
-        cloudSetSettings(user.id, rawSettings as Record<string, unknown>).catch(console.error);
-      }
-    }).catch(console.error);
-  }, [user]);
 
   const settings = deepMergeSettings(rawSettings, DEFAULT_SETTINGS);
 
   const updateSettings = useCallback((partial: Partial<UserSettings>) => {
-    setRawSettings(prev => {
-      const next = { ...prev, ...partial };
-
-      if (user) {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-          cloudSetSettings(user.id, next as Record<string, unknown>).catch(console.error);
-        }, 1500);
-      }
-
-      return next;
-    });
-  }, [setRawSettings, user]);
+    setRawSettings(prev => ({ ...prev, ...partial }));
+  }, [setRawSettings]);
 
   const resetSettings = useCallback(() => {
     setRawSettings({});
-    if (user) {
-      cloudSetSettings(user.id, {}).catch(console.error);
-    }
-  }, [setRawSettings, user]);
+  }, [setRawSettings]);
 
   return (
     <SettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
