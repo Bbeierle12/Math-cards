@@ -21,7 +21,7 @@ import ProfileEditModal from './components/ProfileEditModal';
 import { GearIcon } from './components/Icons';
 import { useSettings } from './contexts/SettingsContext';
 import { useAuth } from './contexts/AuthContext';
-import { getUserProgress as cloudGetProgress, setUserProgress as cloudSetProgress } from './services/firestoreService';
+import { getUserProgress as cloudGetProgress, setUserProgress as cloudSetProgress } from './services/supabaseService';
 
 const DEFAULT_PROGRESS: UserProgress = {
   topicProgress: {},

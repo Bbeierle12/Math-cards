@@ -3,7 +3,7 @@ import { UserSettings } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
 import useLocalStorage from '../hooks/useLocalStorage';
 import { useAuth } from './AuthContext';
-import { getUserSettings, setUserSettings as cloudSetSettings } from '../services/firestoreService';
+import { getUserSettings, setUserSettings as cloudSetSettings } from '../services/supabaseService';
 
 interface SettingsContextValue {
   settings: UserSettings;
@@ -33,7 +33,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSyncedRef = useRef(false);
 
-  // On login, load cloud settings
   useEffect(() => {
     if (!user) {
       hasSyncedRef.current = false;
@@ -44,10 +43,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
     getUserSettings(user.id).then(cloudSettings => {
       if (cloudSettings && Object.keys(cloudSettings).length > 0) {
-        setRawSettings(cloudSettings);
+        setRawSettings(cloudSettings as Partial<UserSettings>);
       } else {
-        // Upload local settings to cloud
-        cloudSetSettings(user.id, rawSettings).catch(console.error);
+        cloudSetSettings(user.id, rawSettings as Record<string, unknown>).catch(console.error);
       }
     }).catch(console.error);
   }, [user]);
@@ -58,11 +56,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setRawSettings(prev => {
       const next = { ...prev, ...partial };
 
-      // Debounced Supabase write
       if (user) {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-          cloudSetSettings(user.id, next).catch(console.error);
+          cloudSetSettings(user.id, next as Record<string, unknown>).catch(console.error);
         }, 1500);
       }
 

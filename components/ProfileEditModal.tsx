@@ -11,25 +11,17 @@ export default function ProfileEditModal({ isOpen, onClose }: ProfileEditModalPr
   const { user, userProfile, updateProfile } = useAuth();
   const [displayName, setDisplayName] = useState(userProfile?.displayName || user?.user_metadata?.display_name || '');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   if (!isOpen || !user) return null;
 
-  const photoURL = userProfile?.photoURL || user.user_metadata?.avatar_url;
-
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim()) {
-      setError('Display name is required');
-      return;
-    }
-    setError('');
     setLoading(true);
     try {
-      await updateProfile({ displayName: displayName.trim() });
+      await updateProfile({ displayName });
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update profile');
+    } catch {
+      // silently fail
     } finally {
       setLoading(false);
     }
@@ -37,48 +29,37 @@ export default function ProfileEditModal({ isOpen, onClose }: ProfileEditModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full max-w-sm mx-4 bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl">
-        <div className="flex items-center justify-between px-6 pt-5 pb-2">
-          <h2 className="text-xl font-bold text-cyan-400">Edit Profile</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
-            <XIcon className="w-5 h-5" />
-          </button>
-        </div>
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-sm mx-4 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-6">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+          <XIcon className="w-5 h-5" />
+        </button>
 
-        <form onSubmit={handleSave} className="px-6 pb-6 space-y-4">
-          <div className="flex justify-center">
-            {photoURL ? (
-              <img src={photoURL} alt="" className="w-20 h-20 rounded-full" referrerPolicy="no-referrer" />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-cyan-600 flex items-center justify-center text-2xl font-bold text-white">
-                {displayName.charAt(0).toUpperCase() || '?'}
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-slate-400 text-center">Avatar is set by your sign-in provider</p>
+        <h2 className="text-xl font-bold text-cyan-400 mb-6">Edit Profile</h2>
 
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-200 mb-1">Display Name</label>
+            <label className="block text-sm text-slate-400 mb-1">Display Name</label>
             <input
               type="text"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-gray-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500"
+              className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-gray-200 text-sm focus:outline-none focus:border-cyan-500"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-200 mb-1">Email</label>
-            <p className="text-sm text-slate-400">{user.email}</p>
+            <label className="block text-sm text-slate-400 mb-1">Email</label>
+            <input
+              type="email"
+              value={user.email || ''}
+              disabled
+              className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-400 text-sm cursor-not-allowed"
+            />
           </div>
-
-          {error && <p className="text-sm text-red-400">{error}</p>}
-
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            className="w-full py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
           >
             {loading ? 'Saving...' : 'Save Changes'}
           </button>

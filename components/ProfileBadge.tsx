@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { UserIcon, LogOutIcon } from './Icons';
+import { LogOutIcon } from './Icons';
 
 interface ProfileBadgeProps {
   onSignInClick: () => void;
