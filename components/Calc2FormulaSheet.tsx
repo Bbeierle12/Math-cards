@@ -46,8 +46,12 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Partial Fractions</p>
               <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
+                <p className="text-xs text-slate-400 italic">Distinct linear factors:</p>
                 <p>1/((x−a)(x−b)) = A/(x−a) + B/(x−b)</p>
+                <p className="text-xs text-slate-400 italic mt-2">Repeated linear factor:</p>
                 <p>1/((x−a)²) = A/(x−a) + B/(x−a)²</p>
+                <p className="text-xs text-slate-400 italic mt-2">Irreducible quadratic factor:</p>
+                <p>1/((x−a)(x²+bx+c)) = A/(x−a) + (Bx+C)/(x²+bx+c)</p>
               </div>
             </div>
 
@@ -56,7 +60,25 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
               <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
                 <p>sin²(x) = (1 − cos(2x))/2</p>
                 <p>cos²(x) = (1 + cos(2x))/2</p>
+                <p>sin(x)cos(x) = sin(2x)/2</p>
               </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Key Trig Integrals</p>
+              <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
+                <p>∫ tan(x) dx = −ln|cos(x)| + C = ln|sec(x)| + C</p>
+                <p>∫ sec(x) dx = ln|sec(x) + tan(x)| + C</p>
+                <p>∫ csc(x) dx = −ln|csc(x) + cot(x)| + C</p>
+                <p>∫ cot(x) dx = ln|sin(x)| + C</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">L'Hôpital's Rule</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">If lim f(x)/g(x) = 0/0 or ±∞/±∞:</p>
+              <p className="font-mono text-sm text-slate-200">lim f(x)/g(x) = lim f'(x)/g'(x)</p>
+              <p className="text-xs text-slate-400 mt-1">May be applied repeatedly. Used heavily in convergence tests.</p>
             </div>
           </div>
         </div>
@@ -68,39 +90,71 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Geometric Series</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">Σ arⁿ = a/(1−r) when |r| &lt; 1</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">Σ(n=0 to ∞) arⁿ = a/(1−r) when |r| &lt; 1</p>
+              <p className="text-xs text-slate-400 mt-1">Diverges when |r| ≥ 1</p>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Telescoping Series</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">Σ(bₙ − bₙ₊₁) = b₁ − lim bₙ₊₁</p>
+              <p className="text-xs text-slate-400 mt-1">Write partial sums — most terms cancel</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">p-Series Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">Σ 1/nᵖ converges if p &gt; 1</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">Σ(n=1 to ∞) 1/nᵖ converges if p &gt; 1, diverges if p ≤ 1</p>
+              <p className="text-xs text-slate-400 mt-1">p = 1 is the harmonic series (diverges)</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Ratio Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">L = lim |a<sub>n+1</sub>/a<sub>n</sub>|</p>
-              <p className="text-xs text-slate-400 mt-1">L &lt; 1: converges, L &gt; 1: diverges, L = 1: inconclusive</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">L = lim(n→∞) |a<sub>n+1</sub>/a<sub>n</sub>|</p>
+              <p className="text-xs text-slate-400 mt-1">L &lt; 1: converges absolutely. L &gt; 1: diverges. L = 1: inconclusive.</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Root Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">L = lim |a<sub>n</sub>|<sup>1/n</sup></p>
-              <p className="text-xs text-slate-400 mt-1">Same rules as Ratio Test</p>
-            </div>
-
-            <div className="bg-slate-800/50 p-3 rounded">
-              <p className="font-semibold text-cyan-300">Alternating Series Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">Σ (−1)ⁿbₙ converges if bₙ is decreasing and lim bₙ = 0</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">L = lim(n→∞) |a<sub>n</sub>|<sup>1/n</sup></p>
+              <p className="text-xs text-slate-400 mt-1">L &lt; 1: converges absolutely. L &gt; 1: diverges. L = 1: inconclusive.</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Integral Test</p>
               <p className="font-mono text-sm text-slate-200 mt-1">Σ f(n) and ∫₁<sup>∞</sup> f(x)dx both converge or both diverge</p>
+              <p className="text-xs text-slate-400 mt-1">Requires: f is continuous, positive, and decreasing on [1, ∞)</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Comparison Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">If 0 ≤ aₙ ≤ bₙ: Σbₙ converges → Σaₙ converges</p>
+              <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
+                <p>If 0 ≤ aₙ ≤ bₙ for all n:</p>
+                <p className="ml-2">Σbₙ converges → Σaₙ converges</p>
+                <p className="ml-2">Σaₙ diverges → Σbₙ diverges</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Limit Comparison Test</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">If lim(n→∞) aₙ/bₙ = L, where 0 &lt; L &lt; ∞:</p>
+              <p className="text-xs text-slate-400 mt-1">Then Σaₙ and Σbₙ both converge or both diverge</p>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Alternating Series Test</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">Σ (−1)ⁿbₙ converges if:</p>
+              <div className="text-xs text-slate-400 mt-1 space-y-0.5">
+                <p>1. bₙ &gt; 0 for all n (terms are positive)</p>
+                <p>2. bₙ is decreasing (bₙ₊₁ ≤ bₙ)</p>
+                <p>3. lim(n→∞) bₙ = 0</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Absolute vs Conditional Convergence</p>
+              <div className="text-sm text-slate-200 mt-1 space-y-1">
+                <p><span className="text-cyan-200 font-mono">Absolute:</span> Σ|aₙ| converges → Σaₙ converges</p>
+                <p><span className="text-cyan-200 font-mono">Conditional:</span> Σaₙ converges but Σ|aₙ| diverges</p>
+              </div>
             </div>
           </div>
         </div>
@@ -112,40 +166,58 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Taylor Series</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">f(x) = Σ f<sup>(n)</sup>(a)/n! · (x−a)ⁿ</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">f(x) = Σ(n=0 to ∞) f<sup>(n)</sup>(a)/n! · (x−a)ⁿ</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Maclaurin Series (a = 0)</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">f(x) = Σ f<sup>(n)</sup>(0)/n! · xⁿ</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">f(x) = Σ(n=0 to ∞) f<sup>(n)</sup>(0)/n! · xⁿ</p>
             </div>
           </div>
 
           <h4 className="text-sm font-bold text-cyan-200 mt-4 mb-2">Common Maclaurin Series</h4>
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">e<sup>x</sup></span>
-              <span className="font-mono text-green-300">= Σ xⁿ/n!</span>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <div className="flex justify-between">
+                <span className="text-slate-300">e<sup>x</sup></span>
+                <span className="font-mono text-green-300">= Σ xⁿ/n!</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">R = ∞ (converges for all x)</p>
             </div>
-            <div className="flex justify-between bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">sin(x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)!</span>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <div className="flex justify-between">
+                <span className="text-slate-300">sin(x)</span>
+                <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)!</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">R = ∞ (converges for all x)</p>
             </div>
-            <div className="flex justify-between bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">cos(x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n</sup>/(2n)!</span>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <div className="flex justify-between">
+                <span className="text-slate-300">cos(x)</span>
+                <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n</sup>/(2n)!</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">R = ∞ (converges for all x)</p>
             </div>
-            <div className="flex justify-between bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">1/(1−x)</span>
-              <span className="font-mono text-green-300">= Σ xⁿ, |x| &lt; 1</span>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <div className="flex justify-between">
+                <span className="text-slate-300">1/(1−x)</span>
+                <span className="font-mono text-green-300">= Σ xⁿ</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">R = 1 (|x| &lt; 1)</p>
             </div>
-            <div className="flex justify-between bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">ln(1+x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)<sup>n+1</sup>xⁿ/n, |x| ≤ 1</span>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <div className="flex justify-between">
+                <span className="text-slate-300">ln(1+x)</span>
+                <span className="font-mono text-green-300">= Σ (−1)<sup>n+1</sup>xⁿ/n</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">R = 1 (−1 &lt; x ≤ 1)</p>
             </div>
-            <div className="flex justify-between bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">arctan(x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)</span>
+            <div className="bg-slate-800/50 p-2 rounded">
+              <div className="flex justify-between">
+                <span className="text-slate-300">arctan(x)</span>
+                <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)</span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">R = 1 (|x| ≤ 1)</p>
             </div>
           </div>
         </div>
@@ -156,8 +228,14 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
 
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
-              <p className="font-semibold text-cyan-300">Parametric Derivative</p>
+              <p className="font-semibold text-cyan-300">Parametric First Derivative</p>
               <p className="font-mono text-sm text-slate-200 mt-1">dy/dx = (dy/dt) / (dx/dt)</p>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Parametric Second Derivative</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">d²y/dx² = [d/dt(dy/dx)] / (dx/dt)</p>
+              <p className="text-xs text-slate-400 mt-1">Take d/dt of the first derivative, then divide by dx/dt again</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -170,6 +248,13 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
               <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
                 <p>x = r cos(θ),  y = r sin(θ)</p>
                 <p>r = √(x² + y²),  θ = arctan(y/x)</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/50 p-3 rounded">
+              <p className="font-semibold text-cyan-300">Polar Derivative</p>
+              <div className="font-mono text-sm text-slate-200 mt-1">
+                <p>dy/dx = (dr/dθ · sin(θ) + r cos(θ)) / (dr/dθ · cos(θ) − r sin(θ))</p>
               </div>
             </div>
 
@@ -193,22 +278,32 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">p-Integral Test</p>
-            <p className="text-sm text-slate-300">∫₁<sup>∞</sup> 1/xᵖ dx converges iff p &gt; 1</p>
+            <p className="text-sm text-slate-300">∫₁<sup>∞</sup> 1/xᵖ dx converges iff p &gt; 1, diverges iff p ≤ 1</p>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Comparison Test (Integrals)</p>
-            <p className="text-sm text-slate-300">If 0 ≤ f(x) ≤ g(x) and ∫g converges, then ∫f converges</p>
+            <div className="text-sm text-slate-300 space-y-1">
+              <p>If 0 ≤ f(x) ≤ g(x):</p>
+              <p className="ml-2">∫g converges → ∫f converges</p>
+              <p className="ml-2">∫f diverges → ∫g diverges</p>
+            </div>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Arithmetic Sequence</p>
-            <p className="text-sm text-slate-300">aₙ = a₁ + (n−1)d</p>
+            <div className="text-sm text-slate-300 space-y-1">
+              <p>aₙ = a₁ + (n−1)d</p>
+              <p>Sₙ = n(a₁ + aₙ)/2</p>
+            </div>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Geometric Sequence</p>
-            <p className="text-sm text-slate-300">aₙ = a₁ · rⁿ⁻¹, Sum = a₁(1−rⁿ)/(1−r)</p>
+            <div className="text-sm text-slate-300 space-y-1">
+              <p>aₙ = a₁ · rⁿ⁻¹</p>
+              <p>Sₙ = a₁(1−rⁿ)/(1−r), r ≠ 1</p>
+            </div>
           </div>
         </div>
       </div>
@@ -220,7 +315,8 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Radius of Convergence</p>
-            <p className="text-slate-300 mt-1">R = lim |aₙ/aₙ₊₁| or R = 1/lim |aₙ|<sup>1/n</sup></p>
+            <p className="text-slate-300 mt-1">R = lim(n→∞) |cₙ/cₙ₊₁| or R = 1/lim(n→∞) |cₙ|<sup>1/n</sup></p>
+            <p className="text-xs text-slate-500 mt-1">where cₙ are the series coefficients</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Interval of Convergence</p>
