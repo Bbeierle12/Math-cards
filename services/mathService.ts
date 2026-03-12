@@ -22,6 +22,16 @@ const formatNum = (n: number) => (n < 0 ? `(${n})` : n);
 // Helper to format a constant term with sign (e.g., + 5 or - 5)
 const formatTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}`);
 
+// LaTeX formatting helpers
+const latexNum = (n: number) => (n < 0 ? `(${n})` : `${n}`);
+const latexTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}`);
+const latexSignedCoeff = (n: number, varName: string): string => {
+  if (n === 1) return `+ ${varName}`;
+  if (n === -1) return `- ${varName}`;
+  return n >= 0 ? `+ ${n}${varName}` : `- ${Math.abs(n)}${varName}`;
+};
+const latexFrac = (num: number, den: number): string => `\\frac{${num}}{${den}}`;
+
 // Helper to format a number, stripping unnecessary trailing ".0"
 const formatDecimal = (n: number): string => {
   const s = n.toFixed(1);
@@ -114,7 +124,7 @@ const generateAdditionProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'addition',
-    problemText: `${a} + ${formatNum(b)} = ?`,
+    problemText: `$${a} + ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a + b,
     explanationPrompt: `Explain step-by-step how to solve ${a} + ${b}.`,
@@ -130,7 +140,7 @@ const generateSubtractionProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'subtraction',
-    problemText: `${a} - ${formatNum(b)} = ?`,
+    problemText: `$${a} - ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a - b,
     explanationPrompt: `Explain step-by-step how to solve ${a} - ${b}.`,
@@ -146,7 +156,7 @@ const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'multiplication',
-    problemText: `${a} × ${formatNum(b)} = ?`,
+    problemText: `$${a} \\times ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a * b,
     explanationPrompt: `Explain step-by-step how to solve ${a} * ${b}.`,
@@ -162,7 +172,7 @@ const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'division',
-      problemText: `0 ÷ 1 = ?`,
+      problemText: `$0 \\div 1 = \\;?$`,
       answerType: 'numeric',
       correctAnswer: 0,
       explanationPrompt: `Explain step-by-step how to solve 0 / 1.`,
@@ -178,7 +188,7 @@ const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'division',
-    problemText: `${a} ÷ ${formatNum(b)} = ?`,
+    problemText: `$${a} \\div ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: result,
     explanationPrompt: `Explain step-by-step how to solve ${a} / ${b}.`,
@@ -199,7 +209,7 @@ const generateSimpleLinearEquationProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'simple-linear-equations',
-    problemText: `${a}x + ${b} = ${c}`,
+    problemText: `$${a}x + ${b} = ${c}$`,
     answerType: 'numeric',
     correctAnswer: x,
     explanationPrompt: `Explain step-by-step how to solve for x in the equation ${a}x + ${b} = ${c}.`,
@@ -247,7 +257,7 @@ const generateFractionsBasicProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'fractions-basic',
-    problemText: `${num1}/${den1} ${op} ${num2}/${den2} = ?`,
+    problemText: `$${latexFrac(num1, den1)} ${op === '×' ? '\\times' : op === '÷' ? '\\div' : op} ${latexFrac(num2, den2)} = \\;?$`,
     answerType: 'fraction',
     correctAnswer: simplified,
     explanationPrompt: `Explain how to ${op === '+' ? 'add' : op === '-' ? 'subtract' : op === '×' ? 'multiply' : 'divide'} these fractions: ${num1}/${den1} ${op} ${num2}/${den2}.`,
@@ -281,7 +291,7 @@ const generateDecimalsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'decimals',
-    problemText: `${a} ${op} ${b} = ?`,
+    problemText: `$${a} ${op === '×' ? '\\times' : op} ${b} = \\;?$`,
     answerType: 'decimal-tolerance',
     correctAnswer: Math.round(answer * 100) / 100,
     explanationPrompt: `Explain how to ${op === '+' ? 'add' : op === '-' ? 'subtract' : 'multiply'} ${a} ${op} ${b}.`,
@@ -304,31 +314,31 @@ const generateOrderOfOperationsProblem = (): Problem => {
   switch (problemType) {
     case 1:
       // a + b × c
-      problemText = `${a} + ${b} × ${c}`;
+      problemText = `$${a} + ${b} \\times ${c}$`;
       answer = a + b * c;
       break;
     case 2:
       // (a + b) × c
-      problemText = `(${a} + ${b}) × ${c}`;
+      problemText = `$(${a} + ${b}) \\times ${c}$`;
       answer = (a + b) * c;
       break;
     case 3:
       // a × b + c × d
-      problemText = `${a} × ${b} + ${c} × ${d}`;
+      problemText = `$${a} \\times ${b} + ${c} \\times ${d}$`;
       answer = a * b + c * d;
       break;
     default:
-      problemText = `${a} + ${b}`;
+      problemText = `$${a} + ${b}$`;
       answer = a + b;
   }
 
   return {
     id: crypto.randomUUID(),
     topicId: 'order-of-operations',
-    problemText: `${problemText} = ?`,
+    problemText: `${problemText} $= \\;?$`,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Explain the order of operations (PEMDAS) for solving ${problemText}.`,
+    explanationPrompt: `Explain the order of operations (PEMDAS) for this problem.`,
     hint: 'Remember PEMDAS: Parentheses, Exponents, Multiplication/Division, Addition/Subtraction.',
   };
 };
@@ -358,7 +368,7 @@ const generateIntegersProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'integers',
-    problemText: `${formatNum(a)} ${op} ${formatNum(b)} = ?`,
+    problemText: `$${latexNum(a)} ${op === '×' ? '\\times' : op} ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: answer,
     explanationPrompt: `Explain how to work with negative numbers: ${formatNum(a)} ${op} ${formatNum(b)}.`,
@@ -381,7 +391,7 @@ const generateMultiStepEquationProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'multi-step-equations',
-    problemText: `${a}x ${formatTerm(b)} = ${c}x ${formatTerm(d)}`,
+    problemText: `$${a}x ${latexTerm(b)} = ${c}x ${latexTerm(d)}$`,
     answerType: 'numeric',
     correctAnswer: x,
     explanationPrompt: `Solve for x: ${a}x ${formatTerm(b)} = ${c}x ${formatTerm(d)}.`,
@@ -404,7 +414,7 @@ const generateInequalitiesProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'inequalities',
-    problemText: `Solve for x: ${a}x + ${b} ${op} ${c}`,
+    problemText: `Solve for $x$: $${a}x + ${b} ${op === '≤' ? '\\leq' : op === '≥' ? '\\geq' : op} ${c}$`,
     answerType: 'expression',
     correctAnswer: `x ${op} ${solution}`,
     explanationPrompt: `Solve the inequality: ${a}x + ${b} ${op} ${c}.`,
@@ -432,7 +442,7 @@ const generateSystemsOfEquationsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'systems-of-equations',
-    problemText: `${a1}x + ${b1}y = ${c1}\n${a2}x + ${b2}y = ${c2}\nFind x:`,
+    problemText: `$${a1}x + ${b1}y = ${c1}$\n$${a2}x + ${b2}y = ${c2}$\nFind $x$:`,
     answerType: 'numeric',
     correctAnswer: x,
     explanationPrompt: `Solve this system of equations for x:\n${a1}x + ${b1}y = ${c1}\n${a2}x + ${b2}y = ${c2}`,
@@ -446,9 +456,9 @@ const generateExponentsProblem = (): Problem => {
   const exp2 = randInt(2, 4);
 
   const problemTypes = [
-    { text: `${base}^${exp1} × ${base}^${exp2}`, answer: Math.pow(base, exp1 + exp2), rule: 'multiplication' },
-    { text: `${base}^${exp1 + exp2} ÷ ${base}^${exp2}`, answer: Math.pow(base, exp1), rule: 'division' },
-    { text: `(${base}^${exp1})^${exp2}`, answer: Math.pow(base, exp1 * exp2), rule: 'power' },
+    { text: `$${base}^{${exp1}} \\times ${base}^{${exp2}}$`, answer: Math.pow(base, exp1 + exp2), rule: 'multiplication' },
+    { text: `$${base}^{${exp1 + exp2}} \\div ${base}^{${exp2}}$`, answer: Math.pow(base, exp1), rule: 'division' },
+    { text: `$(${base}^{${exp1}})^{${exp2}}$`, answer: Math.pow(base, exp1 * exp2), rule: 'power' },
   ];
 
   const chosen = randChoice(problemTypes);
@@ -481,14 +491,15 @@ const generatePolynomialsProblem = (): Problem => {
   const resultB = b1 + sign * b2;
   const resultC = c1 + sign * c2;
 
-  const poly1 = `${a1}x² ${b1 >= 0 ? '+' : ''}${b1}x ${c1 >= 0 ? '+' : ''}${c1}`;
-  const poly2 = `${a2}x² ${b2 >= 0 ? '+' : ''}${b2}x ${c2 >= 0 ? '+' : ''}${c2}`;
-  const result = `${resultA}x² ${resultB >= 0 ? '+' : ''}${resultB}x ${resultC >= 0 ? '+' : ''}${resultC}`;
+  const latexPoly = (a: number, b: number, c: number) =>
+    `${a}x^2 ${latexTerm(b)}x ${latexTerm(c)}`;
+  const poly1 = latexPoly(a1, b1, c1);
+  const poly2 = latexPoly(a2, b2, c2);
 
   return {
     id: crypto.randomUUID(),
     topicId: 'polynomials',
-    problemText: `(${poly1}) ${operation} (${poly2})\nWhat is the coefficient of x?`,
+    problemText: `$(${poly1}) ${operation} (${poly2})$\nWhat is the coefficient of $x$?`,
     answerType: 'numeric',
     correctAnswer: resultB,
     explanationPrompt: `Explain how to ${operation === '+' ? 'add' : 'subtract'} these polynomials.`,
@@ -505,16 +516,16 @@ const generateFactoringProblem = (): Problem => {
   const sum = a + b;
   const product = a * b;
 
-  const problemText = `x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product}`;
+  const quadraticLatex = `x^2 ${latexTerm(sum)}x ${latexTerm(product)}`;
 
   return {
     id: crypto.randomUUID(),
     topicId: 'factoring',
-    problemText: `Factor: ${problemText}\nWhat is the smaller constant in the factors?`,
+    problemText: `Factor: $${quadraticLatex}$\nWhat is the smaller constant in the factors?`,
     answerType: 'numeric',
     correctAnswer: Math.min(a, b),
-    explanationPrompt: `Explain how to factor ${problemText}.`,
-    hint: `Find two numbers that multiply to ${product} and add to ${sum}.`,
+    explanationPrompt: `Explain how to factor this quadratic.`,
+    hint: `Find two numbers that multiply to $${product}$ and add to $${sum}$.`,
   };
 };
 
@@ -527,16 +538,16 @@ const generateQuadraticEquationsProblem = (): Problem => {
   const sum = -(a + b);
   const product = a * b;
 
-  const problemText = `x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0`;
+  const quadraticLatex = `x^2 ${latexTerm(sum)}x ${latexTerm(product)} = 0`;
 
   return {
     id: crypto.randomUUID(),
     topicId: 'quadratic-equations',
-    problemText: `Solve for x: ${problemText}\nWhat is the larger solution?`,
+    problemText: `Solve for $x$: $${quadraticLatex}$\nWhat is the larger solution?`,
     answerType: 'numeric',
     correctAnswer: Math.max(a, b),
-    explanationPrompt: `Solve ${problemText} by factoring or using the quadratic formula.`,
-    hint: 'Try factoring first, or use the quadratic formula: x = (-b ± √(b²-4ac)) / 2a',
+    explanationPrompt: `Solve this quadratic by factoring or using the quadratic formula.`,
+    hint: `Try factoring first, or use the quadratic formula: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$`,
   };
 };
 
@@ -556,7 +567,7 @@ const generateAnglesProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'angles',
-    problemText: `What is the ${chosen.question} angle of ${angle1}°?`,
+    problemText: `What is the ${chosen.question} angle of $${angle1}°$?`,
     answerType: 'numeric',
     correctAnswer: chosen.angle2,
     explanationPrompt: `Explain what ${chosen.question} angles are and how to find the ${chosen.question} of ${angle1}°.`,
@@ -573,7 +584,7 @@ const generateTrianglesProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'triangles',
-    problemText: `A triangle has angles of ${angle1}° and ${angle2}°. What is the third angle?`,
+    problemText: `A triangle has angles of $${angle1}°$ and $${angle2}°$. What is the third angle?`,
     answerType: 'numeric',
     correctAnswer: angle3,
     explanationPrompt: `Explain how to find the missing angle in a triangle with angles ${angle1}° and ${angle2}°.`,
@@ -592,13 +603,13 @@ const generatePythagoreanTheoremProblem = (): Problem => {
   let answer: number;
 
   if (missing === 0) {
-    problemText = `A right triangle has legs b = ${b} and hypotenuse c = ${c}. Find leg a.`;
+    problemText = `A right triangle has leg $b = ${b}$ and hypotenuse $c = ${c}$. Find leg $a$.`;
     answer = a;
   } else if (missing === 1) {
-    problemText = `A right triangle has legs a = ${a} and hypotenuse c = ${c}. Find leg b.`;
+    problemText = `A right triangle has leg $a = ${a}$ and hypotenuse $c = ${c}$. Find leg $b$.`;
     answer = b;
   } else {
-    problemText = `A right triangle has legs a = ${a} and b = ${b}. Find the hypotenuse c.`;
+    problemText = `A right triangle has legs $a = ${a}$ and $b = ${b}$. Find the hypotenuse $c$.`;
     answer = c;
   }
 
@@ -608,8 +619,8 @@ const generatePythagoreanTheoremProblem = (): Problem => {
     problemText,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Use the Pythagorean theorem to solve: ${problemText}`,
-    hint: 'Pythagorean theorem: a² + b² = c², where c is the hypotenuse.',
+    explanationPrompt: `Use the Pythagorean theorem to solve this problem.`,
+    hint: 'Pythagorean theorem: $a^2 + b^2 = c^2$, where $c$ is the hypotenuse.',
   };
 };
 
@@ -627,25 +638,25 @@ const generateAreaPerimeterProblem = (): Problem => {
       const length = randInt(5, 15);
       const width = randInt(3, 10);
       if (measurement === 'area') {
-        problemText = `Find the area of a rectangle with length ${length} and width ${width}.`;
+        problemText = `Find the area of a rectangle with length $${length}$ and width $${width}$.`;
         answer = length * width;
-        hint = 'Area = length × width';
+        hint = '$A = l \\times w$';
       } else {
-        problemText = `Find the perimeter of a rectangle with length ${length} and width ${width}.`;
+        problemText = `Find the perimeter of a rectangle with length $${length}$ and width $${width}$.`;
         answer = 2 * (length + width);
-        hint = 'Perimeter = 2(length + width)';
+        hint = '$P = 2(l + w)$';
       }
       break;
     case 'square':
       const side = randInt(5, 15);
       if (measurement === 'area') {
-        problemText = `Find the area of a square with side length ${side}.`;
+        problemText = `Find the area of a square with side length $${side}$.`;
         answer = side * side;
-        hint = 'Area = side²';
+        hint = '$A = s^2$';
       } else {
-        problemText = `Find the perimeter of a square with side length ${side}.`;
+        problemText = `Find the perimeter of a square with side length $${side}$.`;
         answer = 4 * side;
-        hint = 'Perimeter = 4 × side';
+        hint = '$P = 4s$';
       }
       break;
     case 'triangle': {
@@ -653,22 +664,22 @@ const generateAreaPerimeterProblem = (): Problem => {
       const height = randInt(4, 10);
       // Use even base*height to guarantee integer answer
       const adjustedBase = base % 2 === 1 && height % 2 === 1 ? base + 1 : base;
-      problemText = `Find the area of a triangle with base ${adjustedBase} and height ${height}.`;
+      problemText = `Find the area of a triangle with base $${adjustedBase}$ and height $${height}$.`;
       answer = (adjustedBase * height) / 2;
-      hint = 'Area = ½ × base × height';
+      hint = '$A = \\frac{1}{2}bh$';
       break;
     }
     case 'circle':
       const radius = randInt(3, 10);
       usesPI = true;
       if (measurement === 'area') {
-        problemText = `Find the area of a circle with radius ${radius}. (Use π ≈ 3.14)`;
+        problemText = `Find the area of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
         answer = Math.round(3.14 * radius * radius * 100) / 100;
-        hint = 'Area = πr²';
+        hint = '$A = \\pi r^2$';
       } else {
-        problemText = `Find the circumference of a circle with radius ${radius}. (Use π ≈ 3.14)`;
+        problemText = `Find the circumference of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
         answer = Math.round(2 * 3.14 * radius * 100) / 100;
-        hint = 'Circumference = 2πr';
+        hint = '$C = 2\\pi r$';
       }
       break;
     default:
@@ -713,19 +724,19 @@ const generateCirclesProblem = (): Problem => {
 
   switch (problemType) {
     case 'circumference':
-      problemText = `Find the circumference of a circle with radius ${radius}. (Use π ≈ 3.14)`;
+      problemText = `Find the circumference of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
       answer = Math.round(2 * 3.14 * radius * 100) / 100;
-      hint = 'C = 2πr';
+      hint = '$C = 2\\pi r$';
       break;
     case 'area':
-      problemText = `Find the area of a circle with radius ${radius}. (Use π ≈ 3.14)`;
+      problemText = `Find the area of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
       answer = Math.round(3.14 * radius * radius * 100) / 100;
-      hint = 'A = πr²';
+      hint = '$A = \\pi r^2$';
       break;
     case 'diameter':
-      problemText = `A circle has radius ${radius}. What is its diameter?`;
+      problemText = `A circle has radius $${radius}$. What is its diameter?`;
       answer = 2 * radius;
-      hint = 'Diameter = 2 × radius';
+      hint = '$d = 2r$';
       break;
     default:
       problemText = '';
@@ -758,13 +769,13 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
     case 'cube':
       const side = randInt(3, 8);
       if (measurement === 'volume') {
-        problemText = `Find the volume of a cube with side length ${side}.`;
+        problemText = `Find the volume of a cube with side length $${side}$.`;
         answer = side * side * side;
-        hint = 'Volume = side³';
+        hint = '$V = s^3$';
       } else {
-        problemText = `Find the surface area of a cube with side length ${side}.`;
+        problemText = `Find the surface area of a cube with side length $${side}$.`;
         answer = 6 * side * side;
-        hint = 'Surface Area = 6 × side²';
+        hint = '$SA = 6s^2$';
       }
       break;
     case 'rectangular-prism':
@@ -772,13 +783,13 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
       const w = randInt(3, 8);
       const h = randInt(3, 8);
       if (measurement === 'volume') {
-        problemText = `Find the volume of a rectangular prism with length ${l}, width ${w}, and height ${h}.`;
+        problemText = `Find the volume of a rectangular prism: $l=${l}$, $w=${w}$, $h=${h}$.`;
         answer = l * w * h;
-        hint = 'Volume = length × width × height';
+        hint = '$V = lwh$';
       } else {
-        problemText = `Find the surface area of a rectangular prism with length ${l}, width ${w}, and height ${h}.`;
+        problemText = `Find the surface area of a rectangular prism: $l=${l}$, $w=${w}$, $h=${h}$.`;
         answer = 2 * (l * w + l * h + w * h);
-        hint = 'SA = 2(lw + lh + wh)';
+        hint = '$SA = 2(lw + lh + wh)$';
       }
       break;
     case 'cylinder':
@@ -786,26 +797,26 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
       const height = randInt(5, 12);
       usesPI = true;
       if (measurement === 'volume') {
-        problemText = `Find the volume of a cylinder with radius ${r} and height ${height}. (Use π ≈ 3.14)`;
+        problemText = `Find the volume of a cylinder with $r=${r}$, $h=${height}$. (Use $\\pi \\approx 3.14$)`;
         answer = Math.round(3.14 * r * r * height * 100) / 100;
-        hint = 'Volume = πr²h';
+        hint = '$V = \\pi r^2 h$';
       } else {
-        problemText = `Find the surface area of a cylinder with radius ${r} and height ${height}. (Use π ≈ 3.14)`;
+        problemText = `Find the surface area of a cylinder with $r=${r}$, $h=${height}$. (Use $\\pi \\approx 3.14$)`;
         answer = Math.round(2 * 3.14 * r * (r + height) * 100) / 100;
-        hint = 'SA = 2πr(r + h)';
+        hint = '$SA = 2\\pi r(r + h)$';
       }
       break;
     case 'sphere':
       const radius = randInt(3, 8);
       usesPI = true;
       if (measurement === 'volume') {
-        problemText = `Find the volume of a sphere with radius ${radius}. (Use π ≈ 3.14)`;
+        problemText = `Find the volume of a sphere with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
         answer = Math.round((4 / 3) * 3.14 * radius * radius * radius * 100) / 100;
-        hint = 'Volume = (4/3)πr³';
+        hint = '$V = \\frac{4}{3}\\pi r^3$';
       } else {
-        problemText = `Find the surface area of a sphere with radius ${radius}. (Use π ≈ 3.14)`;
+        problemText = `Find the surface area of a sphere with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
         answer = Math.round(4 * 3.14 * radius * radius * 100) / 100;
-        hint = 'SA = 4πr²';
+        hint = '$SA = 4\\pi r^2$';
       }
       break;
     default:
@@ -855,13 +866,13 @@ const generateComplexNumbersProblem = (): Problem => {
   const realPart = a1 + sign * a2;
   const imagPart = b1 + sign * b2;
 
-  const z1 = `${a1} ${b1 >= 0 ? '+' : ''}${b1}i`;
-  const z2 = `${a2} ${b2 >= 0 ? '+' : ''}${b2}i`;
+  const z1 = `${a1} ${latexTerm(b1)}i`;
+  const z2 = `${a2} ${latexTerm(b2)}i`;
 
   return {
     id: crypto.randomUUID(),
     topicId: 'complex-numbers',
-    problemText: `(${z1}) ${operation} (${z2})\nWhat is the imaginary coefficient?`,
+    problemText: `$(${z1}) ${operation} (${z2})$\nWhat is the imaginary coefficient?`,
     answerType: 'numeric',
     correctAnswer: imagPart,
     explanationPrompt: `Explain how to ${operation === '+' ? 'add' : 'subtract'} complex numbers.`,
@@ -881,7 +892,7 @@ const generateRadicalsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'radicals',
-    problemText: `Simplify √${radicand}. What number is outside the radical?`,
+    problemText: `Simplify $\\sqrt{${radicand}}$. What number is outside the radical?`,
     answerType: 'numeric',
     correctAnswer: simplified,
     explanationPrompt: `Explain how to simplify √${radicand}.`,
@@ -897,7 +908,7 @@ const generateLogarithmsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'logarithms',
-    problemText: `log₍${base}₎(${value}) = ?`,
+    problemText: `$\\log_{${base}}(${value}) = \\;?$`,
     answerType: 'numeric',
     correctAnswer: exponent,
     explanationPrompt: `Explain how to evaluate log₍${base}₎(${value}).`,
@@ -917,11 +928,11 @@ const generateSequencesSeriesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'sequences-series',
-      problemText: `An arithmetic sequence starts at ${a1} with common difference ${d}. Find the ${n}th term.`,
+      problemText: `An arithmetic sequence starts at $${a1}$ with common difference $d = ${d}$. Find the $${n}$th term.`,
       answerType: 'numeric',
       correctAnswer: an,
       explanationPrompt: `Explain how to find the ${n}th term of an arithmetic sequence.`,
-      hint: `Use the formula: aₙ = a₁ + (n-1)d`,
+      hint: `Use the formula: $a_n = a_1 + (n-1)d$`,
     };
   } else {
     const a1 = randInt(2, 5);
@@ -932,11 +943,11 @@ const generateSequencesSeriesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'sequences-series',
-      problemText: `A geometric sequence starts at ${a1} with common ratio ${r}. Find the ${n}th term.`,
+      problemText: `A geometric sequence starts at $${a1}$ with common ratio $r = ${r}$. Find the $${n}$th term.`,
       answerType: 'numeric',
       correctAnswer: an,
       explanationPrompt: `Explain how to find the ${n}th term of a geometric sequence.`,
-      hint: `Use the formula: aₙ = a₁ × r^(n-1)`,
+      hint: `Use the formula: $a_n = a_1 \\cdot r^{n-1}$`,
     };
   }
 };
@@ -960,15 +971,15 @@ const generateTrigRatiosProblem = (): Problem => {
     // Angle opposite to side a
     switch (ratio) {
       case 'sin':
-        problemText = `In a right triangle with sides ${a}, ${b}, ${c} (hypotenuse), find sin(θ) where θ is opposite to side ${a}.`;
+        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\sin(\\theta)$ where $\\theta$ is opposite to side $${a}$.`;
         answer = Math.round((a / c) * 1000) / 1000;
         break;
       case 'cos':
-        problemText = `In a right triangle with sides ${a}, ${b}, ${c} (hypotenuse), find cos(θ) where θ is opposite to side ${a}.`;
+        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\cos(\\theta)$ where $\\theta$ is opposite to side $${a}$.`;
         answer = Math.round((b / c) * 1000) / 1000;
         break;
       case 'tan':
-        problemText = `In a right triangle with sides ${a}, ${b}, ${c} (hypotenuse), find tan(θ) where θ is opposite to side ${a}.`;
+        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\tan(\\theta)$ where $\\theta$ is opposite to side $${a}$.`;
         answer = Math.round((a / b) * 1000) / 1000;
         break;
       default:
@@ -979,15 +990,15 @@ const generateTrigRatiosProblem = (): Problem => {
     // Angle opposite to side b
     switch (ratio) {
       case 'sin':
-        problemText = `In a right triangle with sides ${a}, ${b}, ${c} (hypotenuse), find sin(θ) where θ is opposite to side ${b}.`;
+        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\sin(\\theta)$ where $\\theta$ is opposite to side $${b}$.`;
         answer = Math.round((b / c) * 1000) / 1000;
         break;
       case 'cos':
-        problemText = `In a right triangle with sides ${a}, ${b}, ${c} (hypotenuse), find cos(θ) where θ is opposite to side ${b}.`;
+        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\cos(\\theta)$ where $\\theta$ is opposite to side $${b}$.`;
         answer = Math.round((a / c) * 1000) / 1000;
         break;
       case 'tan':
-        problemText = `In a right triangle with sides ${a}, ${b}, ${c} (hypotenuse), find tan(θ) where θ is opposite to side ${b}.`;
+        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\tan(\\theta)$ where $\\theta$ is opposite to side $${b}$.`;
         answer = Math.round((b / a) * 1000) / 1000;
         break;
       default:
@@ -1024,7 +1035,7 @@ const generateTrigSpecialAnglesProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-special-angles',
-    problemText: `Evaluate ${ratio}(${angle}°). Round to 3 decimal places.`,
+    problemText: `Evaluate $\\${ratio}(${angle}°)$. Round to 3 decimal places.`,
     answerType: 'decimal-tolerance',
     correctAnswer: answer,
     tolerance: 0.01,
@@ -1047,7 +1058,7 @@ const generateLimitsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'limits',
-    problemText: `Evaluate: lim (x→${x}) [${a}x ${formatTerm(b)}]`,
+    problemText: `Evaluate: $\\displaystyle\\lim_{x \\to ${x}} \\left[${a}x ${latexTerm(b)}\\right]$`,
     answerType: 'numeric',
     correctAnswer: answer,
     explanationPrompt: `Explain how to evaluate the limit as x approaches ${x} of ${a}x ${formatTerm(b)}.`,
@@ -1065,11 +1076,11 @@ const generateDerivativesBasicProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'derivatives-basic',
-    problemText: `Find the derivative of ${coefficient}x^${exponent}. What is the coefficient?`,
+    problemText: `Find the derivative of $${coefficient}x^{${exponent}}$. What is the coefficient?`,
     answerType: 'numeric',
     correctAnswer: derivativeCoeff,
-    explanationPrompt: `Explain how to find the derivative of ${coefficient}x^${exponent} using the power rule.`,
-    hint: 'Power rule: d/dx[x^n] = nx^(n-1)',
+    explanationPrompt: `Explain how to find this derivative using the power rule.`,
+    hint: `Power rule: $\\frac{d}{dx}[x^n] = nx^{n-1}$`,
   };
 };
 
@@ -1094,22 +1105,22 @@ const generateDerivativesProductQuotientProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'derivatives-product-quotient',
-      problemText: `Find d/dx[x^${a} × x^${b}]. What is the new exponent?`,
+      problemText: `Find $\\frac{d}{dx}\\left[x^{${a}} \\cdot x^{${b}}\\right]$. What is the new exponent?`,
       answerType: 'numeric',
       correctAnswer: a + b - 1,
-      explanationPrompt: `Explain how to find the derivative of x^${a} × x^${b}.`,
-      hint: 'Simplify first: x^a × x^b = x^(a+b), then use power rule.',
+      explanationPrompt: `Explain how to find this derivative.`,
+      hint: `Simplify first: $x^a \\cdot x^b = x^{a+b}$, then use power rule.`,
     };
   } else {
     // d/dx[x^a / x^b] = (a-b)x^(a-b-1)
     return {
       id: crypto.randomUUID(),
       topicId: 'derivatives-product-quotient',
-      problemText: `Simplify then find d/dx[x^${a} / x^${b}]. What is the new exponent?`,
+      problemText: `Simplify then find $\\frac{d}{dx}\\left[\\frac{x^{${a}}}{x^{${b}}}\\right]$. What is the new exponent?`,
       answerType: 'numeric',
       correctAnswer: a - b - 1,
-      explanationPrompt: `Explain how to find the derivative of x^${a} / x^${b}.`,
-      hint: 'Simplify first: x^a / x^b = x^(a-b), then use power rule.',
+      explanationPrompt: `Explain how to find this derivative.`,
+      hint: `Simplify first: $\\frac{x^a}{x^b} = x^{a-b}$, then use power rule.`,
     };
   }
 };
@@ -1125,11 +1136,11 @@ const generateChainRuleProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'chain-rule',
-    problemText: `Find d/dx[(${inner_coeff}x + ${inner_const})^${outer}]. What is the coefficient after applying chain rule?`,
+    problemText: `Find $\\frac{d}{dx}\\left[(${inner_coeff}x + ${inner_const})^{${outer}}\\right]$. What is the coefficient?`,
     answerType: 'numeric',
     correctAnswer: derivativeCoeff,
-    explanationPrompt: `Explain how to use the chain rule to find d/dx[(${inner_coeff}x + ${inner_const})^${outer}].`,
-    hint: 'Chain rule: d/dx[f(g(x))] = f\'(g(x)) × g\'(x)',
+    explanationPrompt: `Explain how to use the chain rule for this problem.`,
+    hint: `Chain rule: $\\frac{d}{dx}[f(g(x))] = f'(g(x)) \\cdot g'(x)$`,
   };
 };
 
@@ -1143,11 +1154,11 @@ const generateIntegralsBasicProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'integrals-basic',
-    problemText: `∫ ${coefficient}x^${exponent} dx. What is the new exponent?`,
+    problemText: `$\\displaystyle\\int ${coefficient}x^{${exponent}}\\,dx$. What is the new exponent?`,
     answerType: 'numeric',
     correctAnswer: integralExp,
-    explanationPrompt: `Explain how to integrate ${coefficient}x^${exponent}.`,
-    hint: 'Power rule for integration: ∫x^n dx = x^(n+1)/(n+1) + C',
+    explanationPrompt: `Explain how to integrate this expression.`,
+    hint: `Power rule: $\\int x^n\\,dx = \\frac{x^{n+1}}{n+1} + C$`,
   };
 };
 
@@ -1159,11 +1170,11 @@ const generateIntegrationSubstitutionProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'integration-substitution',
-    problemText: `∫ 2x(x² + ${c})^${n} dx\nWhat substitution u should you use?`,
+    problemText: `$\\displaystyle\\int 2x(x^2 + ${c})^{${n}}\\,dx$\nWhat substitution $u$ should you use?`,
     answerType: 'expression',
     correctAnswer: `x^2+${c}`,
     acceptableAnswers: [`x²+${c}`, `x^2 + ${c}`, `x² + ${c}`],
-    explanationPrompt: `Explain how to use u-substitution for ∫ 2x(x² + ${c})^${n} dx.`,
+    explanationPrompt: `Explain how to use u-substitution for this integral.`,
     hint: 'Look for a function whose derivative is also in the integrand.',
   };
 };
@@ -1173,12 +1184,12 @@ const generateIntegrationSubstitutionProblem = (): Problem => {
 // ===========================
 
 const generateTrigIdentitiesProblem = (): Problem => {
-  const identities: { question: string; answer: string; name: string; alts?: string[] }[] = [
-    { question: 'sin²θ + cos²θ = ?', answer: '1', name: 'Pythagorean identity' },
-    { question: 'tan θ = ?', answer: 'sinθ/cosθ', name: 'tangent identity', alts: ['sin(θ)/cos(θ)', 'sin θ/cos θ'] },
-    { question: '1 + tan²θ = ?', answer: 'sec^2θ', name: 'Pythagorean identity', alts: ['sec²θ', 'sec^2(θ)'] },
-    { question: 'sin(90° - θ) = ?', answer: 'cosθ', name: 'cofunction identity', alts: ['cos θ', 'cos(θ)'] },
-    { question: 'cos(90° - θ) = ?', answer: 'sinθ', name: 'cofunction identity', alts: ['sin θ', 'sin(θ)'] },
+  const identities: { question: string; display: string; answer: string; name: string; alts?: string[] }[] = [
+    { question: 'sin²θ + cos²θ = ?', display: '$\\sin^2\\theta + \\cos^2\\theta = \\;?$', answer: '1', name: 'Pythagorean identity' },
+    { question: 'tan θ = ?', display: '$\\tan\\theta = \\;?$', answer: 'sinθ/cosθ', name: 'tangent identity', alts: ['sin(θ)/cos(θ)', 'sin θ/cos θ'] },
+    { question: '1 + tan²θ = ?', display: '$1 + \\tan^2\\theta = \\;?$', answer: 'sec^2θ', name: 'Pythagorean identity', alts: ['sec²θ', 'sec^2(θ)'] },
+    { question: 'sin(90° - θ) = ?', display: '$\\sin(90° - \\theta) = \\;?$', answer: 'cosθ', name: 'cofunction identity', alts: ['cos θ', 'cos(θ)'] },
+    { question: 'cos(90° - θ) = ?', display: '$\\cos(90° - \\theta) = \\;?$', answer: 'sinθ', name: 'cofunction identity', alts: ['sin θ', 'sin(θ)'] },
   ];
 
   const chosen = randChoice(identities);
@@ -1186,7 +1197,7 @@ const generateTrigIdentitiesProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-identities',
-    problemText: `Complete the identity: ${chosen.question}`,
+    problemText: `Complete the identity: ${chosen.display}`,
     answerType: 'expression',
     correctAnswer: chosen.answer,
     acceptableAnswers: chosen.alts,
@@ -1210,7 +1221,7 @@ const generateTrigEquationsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-equations',
-    problemText: `Solve for θ (0° ≤ θ ≤ 90°): ${ratio}(θ) = ${value.toFixed(3)}`,
+    problemText: `Solve for $\\theta$ ($0° \\leq \\theta \\leq 90°$): $\\${ratio}(\\theta) = ${value.toFixed(3)}$`,
     answerType: 'numeric',
     correctAnswer: angle,
     explanationPrompt: `Solve the equation ${ratio}(θ) = ${value.toFixed(3)}.`,
@@ -1234,7 +1245,7 @@ const generateInverseTrigProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'inverse-trig',
-    problemText: `Evaluate: ${chosen.func}⁻¹(${chosen.value.toFixed(3)}) in degrees`,
+    problemText: `Evaluate: $\\${chosen.func}^{-1}(${chosen.value.toFixed(3)})$ in degrees`,
     answerType: 'numeric',
     correctAnswer: chosen.angle,
     explanationPrompt: `Explain how to find ${chosen.func}⁻¹(${chosen.value.toFixed(3)}).`,
@@ -1256,7 +1267,7 @@ const generateRationalExpressionsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'rational-expressions',
-    problemText: `Simplify: (${a}x)/(${b}x). What is the simplified numerator?`,
+    problemText: `Simplify: $\\frac{${a}x}{${b}x}$. What is the simplified numerator?`,
     answerType: 'numeric',
     correctAnswer: simplified.numerator,
     explanationPrompt: `Explain how to simplify (${a}x)/(${b}x).`,
@@ -1277,7 +1288,7 @@ const generateFunctionsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'functions',
-    problemText: `If f(x) = ${a}x + ${b}, find f(${x})`,
+    problemText: `If $f(x) = ${a}x + ${b}$, find $f(${x})$`,
     answerType: 'numeric',
     correctAnswer: result,
     explanationPrompt: `Explain how to evaluate f(${x}) when f(x) = ${a}x + ${b}.`,
@@ -1295,7 +1306,7 @@ const generatePolynomialFunctionsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'polynomial-functions',
-    problemText: `Find a root of: x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0`,
+    problemText: `Find a root of: $x^2 ${latexTerm(sum)}x ${latexTerm(product)} = 0$`,
     answerType: 'numeric',
     correctAnswer: a,
     acceptableAnswers: a !== b ? [b] : undefined,
@@ -1311,7 +1322,7 @@ const generateRationalFunctionsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'rational-functions',
-    problemText: `Find the vertical asymptote of f(x) = 1/(x ${a >= 0 ? '-' : '+'}${Math.abs(a)})`,
+    problemText: `Find the vertical asymptote of $f(x) = \\frac{1}{x ${a >= 0 ? '-' : '+'}${Math.abs(a)}}$`,
     answerType: 'numeric',
     correctAnswer: a,
     explanationPrompt: `Explain how to find vertical asymptotes of rational functions.`,
@@ -1328,11 +1339,11 @@ const generateExponentialFunctionsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'exponential-functions',
-    problemText: `A population starts at ${initialValue} and doubles every period. What is the population after ${time} period(s)?`,
+    problemText: `A population starts at $${initialValue}$ and doubles every period. What is the population after $${time}$ period(s)?`,
     answerType: 'numeric',
     correctAnswer: finalValue,
-    explanationPrompt: `Explain exponential growth with P(t) = ${initialValue} * 2^t.`,
-    hint: `Use the formula P(t) = P₀ * 2^t`,
+    explanationPrompt: `Explain exponential growth for this problem.`,
+    hint: `Use the formula $P(t) = P_0 \\cdot 2^t$`,
   };
 };
 
@@ -1341,15 +1352,16 @@ const generateConicSectionsProblem = (): Problem => {
   const h = randInt(-5, 5);
   const k = randInt(-5, 5);
 
+  const circleLatex = `(x${h >= 0 ? '-' : '+'}${Math.abs(h)})^2 + (y${k >= 0 ? '-' : '+'}${Math.abs(k)})^2 = ${r * r}`;
   const problemTypes = [
     {
       type: 'circle-radius',
-      text: `Find the radius of the circle: (x${h >= 0 ? '-' : '+'}${Math.abs(h)})² + (y${k >= 0 ? '-' : '+'}${Math.abs(k)})² = ${r * r}`,
+      text: `Find the radius of the circle: $${circleLatex}$`,
       answer: r,
     },
     {
       type: 'circle-center-x',
-      text: `Find the x-coordinate of the center: (x${h >= 0 ? '-' : '+'}${Math.abs(h)})² + (y${k >= 0 ? '-' : '+'}${Math.abs(k)})² = ${r * r}`,
+      text: `Find the $x$-coordinate of the center: $${circleLatex}$`,
       answer: h,
     },
   ];
@@ -1363,7 +1375,7 @@ const generateConicSectionsProblem = (): Problem => {
     answerType: 'numeric',
     correctAnswer: chosen.answer,
     explanationPrompt: `Explain the standard form of a circle equation.`,
-    hint: 'Standard form: (x-h)² + (y-k)² = r², center (h,k), radius r',
+    hint: `Standard form: $(x-h)^2 + (y-k)^2 = r^2$, center $(h,k)$, radius $r$`,
   };
 };
 
@@ -1375,31 +1387,31 @@ const generateIntegrationByPartsProblem = (): Problem => {
   // Problems of the form ∫ x·e^x dx, ∫ x·cos(x) dx, ∫ x·sin(x) dx, ∫ x·ln(x) dx
   const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
     {
-      text: '∫ x·eˣ dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int x \\cdot e^x\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'xe^x-e^x',
       alts: ['xe^x - e^x', 'x*e^x - e^x', '(x-1)e^x', '(x-1)*e^x', 'e^x(x-1)'],
-      hint: 'Let u = x, dv = eˣ dx. Then du = dx, v = eˣ.',
+      hint: 'Let $u = x$, $dv = e^x\\,dx$. Then $du = dx$, $v = e^x$.',
       explanation: 'Using IBP: u=x, dv=eˣdx → uv - ∫v du = xeˣ - ∫eˣdx = xeˣ - eˣ + C',
     },
     {
-      text: '∫ x·cos(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int x \\cdot \\cos(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'xsin(x)+cos(x)',
       alts: ['x*sin(x) + cos(x)', 'xsin(x) + cos(x)', 'x·sin(x)+cos(x)'],
-      hint: 'Let u = x, dv = cos(x) dx.',
+      hint: 'Let $u = x$, $dv = \\cos(x)\\,dx$.',
       explanation: 'Using IBP: u=x, dv=cos(x)dx → xsin(x) - ∫sin(x)dx = xsin(x) + cos(x) + C',
     },
     {
-      text: '∫ x·sin(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int x \\cdot \\sin(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: '-xcos(x)+sin(x)',
       alts: ['sin(x) - xcos(x)', '-x*cos(x) + sin(x)', 'sin(x)-xcos(x)'],
-      hint: 'Let u = x, dv = sin(x) dx.',
+      hint: 'Let $u = x$, $dv = \\sin(x)\\,dx$.',
       explanation: 'Using IBP: u=x, dv=sin(x)dx → -xcos(x) + ∫cos(x)dx = -xcos(x) + sin(x) + C',
     },
     {
-      text: '∫ ln(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int \\ln(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'xln(x)-x',
       alts: ['x*ln(x) - x', 'x·ln(x)-x', 'x(ln(x)-1)', 'x·ln(x) - x'],
-      hint: 'Let u = ln(x), dv = dx.',
+      hint: 'Let $u = \\ln(x)$, $dv = dx$.',
       explanation: 'Using IBP: u=ln(x), dv=dx → xln(x) - ∫x·(1/x)dx = xln(x) - x + C',
     },
   ];
@@ -1421,38 +1433,38 @@ const generateIntegrationByPartsProblem = (): Problem => {
 const generateTrigIntegralsProblem = (): Problem => {
   const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
     {
-      text: '∫ sin²(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int \\sin^2(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'x/2-sin(2x)/4',
       alts: ['x/2 - sin(2x)/4', '(x - sin(2x)/2)/2', '(2x-sin(2x))/4'],
-      hint: 'Use the identity sin²(x) = (1 - cos(2x))/2',
+      hint: 'Use the identity $\\sin^2(x) = \\frac{1 - \\cos(2x)}{2}$',
       explanation: 'sin²(x) = (1-cos(2x))/2, so ∫ = x/2 - sin(2x)/4 + C',
     },
     {
-      text: '∫ cos²(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int \\cos^2(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'x/2+sin(2x)/4',
       alts: ['x/2 + sin(2x)/4', '(x + sin(2x)/2)/2', '(2x+sin(2x))/4'],
-      hint: 'Use the identity cos²(x) = (1 + cos(2x))/2',
+      hint: 'Use the identity $\\cos^2(x) = \\frac{1 + \\cos(2x)}{2}$',
       explanation: 'cos²(x) = (1+cos(2x))/2, so ∫ = x/2 + sin(2x)/4 + C',
     },
     {
-      text: '∫ sin(x)·cos(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int \\sin(x)\\cos(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'sin^2(x)/2',
       alts: ['sin²(x)/2', 'sin(x)^2/2', '-cos^2(x)/2', '-cos²(x)/2', '-cos(2x)/4'],
-      hint: 'Use u-substitution with u = sin(x), or the identity sin(2x) = 2sin(x)cos(x)',
+      hint: 'Use $u$-substitution with $u = \\sin(x)$, or the identity $\\sin(2x) = 2\\sin(x)\\cos(x)$',
       explanation: 'Let u=sin(x), du=cos(x)dx → ∫u du = u²/2 = sin²(x)/2 + C',
     },
     {
-      text: '∫ tan(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int \\tan(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: '-ln|cos(x)|',
       alts: ['ln|sec(x)|', 'ln|secx|', '-ln|cosx|', 'ln(sec(x))', '-ln(cos(x))'],
-      hint: 'Rewrite tan(x) = sin(x)/cos(x) and use substitution.',
+      hint: 'Rewrite $\\tan(x) = \\frac{\\sin(x)}{\\cos(x)}$ and use substitution.',
       explanation: '∫ sin(x)/cos(x) dx, let u=cos(x) → -∫du/u = -ln|cos(x)| = ln|sec(x)| + C',
     },
     {
-      text: '∫ sec²(x)·tan(x) dx\nWhat is the result? (omit +C)',
+      text: '$\\displaystyle\\int \\sec^2(x)\\tan(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'tan^2(x)/2',
       alts: ['tan²(x)/2', 'tan(x)^2/2', 'sec^2(x)/2', 'sec²(x)/2'],
-      hint: 'Let u = tan(x), then du = sec²(x) dx',
+      hint: 'Let $u = \\tan(x)$, then $du = \\sec^2(x)\\,dx$',
       explanation: 'Let u=tan(x), du=sec²(x)dx → ∫u du = u²/2 = tan²(x)/2 + C',
     },
   ];
@@ -1485,17 +1497,17 @@ const generatePartialFractionsProblem = (): Problem => {
 
   const problems = [
     {
-      text: `Decompose into partial fractions:\n1/((x − ${a})(x + ${Math.abs(b)}))\n= A/(x − ${a}) + B/(x + ${Math.abs(b)})\nWhat is A? (as a fraction like 1/${diff})`,
+      text: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $A$? (as a fraction like $\\frac{1}{${diff}}$)`,
       answer: `1/${diff}`,
       alts: [`1/${diff}`],
-      hint: 'Multiply both sides by (x − ' + a + ') and set x = ' + a + '.',
+      hint: `Multiply both sides by $(x - ${a})$ and set $x = ${a}$.`,
       explanation: `Set x = ${a}: 1/(${a} − (${b})) = A → A = 1/${diff}`,
     },
     {
-      text: `Decompose into partial fractions:\n1/((x − ${a})(x + ${Math.abs(b)}))\n= A/(x − ${a}) + B/(x + ${Math.abs(b)})\nWhat is B? (as a fraction like -1/${diff} or 1/${diff})`,
+      text: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $B$?`,
       answer: `-1/${diff}`,
       alts: [`-1/${diff}`],
-      hint: 'Multiply both sides by (x + ' + Math.abs(b) + ') and set x = ' + b + '.',
+      hint: `Multiply both sides by $(x + ${Math.abs(b)})$ and set $x = ${b}$.`,
       explanation: `Set x = ${b}: 1/(${b} − ${a}) = B → B = -1/${diff}`,
     },
   ];
@@ -1517,41 +1529,41 @@ const generatePartialFractionsProblem = (): Problem => {
 const generateImproperIntegralsProblem = (): Problem => {
   const problems: { text: string; answer: string | number; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string; tolerance?: number }[] = [
     {
-      text: '∫₁^∞ 1/x² dx\nEvaluate (enter a number or "diverges")',
+      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x^2}\\,dx$\nEvaluate (enter a number or "diverges")',
       answer: 1,
       type: 'numeric',
-      hint: '∫ x⁻² dx = -x⁻¹. Evaluate the limit as b→∞.',
+      hint: '$\\int x^{-2}\\,dx = -x^{-1}$. Evaluate the limit as $b \\to \\infty$.',
       explanation: '∫₁^b x⁻² dx = [-1/x]₁^b = -1/b + 1 → 1 as b→∞',
     },
     {
-      text: '∫₁^∞ 1/x dx\nDoes this converge or diverge?',
+      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x}\\,dx$\nDoes this converge or diverge?',
       answer: 'diverges',
       type: 'expression',
       alts: ['diverge', 'divergent', 'infinity', 'inf'],
-      hint: '∫ 1/x dx = ln|x|. What happens as x→∞?',
+      hint: '$\\int \\frac{1}{x}\\,dx = \\ln|x|$. What happens as $x \\to \\infty$?',
       explanation: '∫₁^b 1/x dx = ln(b) → ∞ as b→∞, so it diverges.',
     },
     {
-      text: '∫₁^∞ 1/x³ dx\nEvaluate (enter a number)',
+      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x^3}\\,dx$\nEvaluate (enter a number)',
       answer: 0.5,
       type: 'numeric',
-      hint: '∫ x⁻³ dx = x⁻²/(-2). Evaluate the limit.',
+      hint: '$\\int x^{-3}\\,dx = \\frac{x^{-2}}{-2}$. Evaluate the limit.',
       explanation: '∫₁^b x⁻³ dx = [-1/(2x²)]₁^b = -1/(2b²) + 1/2 → 1/2 as b→∞',
       tolerance: 0.01,
     },
     {
-      text: '∫₀^∞ e⁻ˣ dx\nEvaluate (enter a number)',
+      text: '$\\displaystyle\\int_0^{\\infty} e^{-x}\\,dx$\nEvaluate (enter a number)',
       answer: 1,
       type: 'numeric',
-      hint: '∫ e⁻ˣ dx = -e⁻ˣ. What is e⁻ˣ as x→∞?',
+      hint: '$\\int e^{-x}\\,dx = -e^{-x}$. What is $e^{-x}$ as $x \\to \\infty$?',
       explanation: '∫₀^b e⁻ˣ dx = [-e⁻ˣ]₀^b = -e⁻ᵇ + 1 → 1 as b→∞',
     },
     {
-      text: 'For the p-series test: ∫₁^∞ 1/xᵖ dx converges when p is ___?\n(Enter an inequality like p>1)',
+      text: 'For the $p$-series test: $\\displaystyle\\int_1^{\\infty} \\frac{1}{x^p}\\,dx$ converges when $p$ is ___?\n(Enter an inequality like $p > 1$)',
       answer: 'p>1',
       type: 'expression',
       alts: ['p > 1', 'p>1'],
-      hint: 'Think about the antiderivative x^(1-p)/(1-p) and when the limit exists.',
+      hint: 'Think about the antiderivative $\\frac{x^{1-p}}{1-p}$ and when the limit exists.',
       explanation: 'The integral converges when p > 1 and diverges when p ≤ 1.',
     },
   ];
@@ -1596,11 +1608,11 @@ const generateSequencesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'sequences',
-      problemText: `Find the ${n}th term of the arithmetic sequence:\na₁ = ${a1}, d = ${d}`,
+      problemText: `Find the $${n}$th term of the arithmetic sequence:\n$a_1 = ${a1}$, $d = ${d}$`,
       answerType: 'numeric',
       correctAnswer: answer,
-      explanationPrompt: `Use aₙ = a₁ + (n-1)d = ${a1} + (${n}-1)(${d}) = ${answer}`,
-      hint: 'Arithmetic sequence formula: aₙ = a₁ + (n-1)d',
+      explanationPrompt: `Use $a_n = a_1 + (n-1)d = ${a1} + (${n}-1)(${d}) = ${answer}$`,
+      hint: `Formula: $a_n = a_1 + (n-1)d$`,
     };
   } else if (problemType === 'geometric') {
     const a1 = randInt(2, 5);
@@ -1612,41 +1624,41 @@ const generateSequencesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'sequences',
-      problemText: `Find the ${n}th term of the geometric sequence:\na₁ = ${a1}, r = ${r}`,
+      problemText: `Find the $${n}$th term of the geometric sequence:\n$a_1 = ${a1}$, $r = ${r}$`,
       answerType: 'numeric',
       correctAnswer: answer,
-      explanationPrompt: `Use aₙ = a₁ · rⁿ⁻¹ = ${a1} · ${r}^${n - 1} = ${answer}`,
-      hint: 'Geometric sequence formula: aₙ = a₁ · rⁿ⁻¹',
+      explanationPrompt: `Use $a_n = a_1 \\cdot r^{n-1} = ${a1} \\cdot ${r}^{${n - 1}} = ${answer}$`,
+      hint: `Formula: $a_n = a_1 \\cdot r^{n-1}$`,
     };
   } else {
     // Convergence of sequences
     const seqs: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
       {
-        text: 'Does the sequence aₙ = 1/n converge or diverge?\nIf converges, what is the limit?',
+        text: 'Does the sequence $a_n = \\frac{1}{n}$ converge or diverge?\nIf converges, what is the limit?',
         answer: '0',
         alts: ['converges to 0', 'converges'],
-        hint: 'As n→∞, what happens to 1/n?',
+        hint: 'As $n \\to \\infty$, what happens to $\\frac{1}{n}$?',
         explanation: 'lim(n→∞) 1/n = 0, so the sequence converges to 0.',
       },
       {
-        text: 'Does the sequence aₙ = (n+1)/n converge or diverge?\nIf converges, what is the limit?',
+        text: 'Does the sequence $a_n = \\frac{n+1}{n}$ converge or diverge?\nIf converges, what is the limit?',
         answer: '1',
         alts: ['converges to 1', 'converges'],
-        hint: 'Divide numerator and denominator by n.',
+        hint: 'Divide numerator and denominator by $n$.',
         explanation: 'lim(n→∞) (n+1)/n = lim(n→∞) (1 + 1/n) = 1.',
       },
       {
-        text: 'Does the sequence aₙ = (-1)ⁿ converge or diverge?',
+        text: 'Does the sequence $a_n = (-1)^n$ converge or diverge?',
         answer: 'diverges',
         alts: ['diverge', 'divergent'],
-        hint: 'The terms alternate between -1 and 1.',
+        hint: 'The terms alternate between $-1$ and $1$.',
         explanation: 'The sequence oscillates between -1 and 1, so it diverges.',
       },
       {
-        text: 'Does the sequence aₙ = n² converge or diverge?',
+        text: 'Does the sequence $a_n = n^2$ converge or diverge?',
         answer: 'diverges',
         alts: ['diverge', 'divergent', 'infinity'],
-        hint: 'As n gets larger, does n² approach a finite value?',
+        hint: 'As $n$ gets larger, does $n^2$ approach a finite value?',
         explanation: 'lim(n→∞) n² = ∞, so the sequence diverges.',
       },
     ];
@@ -1669,58 +1681,58 @@ const generateSequencesProblem = (): Problem => {
 const generateSeriesConvergenceProblem = (): Problem => {
   const problems: { text: string; answer: string | number; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string; tolerance?: number }[] = [
     {
-      text: 'Geometric series: Σ(n=0 to ∞) (1/2)ⁿ\nWhat is the sum?',
+      text: 'Geometric series: $\\displaystyle\\sum_{n=0}^{\\infty} \\left(\\frac{1}{2}\\right)^n$\nWhat is the sum?',
       answer: 2,
       type: 'numeric',
-      hint: 'Geometric series Σ rⁿ = 1/(1-r) when |r| < 1.',
+      hint: 'Geometric series $\\sum r^n = \\frac{1}{1-r}$ when $|r| < 1$.',
       explanation: 'Σ(1/2)ⁿ = 1/(1 - 1/2) = 1/(1/2) = 2',
     },
     {
-      text: 'Geometric series: Σ(n=0 to ∞) (1/3)ⁿ\nWhat is the sum?',
+      text: 'Geometric series: $\\displaystyle\\sum_{n=0}^{\\infty} \\left(\\frac{1}{3}\\right)^n$\nWhat is the sum?',
       answer: 1.5,
       type: 'numeric',
-      hint: 'Geometric series Σ rⁿ = 1/(1-r) when |r| < 1.',
+      hint: 'Geometric series $\\sum r^n = \\frac{1}{1-r}$ when $|r| < 1$.',
       explanation: 'Σ(1/3)ⁿ = 1/(1 - 1/3) = 1/(2/3) = 3/2 = 1.5',
       tolerance: 0.01,
     },
     {
-      text: 'Does Σ(n=1 to ∞) 1/n converge or diverge?\n(This is the harmonic series)',
+      text: 'Does $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{1}{n}$ converge or diverge?\n(This is the harmonic series)',
       answer: 'diverges',
       type: 'expression',
       alts: ['diverge', 'divergent'],
-      hint: 'This is a p-series with p = 1.',
+      hint: 'This is a $p$-series with $p = 1$.',
       explanation: 'The harmonic series Σ 1/n diverges (p-series with p=1 ≤ 1).',
     },
     {
-      text: 'Does Σ(n=1 to ∞) 1/n² converge or diverge?',
+      text: 'Does $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{1}{n^2}$ converge or diverge?',
       answer: 'converges',
       type: 'expression',
       alts: ['converge', 'convergent'],
-      hint: 'This is a p-series with p = 2.',
+      hint: 'This is a $p$-series with $p = 2$.',
       explanation: 'p-series with p=2 > 1, so it converges (to π²/6).',
     },
     {
-      text: 'Use the Ratio Test on Σ(n=0 to ∞) n!/2ⁿ.\nDoes it converge or diverge?',
+      text: 'Use the Ratio Test on $\\displaystyle\\sum_{n=0}^{\\infty} \\frac{n!}{2^n}$.\nDoes it converge or diverge?',
       answer: 'diverges',
       type: 'expression',
       alts: ['diverge', 'divergent'],
-      hint: 'Find lim|aₙ₊₁/aₙ|. If > 1, diverges.',
-      explanation: '|aₙ₊₁/aₙ| = (n+1)!/2^(n+1) · 2ⁿ/n! = (n+1)/2 → ∞ > 1, diverges.',
+      hint: 'Find $\\lim\\left|\\frac{a_{n+1}}{a_n}\\right|$. If $> 1$, diverges.',
+      explanation: '|aₙ₊₁/aₙ| = (n+1)/2 → ∞ > 1, diverges.',
     },
     {
-      text: 'Does the alternating series Σ(n=1 to ∞) (-1)ⁿ⁺¹/n converge or diverge?',
+      text: 'Does the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{n}$ converge or diverge?',
       answer: 'converges',
       type: 'expression',
       alts: ['converge', 'convergent'],
-      hint: 'Check the Alternating Series Test: is 1/n decreasing and → 0?',
+      hint: 'Check the Alternating Series Test: is $\\frac{1}{n}$ decreasing and $\\to 0$?',
       explanation: 'By the AST: bₙ = 1/n is decreasing and lim bₙ = 0, so it converges.',
     },
     {
-      text: 'Geometric series: Σ(n=0 to ∞) (3/2)ⁿ.\nDoes it converge or diverge?',
+      text: 'Geometric series: $\\displaystyle\\sum_{n=0}^{\\infty} \\left(\\frac{3}{2}\\right)^n$.\nDoes it converge or diverge?',
       answer: 'diverges',
       type: 'expression',
       alts: ['diverge', 'divergent'],
-      hint: 'For a geometric series, check if |r| < 1.',
+      hint: 'For a geometric series, check if $|r| < 1$.',
       explanation: '|r| = 3/2 > 1, so the geometric series diverges.',
     },
   ];
@@ -1755,40 +1767,40 @@ const generateSeriesConvergenceProblem = (): Problem => {
 const generatePowerSeriesProblem = (): Problem => {
   const problems: { text: string; answer: number | string; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string }[] = [
     {
-      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) xⁿ/n!',
+      text: 'Find the radius of convergence $R$ for:\n$\\displaystyle\\sum_{n=0}^{\\infty} \\frac{x^n}{n!}$',
       answer: 'infinity',
       type: 'expression',
       alts: ['inf', '∞', 'infinite'],
-      hint: 'Use the Ratio Test: |aₙ₊₁/aₙ| = |x|/(n+1).',
+      hint: 'Use the Ratio Test: $\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{|x|}{n+1}$.',
       explanation: 'Ratio Test: lim |x|/(n+1) = 0 < 1 for all x, so R = ∞ (this is eˣ).',
     },
     {
-      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) xⁿ',
+      text: 'Find the radius of convergence $R$ for:\n$\\displaystyle\\sum_{n=0}^{\\infty} x^n$',
       answer: 1,
       type: 'numeric',
-      hint: 'This is a geometric series with ratio x.',
+      hint: 'This is a geometric series with ratio $x$.',
       explanation: 'Geometric series converges when |x| < 1, so R = 1.',
     },
     {
-      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) nxⁿ',
+      text: 'Find the radius of convergence $R$ for:\n$\\displaystyle\\sum_{n=0}^{\\infty} nx^n$',
       answer: 1,
       type: 'numeric',
-      hint: 'Use the Ratio Test: |aₙ₊₁/aₙ| = (n+1)|x|/n.',
+      hint: 'Use the Ratio Test: $\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{(n+1)|x|}{n}$.',
       explanation: 'Ratio Test: lim (n+1)|x|/n = |x|, converges when |x| < 1, R = 1.',
     },
     {
-      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) xⁿ/2ⁿ',
+      text: 'Find the radius of convergence $R$ for:\n$\\displaystyle\\sum_{n=0}^{\\infty} \\frac{x^n}{2^n}$',
       answer: 2,
       type: 'numeric',
-      hint: 'Rewrite as Σ (x/2)ⁿ — geometric series.',
+      hint: 'Rewrite as $\\sum \\left(\\frac{x}{2}\\right)^n$ — geometric series.',
       explanation: 'This is Σ (x/2)ⁿ, converges when |x/2| < 1, i.e. |x| < 2, so R = 2.',
     },
     {
-      text: 'Find the radius of convergence R for:\nΣ(n=1 to ∞) xⁿ/n',
+      text: 'Find the radius of convergence $R$ for:\n$\\displaystyle\\sum_{n=1}^{\\infty} \\frac{x^n}{n}$',
       answer: 1,
       type: 'numeric',
-      hint: 'Use the Ratio Test: |aₙ₊₁/aₙ| = n|x|/(n+1).',
-      explanation: 'Ratio Test: lim n|x|/(n+1) = |x|, converges when |x| < 1, R = 1. (This is -ln(1-x).)',
+      hint: 'Use the Ratio Test: $\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{n|x|}{n+1}$.',
+      explanation: 'Ratio Test: lim n|x|/(n+1) = |x|, converges when |x| < 1, R = 1.',
     },
   ];
 
@@ -1821,38 +1833,38 @@ const generatePowerSeriesProblem = (): Problem => {
 const generateTaylorMaclaurinProblem = (): Problem => {
   const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
     {
-      text: 'What is the Maclaurin series for eˣ?\n(Write first 4 terms)',
+      text: 'What is the Maclaurin series for $e^x$?\n(Write first 4 terms)',
       answer: '1+x+x^2/2+x^3/6',
       alts: ['1 + x + x^2/2 + x^3/6', '1+x+x²/2+x³/6', '1 + x + x²/2 + x³/6', '1+x+x^2/2!+x^3/3!'],
-      hint: 'The Maclaurin series uses f(0), f\'(0), f\'\'(0), ... All derivatives of eˣ equal eˣ.',
+      hint: 'All derivatives of $e^x$ equal $e^x$, and $f(0) = 1$.',
       explanation: 'eˣ = Σ xⁿ/n! = 1 + x + x²/2! + x³/3! + ...',
     },
     {
-      text: 'What is the Maclaurin series for sin(x)?\n(Write first 3 non-zero terms)',
+      text: 'What is the Maclaurin series for $\\sin(x)$?\n(Write first 3 non-zero terms)',
       answer: 'x-x^3/6+x^5/120',
       alts: ['x - x^3/6 + x^5/120', 'x-x³/6+x⁵/120', 'x - x^3/3! + x^5/5!'],
-      hint: 'sin(x) has only odd powers of x in its series.',
+      hint: '$\\sin(x)$ has only odd powers of $x$ in its series.',
       explanation: 'sin(x) = x - x³/3! + x⁵/5! - ... = x - x³/6 + x⁵/120 - ...',
     },
     {
-      text: 'What is the Maclaurin series for cos(x)?\n(Write first 3 non-zero terms)',
+      text: 'What is the Maclaurin series for $\\cos(x)$?\n(Write first 3 non-zero terms)',
       answer: '1-x^2/2+x^4/24',
       alts: ['1 - x^2/2 + x^4/24', '1-x²/2+x⁴/24', '1 - x^2/2! + x^4/4!'],
-      hint: 'cos(x) has only even powers of x in its series.',
+      hint: '$\\cos(x)$ has only even powers of $x$ in its series.',
       explanation: 'cos(x) = 1 - x²/2! + x⁴/4! - ... = 1 - x²/2 + x⁴/24 - ...',
     },
     {
-      text: 'What is the Maclaurin series for 1/(1-x)?\n(Write first 4 terms)',
+      text: 'What is the Maclaurin series for $\\frac{1}{1-x}$?\n(Write first 4 terms)',
       answer: '1+x+x^2+x^3',
       alts: ['1 + x + x^2 + x^3', '1+x+x²+x³'],
       hint: 'This is a geometric series!',
       explanation: '1/(1-x) = Σ xⁿ = 1 + x + x² + x³ + ... for |x| < 1',
     },
     {
-      text: 'What is the coefficient of x² in the Maclaurin series for eˣ?',
+      text: 'What is the coefficient of $x^2$ in the Maclaurin series for $e^x$?',
       answer: '1/2',
       alts: ['0.5', '1/2!'],
-      hint: 'The coefficient of xⁿ in eˣ is 1/n!',
+      hint: 'The coefficient of $x^n$ in $e^x$ is $\\frac{1}{n!}$',
       explanation: 'eˣ = Σ xⁿ/n!, so coefficient of x² is 1/2! = 1/2.',
     },
   ];
@@ -1882,7 +1894,7 @@ const generateParametricEquationsProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'parametric-equations',
-      problemText: `Given x = t + ${a}, y = t²${b >= 0 ? ' + ' + b : ' − ' + Math.abs(b)}\nEliminate the parameter. What is y in terms of x?`,
+      problemText: `Given $x = t + ${a}$, $y = t^2${b >= 0 ? ' + ' + b : ' - ' + Math.abs(b)}$\nEliminate the parameter. What is $y$ in terms of $x$?`,
       answerType: 'expression',
       correctAnswer: `(x-${a})^2${b >= 0 ? '+' + b : '-' + Math.abs(b)}`,
       acceptableAnswers: [
@@ -1902,7 +1914,7 @@ const generateParametricEquationsProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'parametric-equations',
-      problemText: `Given x = t², y = t³\nFind dy/dx at t = ${t}.`,
+      problemText: `Given $x = t^2$, $y = t^3$\nFind $\\frac{dy}{dx}$ at $t = ${t}$.`,
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
       tolerance: 0.01,
@@ -1919,7 +1931,7 @@ const generateParametricEquationsProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'parametric-equations',
-      problemText: `Given x = ${a}t, y = t²\nWhat is the y-coordinate when t = ${t}?`,
+      problemText: `Given $x = ${a}t$, $y = t^2$\nWhat is the $y$-coordinate when $t = ${t}$?`,
       answerType: 'numeric',
       correctAnswer: y,
       explanationPrompt: `Substitute t = ${t}: y = ${t}² = ${y}.`,
@@ -1939,12 +1951,12 @@ const generatePolarCoordinatesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'polar-coordinates',
-      problemText: `Convert (${x}, ${y}) from Cartesian to polar.\nWhat is r? (round to 2 decimal places)`,
+      problemText: `Convert $(${x}, ${y})$ from Cartesian to polar.\nWhat is $r$? (round to 2 decimal places)`,
       answerType: 'decimal-tolerance',
       correctAnswer: r,
       tolerance: 0.02,
-      explanationPrompt: `r = √(x² + y²) = √(${x}² + ${y}²) = √${x * x + y * y} ≈ ${r}`,
-      hint: 'r = √(x² + y²)',
+      explanationPrompt: `$r = \\sqrt{x^2 + y^2} = \\sqrt{${x}^2 + ${y}^2} = \\sqrt{${x * x + y * y}} \\approx ${r}$`,
+      hint: '$r = \\sqrt{x^2 + y^2}$',
     };
   } else if (problemType === 'cartesian-to-polar-theta') {
     // Use simple angles: (1,1) → 45°, (0,r) → 90°, (r,0) → 0°
@@ -1958,11 +1970,11 @@ const generatePolarCoordinatesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'polar-coordinates',
-      problemText: `Convert (${chosen.x}, ${chosen.y}) from Cartesian to polar.\nWhat is θ in degrees?`,
+      problemText: `Convert $(${chosen.x}, ${chosen.y})$ from Cartesian to polar.\nWhat is $\\theta$ in degrees?`,
       answerType: 'numeric',
       correctAnswer: chosen.theta,
-      explanationPrompt: `θ = arctan(y/x) = arctan(${chosen.y}/${chosen.x}) = ${chosen.theta}°`,
-      hint: 'θ = arctan(y/x). Watch for special cases where x or y is 0.',
+      explanationPrompt: `$\\theta = \\arctan\\left(\\frac{y}{x}\\right) = \\arctan\\left(\\frac{${chosen.y}}{${chosen.x}}\\right) = ${chosen.theta}°$`,
+      hint: '$\\theta = \\arctan\\left(\\frac{y}{x}\\right)$. Watch for special cases where $x$ or $y$ is $0$.',
     };
   } else if (problemType === 'polar-to-cartesian-x') {
     // r=R, θ=angle → x = R·cos(θ)
@@ -1977,12 +1989,12 @@ const generatePolarCoordinatesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'polar-coordinates',
-      problemText: `Convert polar (r=${chosen.r}, θ=${chosen.desc}) to Cartesian.\nWhat is x? (round to 2 decimal places)`,
+      problemText: `Convert polar $(r=${chosen.r},\\; \\theta=${chosen.desc})$ to Cartesian.\nWhat is $x$? (round to 2 decimal places)`,
       answerType: 'decimal-tolerance',
       correctAnswer: chosen.x,
       tolerance: 0.02,
-      explanationPrompt: `x = r·cos(θ) = ${chosen.r}·cos(${chosen.desc}) = ${chosen.x}`,
-      hint: 'x = r·cos(θ)',
+      explanationPrompt: `$x = r\\cos(\\theta) = ${chosen.r}\\cos(${chosen.desc}) = ${chosen.x}$`,
+      hint: '$x = r\\cos(\\theta)$',
     };
   } else if (problemType === 'polar-to-cartesian-y') {
     const cases = [
@@ -1995,19 +2007,19 @@ const generatePolarCoordinatesProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'polar-coordinates',
-      problemText: `Convert polar (r=${chosen.r}, θ=${chosen.desc}) to Cartesian.\nWhat is y?`,
+      problemText: `Convert polar $(r=${chosen.r},\\; \\theta=${chosen.desc})$ to Cartesian.\nWhat is $y$?`,
       answerType: 'numeric',
       correctAnswer: chosen.y,
-      explanationPrompt: `y = r·sin(θ) = ${chosen.r}·sin(${chosen.desc}) = ${chosen.y}`,
-      hint: 'y = r·sin(θ)',
+      explanationPrompt: `$y = r\\sin(\\theta) = ${chosen.r}\\sin(${chosen.desc}) = ${chosen.y}$`,
+      hint: '$y = r\\sin(\\theta)$',
     };
   } else {
     // Identify polar curves
     const curves: { eq: string; answer: string; alts: string[]; hint: string }[] = [
-      { eq: 'r = 5', answer: 'circle', alts: ['a circle'], hint: 'r = constant means all points are the same distance from the origin.' },
-      { eq: 'θ = π/4', answer: 'line', alts: ['a line', 'ray'], hint: 'θ = constant is a ray/line from the origin.' },
-      { eq: 'r = 2cos(θ)', answer: 'circle', alts: ['a circle'], hint: 'r = a·cos(θ) is a circle passing through the origin.' },
-      { eq: 'r = 3sin(θ)', answer: 'circle', alts: ['a circle'], hint: 'r = a·sin(θ) is a circle passing through the origin.' },
+      { eq: '$r = 5$', answer: 'circle', alts: ['a circle'], hint: '$r = $ constant means all points are the same distance from the origin.' },
+      { eq: '$\\theta = \\frac{\\pi}{4}$', answer: 'line', alts: ['a line', 'ray'], hint: '$\\theta = $ constant is a ray/line from the origin.' },
+      { eq: '$r = 2\\cos(\\theta)$', answer: 'circle', alts: ['a circle'], hint: '$r = a\\cos(\\theta)$ is a circle passing through the origin.' },
+      { eq: '$r = 3\\sin(\\theta)$', answer: 'circle', alts: ['a circle'], hint: '$r = a\\sin(\\theta)$ is a circle passing through the origin.' },
     ];
     const chosen = randChoice(curves);
 

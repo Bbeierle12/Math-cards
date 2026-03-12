@@ -6,6 +6,7 @@ import { CURRICULUM } from '../constants';
 import ProgressBar from './ProgressBar';
 import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon } from './Icons';
 import { useSettings } from '../contexts/SettingsContext';
+import MathText from './MathText';
 
 interface PracticeSessionProps {
   topicId: TopicId;
@@ -296,7 +297,9 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       )}
 
       <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/30 rounded-lg p-8 text-center my-8 min-h-[120px] flex items-center justify-center">
-        <p className={`${problemFontSize} font-mono tracking-wider whitespace-pre-line`}>{currentProblem.problemText}</p>
+        <div className={`${problemFontSize} font-mono tracking-wider`}>
+          <MathText text={currentProblem.problemText} />
+        </div>
       </div>
 
       <form onSubmit={handleCheckAnswer}>
@@ -380,7 +383,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
         <div className={`mt-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 ${anim ? 'animate-fade-in-up' : ''}`}>
           <p className="text-amber-300 text-sm flex items-center">
             <LightbulbIcon className="w-4 h-4 mr-2 inline" />
-            <strong>Hint:</strong> <span className="ml-2">{currentProblem.hint}</span>
+            <strong>Hint:</strong> <span className="ml-2"><MathText text={currentProblem.hint!} /></span>
           </p>
         </div>
       )}
