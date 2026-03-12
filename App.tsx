@@ -9,6 +9,11 @@ import MultiplicationTableView from './components/MultiplicationTableView';
 import UnitCircleView from './components/UnitCircleView';
 import CalculusFormulaSheet from './components/CalculusFormulaSheet';
 import Calc2FormulaSheet from './components/Calc2FormulaSheet';
+import PreAlgebraFormulaSheet from './components/PreAlgebraFormulaSheet';
+import Algebra1FormulaSheet from './components/Algebra1FormulaSheet';
+import GeometryFormulaSheet from './components/GeometryFormulaSheet';
+import Algebra2FormulaSheet from './components/Algebra2FormulaSheet';
+import PreCalculusFormulaSheet from './components/PreCalculusFormulaSheet';
 import SettingsPanel from './components/SettingsPanel';
 import { GearIcon } from './components/Icons';
 import { useSettings } from './contexts/SettingsContext';
@@ -106,6 +111,21 @@ export default function App() {
         }
         if (selectedTopicId === 'calc2-formulas') {
             return <Calc2FormulaSheet onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'pre-algebra-formulas') {
+            return <PreAlgebraFormulaSheet onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'algebra1-formulas') {
+            return <Algebra1FormulaSheet onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'geometry-formulas') {
+            return <GeometryFormulaSheet onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'algebra2-formulas') {
+            return <Algebra2FormulaSheet onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'precalculus-formulas') {
+            return <PreCalculusFormulaSheet onComplete={handleSessionComplete} />
         }
     }
     return <PracticeSession

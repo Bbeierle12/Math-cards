@@ -38,6 +38,12 @@ export const CURRICULUM: Level[] = [
     title: 'Pre-Algebra',
     topics: [
       {
+        id: 'pre-algebra-formulas',
+        title: 'Pre-Algebra Formulas',
+        description: 'Reference sheet for pre-algebra concepts and formulas.',
+        type: 'reference'
+      },
+      {
         id: 'simple-linear-equations',
         title: 'Simple Linear Equations',
         description: 'Solve for x in equations like "2x + 3 = 11".'
@@ -68,6 +74,12 @@ export const CURRICULUM: Level[] = [
     id: 'algebra-1',
     title: 'Algebra 1',
     topics: [
+      {
+        id: 'algebra1-formulas',
+        title: 'Algebra 1 Formulas',
+        description: 'Reference sheet for Algebra 1 equations and properties.',
+        type: 'reference'
+      },
       {
         id: 'multi-step-equations',
         title: 'Multi-Step Equations',
@@ -110,6 +122,12 @@ export const CURRICULUM: Level[] = [
     title: 'Geometry',
     topics: [
       {
+        id: 'geometry-formulas',
+        title: 'Geometry Formulas',
+        description: 'Reference sheet for geometry shapes, areas, and volumes.',
+        type: 'reference'
+      },
+      {
         id: 'angles',
         title: 'Angles',
         description: 'Identify and measure angles.'
@@ -145,6 +163,12 @@ export const CURRICULUM: Level[] = [
     id: 'algebra-2',
     title: 'Algebra 2',
     topics: [
+      {
+        id: 'algebra2-formulas',
+        title: 'Algebra 2 Formulas',
+        description: 'Reference sheet for advanced algebra concepts.',
+        type: 'reference'
+      },
       {
         id: 'complex-numbers',
         title: 'Complex Numbers',
@@ -213,6 +237,12 @@ export const CURRICULUM: Level[] = [
     id: 'pre-calculus',
     title: 'Pre-Calculus',
     topics: [
+      {
+        id: 'precalculus-formulas',
+        title: 'Pre-Calculus Formulas',
+        description: 'Reference sheet for pre-calculus functions and concepts.',
+        type: 'reference'
+      },
       {
         id: 'functions',
         title: 'Functions',

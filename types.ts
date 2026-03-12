@@ -6,12 +6,14 @@ export type TopicId =
   'division' |
   'multiplication-tables' |
   // Pre-Algebra
+  'pre-algebra-formulas' |
   'simple-linear-equations' |
   'fractions-basic' |
   'decimals' |
   'order-of-operations' |
   'integers' |
   // Algebra 1
+  'algebra1-formulas' |
   'multi-step-equations' |
   'inequalities' |
   'systems-of-equations' |
@@ -20,6 +22,7 @@ export type TopicId =
   'factoring' |
   'quadratic-equations' |
   // Geometry
+  'geometry-formulas' |
   'angles' |
   'triangles' |
   'pythagorean-theorem' |
@@ -27,6 +30,7 @@ export type TopicId =
   'circles' |
   'volume-surface-area' |
   // Algebra 2
+  'algebra2-formulas' |
   'complex-numbers' |
   'rational-expressions' |
   'radicals' |
@@ -40,6 +44,7 @@ export type TopicId =
   'trig-equations' |
   'inverse-trig' |
   // Pre-Calculus
+  'precalculus-formulas' |
   'functions' |
   'polynomial-functions' |
   'rational-functions' |
