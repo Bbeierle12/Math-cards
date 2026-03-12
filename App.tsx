@@ -8,6 +8,7 @@ import StatsDisplay from './components/StatsDisplay';
 import MultiplicationTableView from './components/MultiplicationTableView';
 import UnitCircleView from './components/UnitCircleView';
 import CalculusFormulaSheet from './components/CalculusFormulaSheet';
+import Calc2FormulaSheet from './components/Calc2FormulaSheet';
 import SettingsPanel from './components/SettingsPanel';
 import { GearIcon } from './components/Icons';
 import { useSettings } from './contexts/SettingsContext';
@@ -102,6 +103,9 @@ export default function App() {
         }
         if (selectedTopicId === 'calculus-formulas') {
             return <CalculusFormulaSheet onComplete={handleSessionComplete} />
+        }
+        if (selectedTopicId === 'calc2-formulas') {
+            return <Calc2FormulaSheet onComplete={handleSessionComplete} />
         }
     }
     return <PracticeSession

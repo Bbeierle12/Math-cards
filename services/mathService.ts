@@ -1,5 +1,6 @@
 import { TopicId, Problem, ProblemAnswer, FractionAnswer } from '../types';
 import { PYTHAGOREAN_TRIPLES, SPECIAL_ANGLES } from '../constants';
+import { parse, simplify, evaluate, MathNode } from 'mathjs';
 
 // ===========================
 // UTILITY FUNCTIONS
@@ -25,6 +26,55 @@ const formatTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}
 const formatDecimal = (n: number): string => {
   const s = n.toFixed(1);
   return s.endsWith('.0') ? String(Math.round(n)) : s;
+};
+
+// Normalize expression string for mathjs parsing
+const normalizeMathExpr = (s: string): string =>
+  s.replace(/\s/g, '')
+   .replace(/[²]/g, '^2').replace(/[³]/g, '^3').replace(/[⁴]/g, '^4').replace(/[⁵]/g, '^5')
+   .replace(/\|([^|]+)\|/g, 'abs($1)')    // |x| → abs(x)
+   .replace(/·/g, '*');                     // · → *
+
+// Check if two math expressions are algebraically equal using mathjs.
+// Uses symbolic simplification and numeric spot-checking.
+const expressionsAlgebraicallyEqual = (userExpr: string, correctExpr: string): boolean => {
+  try {
+    const normUser = normalizeMathExpr(userExpr);
+    const normCorrect = normalizeMathExpr(correctExpr);
+
+    // Skip non-math text answers (convergence, divergence, etc.)
+    if (/^[a-z]+$/i.test(normUser) || /^[a-z]+$/i.test(normCorrect)) return false;
+
+    // Try symbolic simplification: simplify(user - correct) === 0
+    try {
+      const diff = simplify(`(${normUser}) - (${normCorrect})`);
+      const diffStr = diff.toString();
+      if (diffStr === '0') return true;
+    } catch { /* symbolic simplification may fail on some expressions */ }
+
+    // Numeric spot-check: evaluate both expressions at several x values
+    const testPoints = [0.5, 1, 1.5, 2, 2.7, 3.1];
+    let allMatch = true;
+    let anyEvaluated = false;
+
+    for (const x of testPoints) {
+      try {
+        const userVal = evaluate(normUser, { x });
+        const correctVal = evaluate(normCorrect, { x });
+        if (typeof userVal === 'number' && typeof correctVal === 'number') {
+          anyEvaluated = true;
+          if (Math.abs(userVal - correctVal) > 0.001) {
+            allMatch = false;
+            break;
+          }
+        }
+      } catch { /* some points may cause evaluation errors (division by zero, etc.) */ }
+    }
+
+    if (anyEvaluated && allMatch) return true;
+  } catch { /* if parsing fails entirely, fall through */ }
+
+  return false;
 };
 
 // Helper to simplify fractions (GCD)
@@ -1318,6 +1368,663 @@ const generateConicSectionsProblem = (): Problem => {
 };
 
 // ===========================
+// CALCULUS 2
+// ===========================
+
+const generateIntegrationByPartsProblem = (): Problem => {
+  // Problems of the form ∫ x·e^x dx, ∫ x·cos(x) dx, ∫ x·sin(x) dx, ∫ x·ln(x) dx
+  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+    {
+      text: '∫ x·eˣ dx\nWhat is the result? (omit +C)',
+      answer: 'xe^x-e^x',
+      alts: ['xe^x - e^x', 'x*e^x - e^x', '(x-1)e^x', '(x-1)*e^x', 'e^x(x-1)'],
+      hint: 'Let u = x, dv = eˣ dx. Then du = dx, v = eˣ.',
+      explanation: 'Using IBP: u=x, dv=eˣdx → uv - ∫v du = xeˣ - ∫eˣdx = xeˣ - eˣ + C',
+    },
+    {
+      text: '∫ x·cos(x) dx\nWhat is the result? (omit +C)',
+      answer: 'xsin(x)+cos(x)',
+      alts: ['x*sin(x) + cos(x)', 'xsin(x) + cos(x)', 'x·sin(x)+cos(x)'],
+      hint: 'Let u = x, dv = cos(x) dx.',
+      explanation: 'Using IBP: u=x, dv=cos(x)dx → xsin(x) - ∫sin(x)dx = xsin(x) + cos(x) + C',
+    },
+    {
+      text: '∫ x·sin(x) dx\nWhat is the result? (omit +C)',
+      answer: '-xcos(x)+sin(x)',
+      alts: ['sin(x) - xcos(x)', '-x*cos(x) + sin(x)', 'sin(x)-xcos(x)'],
+      hint: 'Let u = x, dv = sin(x) dx.',
+      explanation: 'Using IBP: u=x, dv=sin(x)dx → -xcos(x) + ∫cos(x)dx = -xcos(x) + sin(x) + C',
+    },
+    {
+      text: '∫ ln(x) dx\nWhat is the result? (omit +C)',
+      answer: 'xln(x)-x',
+      alts: ['x*ln(x) - x', 'x·ln(x)-x', 'x(ln(x)-1)', 'x·ln(x) - x'],
+      hint: 'Let u = ln(x), dv = dx.',
+      explanation: 'Using IBP: u=ln(x), dv=dx → xln(x) - ∫x·(1/x)dx = xln(x) - x + C',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'integration-by-parts',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generateTrigIntegralsProblem = (): Problem => {
+  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+    {
+      text: '∫ sin²(x) dx\nWhat is the result? (omit +C)',
+      answer: 'x/2-sin(2x)/4',
+      alts: ['x/2 - sin(2x)/4', '(x - sin(2x)/2)/2', '(2x-sin(2x))/4'],
+      hint: 'Use the identity sin²(x) = (1 - cos(2x))/2',
+      explanation: 'sin²(x) = (1-cos(2x))/2, so ∫ = x/2 - sin(2x)/4 + C',
+    },
+    {
+      text: '∫ cos²(x) dx\nWhat is the result? (omit +C)',
+      answer: 'x/2+sin(2x)/4',
+      alts: ['x/2 + sin(2x)/4', '(x + sin(2x)/2)/2', '(2x+sin(2x))/4'],
+      hint: 'Use the identity cos²(x) = (1 + cos(2x))/2',
+      explanation: 'cos²(x) = (1+cos(2x))/2, so ∫ = x/2 + sin(2x)/4 + C',
+    },
+    {
+      text: '∫ sin(x)·cos(x) dx\nWhat is the result? (omit +C)',
+      answer: 'sin^2(x)/2',
+      alts: ['sin²(x)/2', 'sin(x)^2/2', '-cos^2(x)/2', '-cos²(x)/2', '-cos(2x)/4'],
+      hint: 'Use u-substitution with u = sin(x), or the identity sin(2x) = 2sin(x)cos(x)',
+      explanation: 'Let u=sin(x), du=cos(x)dx → ∫u du = u²/2 = sin²(x)/2 + C',
+    },
+    {
+      text: '∫ tan(x) dx\nWhat is the result? (omit +C)',
+      answer: '-ln|cos(x)|',
+      alts: ['ln|sec(x)|', 'ln|secx|', '-ln|cosx|', 'ln(sec(x))', '-ln(cos(x))'],
+      hint: 'Rewrite tan(x) = sin(x)/cos(x) and use substitution.',
+      explanation: '∫ sin(x)/cos(x) dx, let u=cos(x) → -∫du/u = -ln|cos(x)| = ln|sec(x)| + C',
+    },
+    {
+      text: '∫ sec²(x)·tan(x) dx\nWhat is the result? (omit +C)',
+      answer: 'tan^2(x)/2',
+      alts: ['tan²(x)/2', 'tan(x)^2/2', 'sec^2(x)/2', 'sec²(x)/2'],
+      hint: 'Let u = tan(x), then du = sec²(x) dx',
+      explanation: 'Let u=tan(x), du=sec²(x)dx → ∫u du = u²/2 = tan²(x)/2 + C',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'trig-integrals',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generatePartialFractionsProblem = (): Problem => {
+  // ∫ 1/((x-a)(x-b)) dx → decompose to A/(x-a) + B/(x-b)
+  // Using distinct small integers for a and b
+  let a = randInt(1, 5);
+  let b = randInt(-5, -1);
+
+  // 1/((x-a)(x-b)) = [1/(a-b)]·[1/(x-a) - 1/(x-b)]
+  // Ask: what is A in the decomposition A/(x-a) + B/(x-b)?
+  // A = 1/(a-b)
+
+  const diff = a - b; // always positive since a>0, b<0
+
+  const problems = [
+    {
+      text: `Decompose into partial fractions:\n1/((x − ${a})(x + ${Math.abs(b)}))\n= A/(x − ${a}) + B/(x + ${Math.abs(b)})\nWhat is A? (as a fraction like 1/${diff})`,
+      answer: `1/${diff}`,
+      alts: [`1/${diff}`],
+      hint: 'Multiply both sides by (x − ' + a + ') and set x = ' + a + '.',
+      explanation: `Set x = ${a}: 1/(${a} − (${b})) = A → A = 1/${diff}`,
+    },
+    {
+      text: `Decompose into partial fractions:\n1/((x − ${a})(x + ${Math.abs(b)}))\n= A/(x − ${a}) + B/(x + ${Math.abs(b)})\nWhat is B? (as a fraction like -1/${diff} or 1/${diff})`,
+      answer: `-1/${diff}`,
+      alts: [`-1/${diff}`],
+      hint: 'Multiply both sides by (x + ' + Math.abs(b) + ') and set x = ' + b + '.',
+      explanation: `Set x = ${b}: 1/(${b} − ${a}) = B → B = -1/${diff}`,
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'partial-fractions',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generateImproperIntegralsProblem = (): Problem => {
+  const problems: { text: string; answer: string | number; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string; tolerance?: number }[] = [
+    {
+      text: '∫₁^∞ 1/x² dx\nEvaluate (enter a number or "diverges")',
+      answer: 1,
+      type: 'numeric',
+      hint: '∫ x⁻² dx = -x⁻¹. Evaluate the limit as b→∞.',
+      explanation: '∫₁^b x⁻² dx = [-1/x]₁^b = -1/b + 1 → 1 as b→∞',
+    },
+    {
+      text: '∫₁^∞ 1/x dx\nDoes this converge or diverge?',
+      answer: 'diverges',
+      type: 'expression',
+      alts: ['diverge', 'divergent', 'infinity', 'inf'],
+      hint: '∫ 1/x dx = ln|x|. What happens as x→∞?',
+      explanation: '∫₁^b 1/x dx = ln(b) → ∞ as b→∞, so it diverges.',
+    },
+    {
+      text: '∫₁^∞ 1/x³ dx\nEvaluate (enter a number)',
+      answer: 0.5,
+      type: 'numeric',
+      hint: '∫ x⁻³ dx = x⁻²/(-2). Evaluate the limit.',
+      explanation: '∫₁^b x⁻³ dx = [-1/(2x²)]₁^b = -1/(2b²) + 1/2 → 1/2 as b→∞',
+      tolerance: 0.01,
+    },
+    {
+      text: '∫₀^∞ e⁻ˣ dx\nEvaluate (enter a number)',
+      answer: 1,
+      type: 'numeric',
+      hint: '∫ e⁻ˣ dx = -e⁻ˣ. What is e⁻ˣ as x→∞?',
+      explanation: '∫₀^b e⁻ˣ dx = [-e⁻ˣ]₀^b = -e⁻ᵇ + 1 → 1 as b→∞',
+    },
+    {
+      text: 'For the p-series test: ∫₁^∞ 1/xᵖ dx converges when p is ___?\n(Enter an inequality like p>1)',
+      answer: 'p>1',
+      type: 'expression',
+      alts: ['p > 1', 'p>1'],
+      hint: 'Think about the antiderivative x^(1-p)/(1-p) and when the limit exists.',
+      explanation: 'The integral converges when p > 1 and diverges when p ≤ 1.',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  if (chosen.type === 'numeric') {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'improper-integrals',
+      problemText: chosen.text,
+      answerType: chosen.tolerance ? 'decimal-tolerance' : 'numeric',
+      correctAnswer: chosen.answer as number,
+      tolerance: chosen.tolerance,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
+    };
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'improper-integrals',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer as string,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generateSequencesProblem = (): Problem => {
+  const problemType = randChoice(['arithmetic', 'geometric', 'convergence']);
+
+  if (problemType === 'arithmetic') {
+    const a1 = randInt(1, 10);
+    const d = randInt(2, 7);
+    const n = randInt(5, 15);
+    // a_n = a1 + (n-1)d
+    const answer = a1 + (n - 1) * d;
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'sequences',
+      problemText: `Find the ${n}th term of the arithmetic sequence:\na₁ = ${a1}, d = ${d}`,
+      answerType: 'numeric',
+      correctAnswer: answer,
+      explanationPrompt: `Use aₙ = a₁ + (n-1)d = ${a1} + (${n}-1)(${d}) = ${answer}`,
+      hint: 'Arithmetic sequence formula: aₙ = a₁ + (n-1)d',
+    };
+  } else if (problemType === 'geometric') {
+    const a1 = randInt(2, 5);
+    const r = randInt(2, 3);
+    const n = randInt(3, 6);
+    // a_n = a1 * r^(n-1)
+    const answer = a1 * Math.pow(r, n - 1);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'sequences',
+      problemText: `Find the ${n}th term of the geometric sequence:\na₁ = ${a1}, r = ${r}`,
+      answerType: 'numeric',
+      correctAnswer: answer,
+      explanationPrompt: `Use aₙ = a₁ · rⁿ⁻¹ = ${a1} · ${r}^${n - 1} = ${answer}`,
+      hint: 'Geometric sequence formula: aₙ = a₁ · rⁿ⁻¹',
+    };
+  } else {
+    // Convergence of sequences
+    const seqs: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+      {
+        text: 'Does the sequence aₙ = 1/n converge or diverge?\nIf converges, what is the limit?',
+        answer: '0',
+        alts: ['converges to 0', 'converges'],
+        hint: 'As n→∞, what happens to 1/n?',
+        explanation: 'lim(n→∞) 1/n = 0, so the sequence converges to 0.',
+      },
+      {
+        text: 'Does the sequence aₙ = (n+1)/n converge or diverge?\nIf converges, what is the limit?',
+        answer: '1',
+        alts: ['converges to 1', 'converges'],
+        hint: 'Divide numerator and denominator by n.',
+        explanation: 'lim(n→∞) (n+1)/n = lim(n→∞) (1 + 1/n) = 1.',
+      },
+      {
+        text: 'Does the sequence aₙ = (-1)ⁿ converge or diverge?',
+        answer: 'diverges',
+        alts: ['diverge', 'divergent'],
+        hint: 'The terms alternate between -1 and 1.',
+        explanation: 'The sequence oscillates between -1 and 1, so it diverges.',
+      },
+      {
+        text: 'Does the sequence aₙ = n² converge or diverge?',
+        answer: 'diverges',
+        alts: ['diverge', 'divergent', 'infinity'],
+        hint: 'As n gets larger, does n² approach a finite value?',
+        explanation: 'lim(n→∞) n² = ∞, so the sequence diverges.',
+      },
+    ];
+
+    const chosen = randChoice(seqs);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'sequences',
+      problemText: chosen.text,
+      answerType: 'expression',
+      correctAnswer: chosen.answer,
+      acceptableAnswers: chosen.alts,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
+    };
+  }
+};
+
+const generateSeriesConvergenceProblem = (): Problem => {
+  const problems: { text: string; answer: string | number; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string; tolerance?: number }[] = [
+    {
+      text: 'Geometric series: Σ(n=0 to ∞) (1/2)ⁿ\nWhat is the sum?',
+      answer: 2,
+      type: 'numeric',
+      hint: 'Geometric series Σ rⁿ = 1/(1-r) when |r| < 1.',
+      explanation: 'Σ(1/2)ⁿ = 1/(1 - 1/2) = 1/(1/2) = 2',
+    },
+    {
+      text: 'Geometric series: Σ(n=0 to ∞) (1/3)ⁿ\nWhat is the sum?',
+      answer: 1.5,
+      type: 'numeric',
+      hint: 'Geometric series Σ rⁿ = 1/(1-r) when |r| < 1.',
+      explanation: 'Σ(1/3)ⁿ = 1/(1 - 1/3) = 1/(2/3) = 3/2 = 1.5',
+      tolerance: 0.01,
+    },
+    {
+      text: 'Does Σ(n=1 to ∞) 1/n converge or diverge?\n(This is the harmonic series)',
+      answer: 'diverges',
+      type: 'expression',
+      alts: ['diverge', 'divergent'],
+      hint: 'This is a p-series with p = 1.',
+      explanation: 'The harmonic series Σ 1/n diverges (p-series with p=1 ≤ 1).',
+    },
+    {
+      text: 'Does Σ(n=1 to ∞) 1/n² converge or diverge?',
+      answer: 'converges',
+      type: 'expression',
+      alts: ['converge', 'convergent'],
+      hint: 'This is a p-series with p = 2.',
+      explanation: 'p-series with p=2 > 1, so it converges (to π²/6).',
+    },
+    {
+      text: 'Use the Ratio Test on Σ(n=0 to ∞) n!/2ⁿ.\nDoes it converge or diverge?',
+      answer: 'diverges',
+      type: 'expression',
+      alts: ['diverge', 'divergent'],
+      hint: 'Find lim|aₙ₊₁/aₙ|. If > 1, diverges.',
+      explanation: '|aₙ₊₁/aₙ| = (n+1)!/2^(n+1) · 2ⁿ/n! = (n+1)/2 → ∞ > 1, diverges.',
+    },
+    {
+      text: 'Does the alternating series Σ(n=1 to ∞) (-1)ⁿ⁺¹/n converge or diverge?',
+      answer: 'converges',
+      type: 'expression',
+      alts: ['converge', 'convergent'],
+      hint: 'Check the Alternating Series Test: is 1/n decreasing and → 0?',
+      explanation: 'By the AST: bₙ = 1/n is decreasing and lim bₙ = 0, so it converges.',
+    },
+    {
+      text: 'Geometric series: Σ(n=0 to ∞) (3/2)ⁿ.\nDoes it converge or diverge?',
+      answer: 'diverges',
+      type: 'expression',
+      alts: ['diverge', 'divergent'],
+      hint: 'For a geometric series, check if |r| < 1.',
+      explanation: '|r| = 3/2 > 1, so the geometric series diverges.',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  if (chosen.type === 'numeric') {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'series-convergence',
+      problemText: chosen.text,
+      answerType: chosen.tolerance ? 'decimal-tolerance' : 'numeric',
+      correctAnswer: chosen.answer as number,
+      tolerance: chosen.tolerance,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
+    };
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'series-convergence',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer as string,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generatePowerSeriesProblem = (): Problem => {
+  const problems: { text: string; answer: number | string; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string }[] = [
+    {
+      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) xⁿ/n!',
+      answer: 'infinity',
+      type: 'expression',
+      alts: ['inf', '∞', 'infinite'],
+      hint: 'Use the Ratio Test: |aₙ₊₁/aₙ| = |x|/(n+1).',
+      explanation: 'Ratio Test: lim |x|/(n+1) = 0 < 1 for all x, so R = ∞ (this is eˣ).',
+    },
+    {
+      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) xⁿ',
+      answer: 1,
+      type: 'numeric',
+      hint: 'This is a geometric series with ratio x.',
+      explanation: 'Geometric series converges when |x| < 1, so R = 1.',
+    },
+    {
+      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) nxⁿ',
+      answer: 1,
+      type: 'numeric',
+      hint: 'Use the Ratio Test: |aₙ₊₁/aₙ| = (n+1)|x|/n.',
+      explanation: 'Ratio Test: lim (n+1)|x|/n = |x|, converges when |x| < 1, R = 1.',
+    },
+    {
+      text: 'Find the radius of convergence R for:\nΣ(n=0 to ∞) xⁿ/2ⁿ',
+      answer: 2,
+      type: 'numeric',
+      hint: 'Rewrite as Σ (x/2)ⁿ — geometric series.',
+      explanation: 'This is Σ (x/2)ⁿ, converges when |x/2| < 1, i.e. |x| < 2, so R = 2.',
+    },
+    {
+      text: 'Find the radius of convergence R for:\nΣ(n=1 to ∞) xⁿ/n',
+      answer: 1,
+      type: 'numeric',
+      hint: 'Use the Ratio Test: |aₙ₊₁/aₙ| = n|x|/(n+1).',
+      explanation: 'Ratio Test: lim n|x|/(n+1) = |x|, converges when |x| < 1, R = 1. (This is -ln(1-x).)',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  if (chosen.type === 'numeric') {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'power-series',
+      problemText: chosen.text,
+      answerType: 'numeric',
+      correctAnswer: chosen.answer as number,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
+    };
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'power-series',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer as string,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generateTaylorMaclaurinProblem = (): Problem => {
+  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+    {
+      text: 'What is the Maclaurin series for eˣ?\n(Write first 4 terms)',
+      answer: '1+x+x^2/2+x^3/6',
+      alts: ['1 + x + x^2/2 + x^3/6', '1+x+x²/2+x³/6', '1 + x + x²/2 + x³/6', '1+x+x^2/2!+x^3/3!'],
+      hint: 'The Maclaurin series uses f(0), f\'(0), f\'\'(0), ... All derivatives of eˣ equal eˣ.',
+      explanation: 'eˣ = Σ xⁿ/n! = 1 + x + x²/2! + x³/3! + ...',
+    },
+    {
+      text: 'What is the Maclaurin series for sin(x)?\n(Write first 3 non-zero terms)',
+      answer: 'x-x^3/6+x^5/120',
+      alts: ['x - x^3/6 + x^5/120', 'x-x³/6+x⁵/120', 'x - x^3/3! + x^5/5!'],
+      hint: 'sin(x) has only odd powers of x in its series.',
+      explanation: 'sin(x) = x - x³/3! + x⁵/5! - ... = x - x³/6 + x⁵/120 - ...',
+    },
+    {
+      text: 'What is the Maclaurin series for cos(x)?\n(Write first 3 non-zero terms)',
+      answer: '1-x^2/2+x^4/24',
+      alts: ['1 - x^2/2 + x^4/24', '1-x²/2+x⁴/24', '1 - x^2/2! + x^4/4!'],
+      hint: 'cos(x) has only even powers of x in its series.',
+      explanation: 'cos(x) = 1 - x²/2! + x⁴/4! - ... = 1 - x²/2 + x⁴/24 - ...',
+    },
+    {
+      text: 'What is the Maclaurin series for 1/(1-x)?\n(Write first 4 terms)',
+      answer: '1+x+x^2+x^3',
+      alts: ['1 + x + x^2 + x^3', '1+x+x²+x³'],
+      hint: 'This is a geometric series!',
+      explanation: '1/(1-x) = Σ xⁿ = 1 + x + x² + x³ + ... for |x| < 1',
+    },
+    {
+      text: 'What is the coefficient of x² in the Maclaurin series for eˣ?',
+      answer: '1/2',
+      alts: ['0.5', '1/2!'],
+      hint: 'The coefficient of xⁿ in eˣ is 1/n!',
+      explanation: 'eˣ = Σ xⁿ/n!, so coefficient of x² is 1/2! = 1/2.',
+    },
+  ];
+
+  const chosen = randChoice(problems);
+
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'taylor-maclaurin',
+    problemText: chosen.text,
+    answerType: 'expression',
+    correctAnswer: chosen.answer,
+    acceptableAnswers: chosen.alts,
+    explanationPrompt: chosen.explanation,
+    hint: chosen.hint,
+  };
+};
+
+const generateParametricEquationsProblem = (): Problem => {
+  const problemType = randChoice(['eliminate', 'dydx', 'point']);
+
+  if (problemType === 'eliminate') {
+    // x = t + a, y = t² + b → y = (x-a)² + b
+    const a = randInt(1, 5);
+    const b = randInt(-3, 3);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'parametric-equations',
+      problemText: `Given x = t + ${a}, y = t²${b >= 0 ? ' + ' + b : ' − ' + Math.abs(b)}\nEliminate the parameter. What is y in terms of x?`,
+      answerType: 'expression',
+      correctAnswer: `(x-${a})^2${b >= 0 ? '+' + b : '-' + Math.abs(b)}`,
+      acceptableAnswers: [
+        `(x-${a})^2 ${b >= 0 ? '+ ' + b : '- ' + Math.abs(b)}`,
+        `(x - ${a})^2 ${b >= 0 ? '+ ' + b : '- ' + Math.abs(b)}`,
+        b === 0 ? `(x-${a})^2` : undefined,
+      ].filter(Boolean) as string[],
+      explanationPrompt: `From x = t + ${a}, t = x − ${a}. Substitute: y = (x−${a})² ${b >= 0 ? '+' + b : '−' + Math.abs(b)}.`,
+      hint: 'Solve the x equation for t, then substitute into the y equation.',
+    };
+  } else if (problemType === 'dydx') {
+    // x = t², y = t³ → dy/dx = (dy/dt)/(dx/dt) = 3t²/(2t) = 3t/2
+    // Evaluate at a specific t
+    const t = randInt(2, 5);
+    const answer = (3 * t) / 2;
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'parametric-equations',
+      problemText: `Given x = t², y = t³\nFind dy/dx at t = ${t}.`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: answer,
+      tolerance: 0.01,
+      explanationPrompt: `dy/dx = (dy/dt)/(dx/dt) = 3t²/(2t) = 3t/2. At t=${t}: dy/dx = ${answer}.`,
+      hint: 'dy/dx = (dy/dt) / (dx/dt). Find each derivative separately.',
+    };
+  } else {
+    // Find a point on the curve
+    const t = randInt(1, 4);
+    const a = randInt(2, 4);
+    const x = a * t;
+    const y = t * t;
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'parametric-equations',
+      problemText: `Given x = ${a}t, y = t²\nWhat is the y-coordinate when t = ${t}?`,
+      answerType: 'numeric',
+      correctAnswer: y,
+      explanationPrompt: `Substitute t = ${t}: y = ${t}² = ${y}.`,
+      hint: 'Just substitute the value of t into the y equation.',
+    };
+  }
+};
+
+const generatePolarCoordinatesProblem = (): Problem => {
+  const problemType = randChoice(['cartesian-to-polar-r', 'cartesian-to-polar-theta', 'polar-to-cartesian-x', 'polar-to-cartesian-y', 'identify-curve']);
+
+  if (problemType === 'cartesian-to-polar-r') {
+    const x = randInt(3, 8);
+    const y = randInt(3, 8);
+    const r = Math.round(Math.sqrt(x * x + y * y) * 100) / 100;
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'polar-coordinates',
+      problemText: `Convert (${x}, ${y}) from Cartesian to polar.\nWhat is r? (round to 2 decimal places)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: r,
+      tolerance: 0.02,
+      explanationPrompt: `r = √(x² + y²) = √(${x}² + ${y}²) = √${x * x + y * y} ≈ ${r}`,
+      hint: 'r = √(x² + y²)',
+    };
+  } else if (problemType === 'cartesian-to-polar-theta') {
+    // Use simple angles: (1,1) → 45°, (0,r) → 90°, (r,0) → 0°
+    const cases = [
+      { x: 1, y: 1, theta: 45 },
+      { x: 0, y: 5, theta: 90 },
+      { x: 3, y: 0, theta: 0 },
+    ];
+    const chosen = randChoice(cases);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'polar-coordinates',
+      problemText: `Convert (${chosen.x}, ${chosen.y}) from Cartesian to polar.\nWhat is θ in degrees?`,
+      answerType: 'numeric',
+      correctAnswer: chosen.theta,
+      explanationPrompt: `θ = arctan(y/x) = arctan(${chosen.y}/${chosen.x}) = ${chosen.theta}°`,
+      hint: 'θ = arctan(y/x). Watch for special cases where x or y is 0.',
+    };
+  } else if (problemType === 'polar-to-cartesian-x') {
+    // r=R, θ=angle → x = R·cos(θ)
+    const cases = [
+      { r: 4, theta: 60, x: 2, desc: '60°' },
+      { r: 6, theta: 0, x: 6, desc: '0°' },
+      { r: 2, theta: 90, x: 0, desc: '90°' },
+      { r: 4, theta: 45, x: 2.83, desc: '45°' },
+    ];
+    const chosen = randChoice(cases);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'polar-coordinates',
+      problemText: `Convert polar (r=${chosen.r}, θ=${chosen.desc}) to Cartesian.\nWhat is x? (round to 2 decimal places)`,
+      answerType: 'decimal-tolerance',
+      correctAnswer: chosen.x,
+      tolerance: 0.02,
+      explanationPrompt: `x = r·cos(θ) = ${chosen.r}·cos(${chosen.desc}) = ${chosen.x}`,
+      hint: 'x = r·cos(θ)',
+    };
+  } else if (problemType === 'polar-to-cartesian-y') {
+    const cases = [
+      { r: 4, theta: 30, y: 2, desc: '30°' },
+      { r: 6, theta: 90, y: 6, desc: '90°' },
+      { r: 2, theta: 0, y: 0, desc: '0°' },
+    ];
+    const chosen = randChoice(cases);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'polar-coordinates',
+      problemText: `Convert polar (r=${chosen.r}, θ=${chosen.desc}) to Cartesian.\nWhat is y?`,
+      answerType: 'numeric',
+      correctAnswer: chosen.y,
+      explanationPrompt: `y = r·sin(θ) = ${chosen.r}·sin(${chosen.desc}) = ${chosen.y}`,
+      hint: 'y = r·sin(θ)',
+    };
+  } else {
+    // Identify polar curves
+    const curves: { eq: string; answer: string; alts: string[]; hint: string }[] = [
+      { eq: 'r = 5', answer: 'circle', alts: ['a circle'], hint: 'r = constant means all points are the same distance from the origin.' },
+      { eq: 'θ = π/4', answer: 'line', alts: ['a line', 'ray'], hint: 'θ = constant is a ray/line from the origin.' },
+      { eq: 'r = 2cos(θ)', answer: 'circle', alts: ['a circle'], hint: 'r = a·cos(θ) is a circle passing through the origin.' },
+      { eq: 'r = 3sin(θ)', answer: 'circle', alts: ['a circle'], hint: 'r = a·sin(θ) is a circle passing through the origin.' },
+    ];
+    const chosen = randChoice(curves);
+
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'polar-coordinates',
+      problemText: `What type of curve is ${chosen.eq}?`,
+      answerType: 'expression',
+      correctAnswer: chosen.answer,
+      acceptableAnswers: chosen.alts,
+      explanationPrompt: `The polar equation ${chosen.eq} represents a ${chosen.answer}.`,
+      hint: chosen.hint,
+    };
+  }
+};
+
+// ===========================
 // MAIN GENERATOR FUNCTION
 // ===========================
 
@@ -1431,6 +2138,28 @@ export const generateProblem = (topicId: TopicId, numberRange?: { min: number; m
     case 'integration-substitution':
       return generateIntegrationSubstitutionProblem();
 
+    // Calculus 2
+    case 'integration-by-parts':
+      return generateIntegrationByPartsProblem();
+    case 'trig-integrals':
+      return generateTrigIntegralsProblem();
+    case 'partial-fractions':
+      return generatePartialFractionsProblem();
+    case 'improper-integrals':
+      return generateImproperIntegralsProblem();
+    case 'sequences':
+      return generateSequencesProblem();
+    case 'series-convergence':
+      return generateSeriesConvergenceProblem();
+    case 'power-series':
+      return generatePowerSeriesProblem();
+    case 'taylor-maclaurin':
+      return generateTaylorMaclaurinProblem();
+    case 'parametric-equations':
+      return generateParametricEquationsProblem();
+    case 'polar-coordinates':
+      return generatePolarCoordinatesProblem();
+
     default:
       throw new Error(`Problem generator not yet implemented for topic: ${topicId}`);
   }
@@ -1509,7 +2238,7 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
 
       // Check additional acceptable answers
       if (problem.acceptableAnswers) {
-        return problem.acceptableAnswers.some(alt => {
+        const matched = problem.acceptableAnswers.some(alt => {
           const cleanAlt = normalizeExpr(String(alt));
           if (cleanAlt === cleanUser) return true;
           const parsedAlt = parseInequality(cleanAlt);
@@ -1520,7 +2249,15 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
           }
           return false;
         });
+        if (matched) return true;
       }
+
+      // mathjs algebraic equivalence: try to simplify (user - correct) to 0,
+      // or evaluate both at several random points and compare
+      if (expressionsAlgebraicallyEqual(userAnswer, problem.correctAnswer as string)) {
+        return true;
+      }
+
       return false;
     }
 
