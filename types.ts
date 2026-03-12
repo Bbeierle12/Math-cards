@@ -6,12 +6,14 @@ export type TopicId =
   'division' |
   'multiplication-tables' |
   // Pre-Algebra
+  'pre-algebra-formulas' |
   'simple-linear-equations' |
   'fractions-basic' |
   'decimals' |
   'order-of-operations' |
   'integers' |
   // Algebra 1
+  'algebra1-formulas' |
   'multi-step-equations' |
   'inequalities' |
   'systems-of-equations' |
@@ -20,6 +22,7 @@ export type TopicId =
   'factoring' |
   'quadratic-equations' |
   // Geometry
+  'geometry-formulas' |
   'angles' |
   'triangles' |
   'pythagorean-theorem' |
@@ -27,6 +30,7 @@ export type TopicId =
   'circles' |
   'volume-surface-area' |
   // Algebra 2
+  'algebra2-formulas' |
   'complex-numbers' |
   'rational-expressions' |
   'radicals' |
@@ -40,19 +44,32 @@ export type TopicId =
   'trig-equations' |
   'inverse-trig' |
   // Pre-Calculus
+  'precalculus-formulas' |
   'functions' |
   'polynomial-functions' |
   'rational-functions' |
   'exponential-functions' |
   'conic-sections' |
-  // Calculus
+  // Calculus 1
   'calculus-formulas' |
   'limits' |
   'derivatives-basic' |
   'derivatives-product-quotient' |
   'chain-rule' |
   'integrals-basic' |
-  'integration-substitution';
+  'integration-substitution' |
+  // Calculus 2
+  'calc2-formulas' |
+  'integration-by-parts' |
+  'trig-integrals' |
+  'partial-fractions' |
+  'improper-integrals' |
+  'sequences' |
+  'series-convergence' |
+  'power-series' |
+  'taylor-maclaurin' |
+  'parametric-equations' |
+  'polar-coordinates';
 
 export type AnswerType =
   | 'numeric'           // Single number: 42
@@ -90,6 +107,7 @@ export interface Problem {
   hint?: string;
   multipleChoiceOptions?: string[];
   tolerance?: number; // For decimal-tolerance answers
+  acceptableAnswers?: ProblemAnswer[]; // Additional correct answers
   diagram?: string;   // SVG or description for geometry
 }
 
@@ -118,4 +136,32 @@ export interface UserProgress {
   totalCorrect: number;
   currentStreak: number;
   longestStreak: number;
+}
+
+export interface UserSettings {
+  // Practice Preferences
+  practiceMode: 'standard' | 'speed-drill' | 'thoughtful';
+  problemsPerSession: number; // 0 = unlimited
+  showHintsAutomatically: boolean;
+  showExplanationOnIncorrect: boolean;
+
+  // Difficulty & Progression
+  masteryThreshold: number;
+  numberRange: { min: number; max: number };
+  allowNegatives: boolean;
+  unlockMode: 'sequential' | 'free';
+
+  // Timer / Speed Drill
+  timerEnabled: boolean;
+  timerDurationSeconds: number;
+  autoAdvanceOnCorrect: boolean;
+
+  // Appearance
+  theme: 'dark' | 'light' | 'system';
+  animationsEnabled: boolean;
+  fontSize: 'small' | 'medium' | 'large';
+
+  // Audio & Feedback
+  soundEnabled: boolean;
+  hapticFeedback: boolean;
 }

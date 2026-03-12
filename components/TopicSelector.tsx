@@ -3,6 +3,7 @@ import { TopicId, UserProgress } from '../types';
 import { CURRICULUM } from '../constants';
 import ProgressBar from './ProgressBar';
 import { LockIcon, PlayIcon, BookOpenIcon, TrophyIcon } from './Icons';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface TopicSelectorProps {
   onSelectTopic: (topicId: TopicId) => void;
@@ -11,6 +12,9 @@ interface TopicSelectorProps {
 }
 
 export default function TopicSelector({ onSelectTopic, userProgress, unlockedTopics }: TopicSelectorProps) {
+  const { settings } = useSettings();
+  const masteryThreshold = settings.masteryThreshold;
+
   return (
     <div className="space-y-8">
       {CURRICULUM.map((level) => (
@@ -22,7 +26,7 @@ export default function TopicSelector({ onSelectTopic, userProgress, unlockedTop
               const isPractice = topic.type !== 'reference';
               const progress = userProgress.topicProgress[topic.id];
               const isMastered = progress?.mastery;
-              const masteryPercent = progress ? (progress.correct / 10) * 100 : 0;
+              const masteryPercent = progress ? (progress.correct / masteryThreshold) * 100 : 0;
 
               return (
                 <button
@@ -52,7 +56,7 @@ export default function TopicSelector({ onSelectTopic, userProgress, unlockedTop
                       ) : (
                         <>
                           <ProgressBar percentage={masteryPercent} />
-                          <div className="text-xs text-slate-300 mt-1 text-right">{progress?.correct || 0} / 10</div>
+                          <div className="text-xs text-slate-300 mt-1 text-right">{progress?.correct || 0} / {masteryThreshold}</div>
                         </>
                       )}
                     </div>

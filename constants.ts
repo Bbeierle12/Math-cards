@@ -1,4 +1,4 @@
-import { Level } from './types';
+import { Level, UserSettings } from './types';
 
 export const CURRICULUM: Level[] = [
   {
@@ -38,6 +38,12 @@ export const CURRICULUM: Level[] = [
     title: 'Pre-Algebra',
     topics: [
       {
+        id: 'pre-algebra-formulas',
+        title: 'Pre-Algebra Formulas',
+        description: 'Reference sheet for pre-algebra concepts and formulas.',
+        type: 'reference'
+      },
+      {
         id: 'simple-linear-equations',
         title: 'Simple Linear Equations',
         description: 'Solve for x in equations like "2x + 3 = 11".'
@@ -68,6 +74,12 @@ export const CURRICULUM: Level[] = [
     id: 'algebra-1',
     title: 'Algebra 1',
     topics: [
+      {
+        id: 'algebra1-formulas',
+        title: 'Algebra 1 Formulas',
+        description: 'Reference sheet for Algebra 1 equations and properties.',
+        type: 'reference'
+      },
       {
         id: 'multi-step-equations',
         title: 'Multi-Step Equations',
@@ -110,6 +122,12 @@ export const CURRICULUM: Level[] = [
     title: 'Geometry',
     topics: [
       {
+        id: 'geometry-formulas',
+        title: 'Geometry Formulas',
+        description: 'Reference sheet for geometry shapes, areas, and volumes.',
+        type: 'reference'
+      },
+      {
         id: 'angles',
         title: 'Angles',
         description: 'Identify and measure angles.'
@@ -145,6 +163,12 @@ export const CURRICULUM: Level[] = [
     id: 'algebra-2',
     title: 'Algebra 2',
     topics: [
+      {
+        id: 'algebra2-formulas',
+        title: 'Algebra 2 Formulas',
+        description: 'Reference sheet for advanced algebra concepts.',
+        type: 'reference'
+      },
       {
         id: 'complex-numbers',
         title: 'Complex Numbers',
@@ -214,6 +238,12 @@ export const CURRICULUM: Level[] = [
     title: 'Pre-Calculus',
     topics: [
       {
+        id: 'precalculus-formulas',
+        title: 'Pre-Calculus Formulas',
+        description: 'Reference sheet for pre-calculus functions and concepts.',
+        type: 'reference'
+      },
+      {
         id: 'functions',
         title: 'Functions',
         description: 'Function notation and transformations.'
@@ -241,8 +271,8 @@ export const CURRICULUM: Level[] = [
     ]
   },
   {
-    id: 'calculus',
-    title: 'Calculus',
+    id: 'calculus-1',
+    title: 'Calculus 1',
     topics: [
       {
         id: 'calculus-formulas',
@@ -281,6 +311,68 @@ export const CURRICULUM: Level[] = [
         description: 'Integration by substitution.'
       }
     ]
+  },
+  {
+    id: 'calculus-2',
+    title: 'Calculus 2',
+    topics: [
+      {
+        id: 'calc2-formulas',
+        title: 'Calc 2 Formula Reference',
+        description: 'Reference sheet for Calc 2 integration techniques, series tests, and more.',
+        type: 'reference'
+      },
+      {
+        id: 'integration-by-parts',
+        title: 'Integration by Parts',
+        description: 'Apply ∫ u dv = uv − ∫ v du to evaluate integrals.'
+      },
+      {
+        id: 'trig-integrals',
+        title: 'Trigonometric Integrals',
+        description: 'Integrate powers and products of trig functions.'
+      },
+      {
+        id: 'partial-fractions',
+        title: 'Partial Fractions',
+        description: 'Decompose rational functions for integration.'
+      },
+      {
+        id: 'improper-integrals',
+        title: 'Improper Integrals',
+        description: 'Evaluate integrals with infinite limits or discontinuities.'
+      },
+      {
+        id: 'sequences',
+        title: 'Sequences',
+        description: 'Determine convergence and find terms of sequences.'
+      },
+      {
+        id: 'series-convergence',
+        title: 'Series & Convergence',
+        description: 'Apply convergence tests to infinite series.'
+      },
+      {
+        id: 'power-series',
+        title: 'Power Series',
+        description: 'Find radius and interval of convergence.'
+      },
+      {
+        id: 'taylor-maclaurin',
+        title: 'Taylor & Maclaurin Series',
+        description: 'Expand functions as infinite series.'
+      },
+      {
+        id: 'parametric-equations',
+        title: 'Parametric Equations',
+        description: 'Work with curves defined by parametric equations.'
+      },
+      {
+        id: 'polar-coordinates',
+        title: 'Polar Coordinates',
+        description: 'Convert and graph in polar coordinate systems.'
+      }
+    ]
   }
 ];
 
@@ -306,3 +398,22 @@ export const PRACTICE_MODES = {
   STANDARD: 'standard',
   THOUGHTFUL: 'thoughtful',
 } as const;
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  practiceMode: 'standard',
+  problemsPerSession: 0,
+  showHintsAutomatically: false,
+  showExplanationOnIncorrect: false,
+  masteryThreshold: 10,
+  numberRange: { min: -10, max: 10 },
+  allowNegatives: true,
+  unlockMode: 'sequential',
+  timerEnabled: false,
+  timerDurationSeconds: 60,
+  autoAdvanceOnCorrect: false,
+  theme: 'dark',
+  animationsEnabled: true,
+  fontSize: 'medium',
+  soundEnabled: false,
+  hapticFeedback: false,
+};

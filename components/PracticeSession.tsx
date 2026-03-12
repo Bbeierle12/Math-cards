@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { TopicId, Problem, UserProgress, FractionAnswer, CoordinateAnswer } from '../types';
 import { generateProblem, validateAnswer } from '../services/mathService';
-import { CURRICULUM, MASTERY_THRESHOLD } from '../constants';
+import { CURRICULUM } from '../constants';
 import ProgressBar from './ProgressBar';
-import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon } from './Icons';
+import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon } from './Icons';
+import { useSettings } from '../contexts/SettingsContext';
+import MathText from './MathText';
 
 interface PracticeSessionProps {
   topicId: TopicId;
@@ -22,12 +24,19 @@ function formatAnswer(answer: Problem['correctAnswer']): string {
 }
 
 export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
+  const { settings } = useSettings();
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [userAnswer, setUserAnswer] = useState('');
   const [fractionNumerator, setFractionNumerator] = useState('');
   const [fractionDenominator, setFractionDenominator] = useState('');
   const [answerStatus, setAnswerStatus] = useState<'idle' | 'correct' | 'incorrect'>('idle');
   const [showHint, setShowHint] = useState(false);
+  const [sessionCount, setSessionCount] = useState(0);
+  const [timerRemaining, setTimerRemaining] = useState(settings.timerDurationSeconds);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const masteryThreshold = settings.masteryThreshold;
 
   const topicProgress = useMemo(() => {
     return userProgress.topicProgress[topicId] || { correct: 0, attempted: 0, mastery: false };
@@ -41,24 +50,136 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     return { title: 'Unknown Topic', description: ''};
   }, [topicId]);
 
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const startTimer = useCallback(() => {
+    stopTimer();
+    setTimerRemaining(settings.timerDurationSeconds);
+    if (!settings.timerEnabled) return;
+    timerRef.current = setInterval(() => {
+      setTimerRemaining(prev => {
+        if (prev <= 1) {
+          stopTimer();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [settings.timerEnabled, settings.timerDurationSeconds, stopTimer]);
+
   const generateNewProblem = useCallback(() => {
-    setCurrentProblem(generateProblem(topicId));
+    // Cancel any pending auto-advance to prevent race with manual "Next"
+    if (autoAdvanceRef.current) {
+      clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
+    // Check session limit
+    if (settings.problemsPerSession > 0 && sessionCount >= settings.problemsPerSession) {
+      onComplete();
+      return;
+    }
+    setCurrentProblem(generateProblem(topicId, settings.numberRange, settings.allowNegatives));
     setUserAnswer('');
     setFractionNumerator('');
     setFractionDenominator('');
     setAnswerStatus('idle');
     setShowHint(false);
-  }, [topicId]);
+    setSessionCount(prev => prev + 1);
+  }, [topicId, sessionCount, settings.problemsPerSession, settings.numberRange, settings.allowNegatives, onComplete]);
 
   useEffect(() => {
     generateNewProblem();
-  }, [generateNewProblem]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId]);
+
+  // Start timer when a new problem is shown and status is idle
+  useEffect(() => {
+    if (answerStatus === 'idle' && currentProblem) {
+      startTimer();
+    } else {
+      stopTimer();
+    }
+    return stopTimer;
+  }, [answerStatus, currentProblem, startTimer, stopTimer]);
+
+  // Clean up auto-advance timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current);
+    };
+  }, []);
+
+  // Handle timer expiry (auto-submit as incorrect)
+  useEffect(() => {
+    if (settings.timerEnabled && timerRemaining === 0 && answerStatus === 'idle' && currentProblem) {
+      setAnswerStatus('incorrect');
+      setUserProgress(prevProgress => {
+        const newProgress = { ...prevProgress, topicProgress: { ...prevProgress.topicProgress } };
+        const topicStats = newProgress.topicProgress[topicId]
+          ? { ...newProgress.topicProgress[topicId] }
+          : { correct: 0, attempted: 0, mastery: false };
+        topicStats.attempted += 1;
+        newProgress.totalProblemsAttempted = (newProgress.totalProblemsAttempted || 0) + 1;
+        newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak || 0);
+        newProgress.currentStreak = 0;
+        newProgress.topicProgress[topicId] = topicStats;
+        return newProgress;
+      });
+    }
+  }, [timerRemaining, settings.timerEnabled, answerStatus, currentProblem, topicId, setUserProgress]);
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Clean up AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+    };
+  }, []);
+
+  const playSoundEffect = (correct: boolean) => {
+    if (!settings.soundEnabled) return;
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.value = 0.1;
+      if (correct) {
+        osc.frequency.value = 523.25; // C5
+        osc.start();
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
+        osc.stop(ctx.currentTime + 0.2);
+      } else {
+        osc.frequency.value = 200;
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      }
+    } catch {}
+  };
+
+  const triggerHaptic = () => {
+    if (settings.hapticFeedback && navigator.vibrate) {
+      navigator.vibrate(100);
+    }
+  };
 
   const handleCheckAnswer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProblem) return;
 
-    // Format answer based on problem type
     let formattedAnswer = '';
     if (currentProblem.answerType === 'fraction') {
       if (!fractionNumerator.trim() || !fractionDenominator.trim()) return;
@@ -71,13 +192,21 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     const isCorrect = validateAnswer(currentProblem, formattedAnswer);
     setAnswerStatus(isCorrect ? 'correct' : 'incorrect');
 
+    playSoundEffect(isCorrect);
+    if (!isCorrect) {
+      triggerHaptic();
+      if (settings.showHintsAutomatically && currentProblem.hint) {
+        setShowHint(true);
+      }
+    }
+
     setUserProgress(prevProgress => {
-        const newProgress = { 
-            ...prevProgress, 
-            topicProgress: { ...prevProgress.topicProgress } 
+        const newProgress = {
+            ...prevProgress,
+            topicProgress: { ...prevProgress.topicProgress }
         };
 
-        const topicStats = newProgress.topicProgress[topicId] 
+        const topicStats = newProgress.topicProgress[topicId]
             ? { ...newProgress.topicProgress[topicId] }
             : { correct: 0, attempted: 0, mastery: false };
 
@@ -91,17 +220,22 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
         } else {
             newProgress.currentStreak = 0;
         }
-        
-        if (topicStats.correct >= MASTERY_THRESHOLD) {
-            topicStats.mastery = true;
-        }
-        
+
+        // Derive mastery from data — re-evaluate every time so threshold changes take effect
+        topicStats.mastery = topicStats.correct >= masteryThreshold;
+
         newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak);
         newProgress.topicProgress[topicId] = topicStats;
 
         return newProgress;
     });
 
+    // Auto-advance on correct
+    if (isCorrect && settings.autoAdvanceOnCorrect) {
+      autoAdvanceRef.current = setTimeout(() => {
+        generateNewProblem();
+      }, 1200);
+    }
   };
 
   if (!currentProblem) {
@@ -112,10 +246,19 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     );
   }
 
-  const masteryPercent = (topicProgress.correct / MASTERY_THRESHOLD) * 100;
+  const masteryPercent = (topicProgress.correct / masteryThreshold) * 100;
+
+  const fontSizeClasses = {
+    small: 'text-2xl sm:text-3xl',
+    medium: 'text-4xl sm:text-5xl',
+    large: 'text-5xl sm:text-6xl',
+  };
+  const problemFontSize = fontSizeClasses[settings.fontSize];
+
+  const anim = settings.animationsEnabled;
 
   return (
-    <div className="bg-slate-800/50 rounded-xl p-6 sm:p-8 shadow-lg border border-slate-700 animate-fade-in">
+    <div className={`bg-slate-800/50 rounded-xl p-6 sm:p-8 shadow-lg border border-slate-700 ${anim ? 'animate-fade-in' : ''}`}>
       <div className="flex justify-between items-start mb-4">
         <div>
            <h2 className="text-2xl sm:text-3xl font-bold text-cyan-400 flex items-center gap-3">
@@ -137,15 +280,29 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
 
        <div className="my-6">
           <ProgressBar percentage={masteryPercent} />
-          <p className="text-right text-sm text-slate-300 mt-1">{topicProgress.correct} / {MASTERY_THRESHOLD} Correct</p>
+          <div className="flex justify-between items-center mt-1">
+            {settings.problemsPerSession > 0 && (
+              <p className="text-sm text-slate-400">Problem {Math.min(sessionCount, settings.problemsPerSession)} / {settings.problemsPerSession}</p>
+            )}
+            <p className="text-right text-sm text-slate-300 ml-auto">{topicProgress.correct} / {masteryThreshold} Correct</p>
+          </div>
         </div>
 
+      {/* Timer display */}
+      {settings.timerEnabled && answerStatus === 'idle' && (
+        <div className={`flex items-center justify-center gap-2 mb-4 text-lg font-mono ${timerRemaining <= 10 ? 'text-red-400' : 'text-slate-300'}`}>
+          <TimerIcon className="w-5 h-5" />
+          <span>{timerRemaining}s</span>
+        </div>
+      )}
+
       <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/30 rounded-lg p-8 text-center my-8 min-h-[120px] flex items-center justify-center">
-        <p className="text-4xl sm:text-5xl font-mono tracking-wider">{currentProblem.problemText}</p>
+        <div className={`${problemFontSize} font-mono tracking-wider`}>
+          <MathText text={currentProblem.problemText} />
+        </div>
       </div>
 
       <form onSubmit={handleCheckAnswer}>
-        {/* Render input based on answer type */}
         {currentProblem.answerType === 'fraction' ? (
           <div className="flex flex-col items-center gap-2">
             <input
@@ -167,7 +324,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
               disabled={answerStatus !== 'idle'}
               placeholder="Denominator"
               className={`w-48 text-xl p-3 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
-                ${answerStatus === 'incorrect' ? 'border-red-500 animate-shake' : 'border-slate-600'}
+                ${answerStatus === 'incorrect' ? `border-red-500 ${anim ? 'animate-shake' : ''}` : 'border-slate-600'}
               `}
             />
           </div>
@@ -181,7 +338,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
             placeholder="Your answer..."
             autoFocus
             className={`w-full text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
-              ${answerStatus === 'incorrect' ? 'border-red-500 animate-shake' : 'border-slate-600'}
+              ${answerStatus === 'incorrect' ? `border-red-500 ${anim ? 'animate-shake' : ''}` : 'border-slate-600'}
             `}
           />
         )}
@@ -207,34 +364,46 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
                   className="px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-transform transform hover:scale-105"
                   title="Show hint"
                 >
-                  💡
+                  <LightbulbIcon className="w-5 h-5" />
                 </button>
               )}
             </>
           ) : (
-            <button type="button" onClick={generateNewProblem} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105">
-              Next Question
-            </button>
+            !(settings.autoAdvanceOnCorrect && answerStatus === 'correct') && (
+              <button type="button" onClick={generateNewProblem} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105">
+                Next Question
+              </button>
+            )
           )}
         </div>
       </form>
 
-      {/* Show hint if requested */}
-      {showHint && currentProblem.hint && answerStatus === 'idle' && (
-        <div className="mt-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 animate-fade-in-up">
+      {/* Show hint */}
+      {showHint && currentProblem.hint && (
+        <div className={`mt-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 ${anim ? 'animate-fade-in-up' : ''}`}>
           <p className="text-amber-300 text-sm flex items-center">
             <LightbulbIcon className="w-4 h-4 mr-2 inline" />
-            <strong>Hint:</strong> <span className="ml-2">{currentProblem.hint}</span>
+            <strong>Hint:</strong> <span className="ml-2"><MathText text={currentProblem.hint!} /></span>
           </p>
         </div>
       )}
-      
+
       {answerStatus !== 'idle' && (
-        <div className={`mt-6 p-4 rounded-lg text-center 
-          ${answerStatus === 'correct' ? 'bg-green-500/20 text-green-300 animate-pop' : 'bg-red-500/20 text-red-300 animate-fade-in-up'}`}
+        <div className={`mt-6 p-4 rounded-lg text-center
+          ${answerStatus === 'correct' ? `bg-green-500/20 text-green-300 ${anim ? 'animate-pop' : ''}` : `bg-red-500/20 text-red-300 ${anim ? 'animate-fade-in-up' : ''}`}`}
         >
-          <p className="font-bold text-lg">{answerStatus === 'correct' ? 'Correct!' : 'Not quite.'}</p>
-           {answerStatus === 'incorrect' && <p>The correct answer is: <span className="font-bold">{formatAnswer(currentProblem.correctAnswer)}</span></p>}
+          <p className="font-bold text-lg">
+            {answerStatus === 'correct' ? 'Correct!' : timerRemaining === 0 && settings.timerEnabled ? "Time's up!" : 'Not quite.'}
+          </p>
+          {answerStatus === 'incorrect' && (
+            <p>The correct answer is: <span className="font-bold">{formatAnswer(currentProblem.correctAnswer)}</span></p>
+          )}
+          {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && currentProblem.explanationPrompt && (
+            <p className="mt-2 text-sm text-slate-300 italic">{currentProblem.explanationPrompt}</p>
+          )}
+          {answerStatus === 'correct' && settings.autoAdvanceOnCorrect && (
+            <p className="mt-1 text-sm text-green-400/60">Next question in a moment...</p>
+          )}
         </div>
       )}
 
