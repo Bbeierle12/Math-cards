@@ -72,6 +72,11 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
   }, [settings.timerEnabled, settings.timerDurationSeconds, stopTimer]);
 
   const generateNewProblem = useCallback(() => {
+    // Cancel any pending auto-advance to prevent race with manual "Next"
+    if (autoAdvanceRef.current) {
+      clearTimeout(autoAdvanceRef.current);
+      autoAdvanceRef.current = null;
+    }
     // Check session limit
     if (settings.problemsPerSession > 0 && sessionCount >= settings.problemsPerSession) {
       onComplete();
@@ -119,18 +124,33 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
           : { correct: 0, attempted: 0, mastery: false };
         topicStats.attempted += 1;
         newProgress.totalProblemsAttempted = (newProgress.totalProblemsAttempted || 0) + 1;
+        newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak || 0);
         newProgress.currentStreak = 0;
-        newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak);
         newProgress.topicProgress[topicId] = topicStats;
         return newProgress;
       });
     }
   }, [timerRemaining, settings.timerEnabled, answerStatus, currentProblem, topicId, setUserProgress]);
 
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Clean up AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+        audioCtxRef.current = null;
+      }
+    };
+  }, []);
+
   const playSoundEffect = (correct: boolean) => {
     if (!settings.soundEnabled) return;
     try {
-      const ctx = new AudioContext();
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioContext();
+      }
+      const ctx = audioCtxRef.current;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -200,9 +220,8 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
             newProgress.currentStreak = 0;
         }
 
-        if (topicStats.correct >= masteryThreshold) {
-            topicStats.mastery = true;
-        }
+        // Derive mastery from data — re-evaluate every time so threshold changes take effect
+        topicStats.mastery = topicStats.correct >= masteryThreshold;
 
         newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak);
         newProgress.topicProgress[topicId] = topicStats;

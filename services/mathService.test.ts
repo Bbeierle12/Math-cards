@@ -321,3 +321,53 @@ describe('edge cases', () => {
     }
   });
 });
+
+// ===========================
+// SELF-VALIDATION: generated answers must pass validateAnswer
+// ===========================
+
+// Helper to format a generated answer into a user-input string
+function formatAnswerForInput(problem: ReturnType<typeof generateProblem>): string {
+  const answer = problem.correctAnswer;
+  switch (problem.answerType) {
+    case 'numeric':
+    case 'decimal-tolerance':
+      return String(answer);
+    case 'fraction': {
+      const f = answer as FractionAnswer;
+      return `${f.numerator}/${f.denominator}`;
+    }
+    case 'expression':
+      return String(answer);
+    case 'coordinate': {
+      const c = answer as { x: number; y: number };
+      return `(${c.x}, ${c.y})`;
+    }
+    case 'multiple-choice':
+      return String(answer);
+    default:
+      return String(answer);
+  }
+}
+
+describe('self-validation: generated answers pass validateAnswer', () => {
+  for (const topicId of generatableTopics) {
+    it(`correct answer validates for "${topicId}" (10 runs)`, () => {
+      for (let i = 0; i < 10; i++) {
+        const problem = generateProblem(topicId);
+        const input = formatAnswerForInput(problem);
+        const result = validateAnswer(problem, input);
+        if (!result) {
+          // Provide helpful error message on failure
+          throw new Error(
+            `Self-validation failed for "${topicId}":\n` +
+            `  Problem: ${problem.problemText}\n` +
+            `  Answer type: ${problem.answerType}\n` +
+            `  Correct answer: ${JSON.stringify(problem.correctAnswer)}\n` +
+            `  Formatted input: "${input}"`
+          );
+        }
+      }
+    });
+  }
+});

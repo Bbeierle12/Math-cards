@@ -18,6 +18,15 @@ const randChoice = <T>(arr: T[]): T => {
 // Helper to format negative numbers for display
 const formatNum = (n: number) => (n < 0 ? `(${n})` : n);
 
+// Helper to format a constant term with sign (e.g., + 5 or - 5)
+const formatTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}`);
+
+// Helper to format a number, stripping unnecessary trailing ".0"
+const formatDecimal = (n: number): string => {
+  const s = n.toFixed(1);
+  return s.endsWith('.0') ? String(Math.round(n)) : s;
+};
+
 // Helper to simplify fractions (GCD)
 export const gcd = (a: number, b: number): number => {
   a = Math.abs(a);
@@ -98,6 +107,18 @@ const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
 const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
   const min = opts?.allowNegatives === false ? Math.max(1, opts?.numberRange?.min ?? 1) : (opts?.numberRange?.min ?? -10);
   const max = opts?.numberRange?.max ?? 10;
+  // Guard against range that can only produce 0 (e.g., [0,0])
+  if (min === 0 && max === 0) {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'division',
+      problemText: `0 ÷ 1 = ?`,
+      answerType: 'numeric',
+      correctAnswer: 0,
+      explanationPrompt: `Explain step-by-step how to solve 0 / 1.`,
+      hint: 'Zero divided by any non-zero number is zero.',
+    };
+  }
   let b = 0;
   while (b === 0) {
     b = randInt(min, max);
@@ -310,29 +331,32 @@ const generateMultiStepEquationProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'multi-step-equations',
-    problemText: `${a}x + ${b} = ${c}x + ${d}`,
+    problemText: `${a}x ${formatTerm(b)} = ${c}x ${formatTerm(d)}`,
     answerType: 'numeric',
     correctAnswer: x,
-    explanationPrompt: `Solve for x: ${a}x + ${b} = ${c}x + ${d}.`,
+    explanationPrompt: `Solve for x: ${a}x ${formatTerm(b)} = ${c}x ${formatTerm(d)}.`,
     hint: 'Move all x terms to one side and constants to the other.',
   };
 };
 
 const generateInequalitiesProblem = (): Problem => {
-  const x = randInt(5, 15);
   const a = randInt(2, 5);
   const b = randInt(1, 10);
-  const c = a * x + b + randInt(1, 5); // Ensure inequality is true
+  // Ensure (c - b) is divisible by a so the answer is an exact integer
+  const x = randInt(1, 15);
+  const c = a * x + b + randInt(1, 5) * a; // guarantees (c - b) % a === 0
 
   const operators = ['<', '>', '≤', '≥'];
   const op = randChoice(operators);
+
+  const solution = (c - b) / a; // Always an integer now
 
   return {
     id: crypto.randomUUID(),
     topicId: 'inequalities',
     problemText: `Solve for x: ${a}x + ${b} ${op} ${c}`,
     answerType: 'expression',
-    correctAnswer: `x ${op} ${((c - b) / a).toFixed(1)}`,
+    correctAnswer: `x ${op} ${solution}`,
     explanationPrompt: `Solve the inequality: ${a}x + ${b} ${op} ${c}.`,
     hint: 'Solve like an equation, but remember: flip the sign when multiplying/dividing by a negative!',
   };
@@ -424,8 +448,10 @@ const generatePolynomialsProblem = (): Problem => {
 
 const generateFactoringProblem = (): Problem => {
   // Generate a factorable quadratic: (x + a)(x + b) = x² + (a+b)x + ab
-  const a = randInt(-8, 8);
-  const b = randInt(-8, 8);
+  // Avoid a=0 or b=0 to prevent degenerate x² + 0x + 0 problems
+  let a = 0, b = 0;
+  while (a === 0) a = randInt(-8, 8);
+  while (b === 0) b = randInt(-8, 8);
   const sum = a + b;
   const product = a * b;
 
@@ -444,8 +470,10 @@ const generateFactoringProblem = (): Problem => {
 
 const generateQuadraticEquationsProblem = (): Problem => {
   // Generate equation (x - a)(x - b) = 0 with solutions a, b
-  const a = randInt(-8, 8);
-  const b = randInt(-8, 8);
+  // Avoid a=0 or b=0 to prevent degenerate equations
+  let a = 0, b = 0;
+  while (a === 0) a = randInt(-8, 8);
+  while (b === 0) b = randInt(-8, 8);
   const sum = -(a + b);
   const product = a * b;
 
@@ -542,6 +570,7 @@ const generateAreaPerimeterProblem = (): Problem => {
   let problemText: string;
   let answer: number;
   let hint: string;
+  let usesPI = false;
 
   switch (shape) {
     case 'rectangle':
@@ -569,22 +598,26 @@ const generateAreaPerimeterProblem = (): Problem => {
         hint = 'Perimeter = 4 × side';
       }
       break;
-    case 'triangle':
+    case 'triangle': {
       const base = randInt(6, 12);
       const height = randInt(4, 10);
-      problemText = `Find the area of a triangle with base ${base} and height ${height}.`;
-      answer = (base * height) / 2;
+      // Use even base*height to guarantee integer answer
+      const adjustedBase = base % 2 === 1 && height % 2 === 1 ? base + 1 : base;
+      problemText = `Find the area of a triangle with base ${adjustedBase} and height ${height}.`;
+      answer = (adjustedBase * height) / 2;
       hint = 'Area = ½ × base × height';
       break;
+    }
     case 'circle':
       const radius = randInt(3, 10);
+      usesPI = true;
       if (measurement === 'area') {
         problemText = `Find the area of a circle with radius ${radius}. (Use π ≈ 3.14)`;
-        answer = Math.round(Math.PI * radius * radius * 100) / 100;
+        answer = Math.round(3.14 * radius * radius * 100) / 100;
         hint = 'Area = πr²';
       } else {
         problemText = `Find the circumference of a circle with radius ${radius}. (Use π ≈ 3.14)`;
-        answer = Math.round(2 * Math.PI * radius * 100) / 100;
+        answer = Math.round(2 * 3.14 * radius * 100) / 100;
         hint = 'Circumference = 2πr';
       }
       break;
@@ -594,13 +627,27 @@ const generateAreaPerimeterProblem = (): Problem => {
       hint = '';
   }
 
+  // Use exact numeric matching for integer answers, tolerance only for π-based
+  if (usesPI) {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'area-perimeter',
+      problemText,
+      answerType: 'decimal-tolerance',
+      correctAnswer: answer,
+      tolerance: 0.5,
+      explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
+      hint,
+    };
+  }
+
   return {
     id: crypto.randomUUID(),
     topicId: 'area-perimeter',
     problemText,
-    answerType: 'decimal-tolerance',
+    answerType: Number.isInteger(answer) ? 'numeric' : 'decimal-tolerance',
     correctAnswer: answer,
-    tolerance: 0.5,
+    tolerance: Number.isInteger(answer) ? undefined : 0.1,
     explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
     hint,
   };
@@ -617,12 +664,12 @@ const generateCirclesProblem = (): Problem => {
   switch (problemType) {
     case 'circumference':
       problemText = `Find the circumference of a circle with radius ${radius}. (Use π ≈ 3.14)`;
-      answer = Math.round(2 * Math.PI * radius * 100) / 100;
+      answer = Math.round(2 * 3.14 * radius * 100) / 100;
       hint = 'C = 2πr';
       break;
     case 'area':
       problemText = `Find the area of a circle with radius ${radius}. (Use π ≈ 3.14)`;
-      answer = Math.round(Math.PI * radius * radius * 100) / 100;
+      answer = Math.round(3.14 * radius * radius * 100) / 100;
       hint = 'A = πr²';
       break;
     case 'diameter':
@@ -655,6 +702,7 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
   let problemText: string;
   let answer: number;
   let hint: string;
+  let usesPI = false;
 
   switch (shape) {
     case 'cube':
@@ -686,25 +734,27 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
     case 'cylinder':
       const r = randInt(3, 7);
       const height = randInt(5, 12);
+      usesPI = true;
       if (measurement === 'volume') {
         problemText = `Find the volume of a cylinder with radius ${r} and height ${height}. (Use π ≈ 3.14)`;
-        answer = Math.round(Math.PI * r * r * height * 100) / 100;
+        answer = Math.round(3.14 * r * r * height * 100) / 100;
         hint = 'Volume = πr²h';
       } else {
         problemText = `Find the surface area of a cylinder with radius ${r} and height ${height}. (Use π ≈ 3.14)`;
-        answer = Math.round(2 * Math.PI * r * (r + height) * 100) / 100;
+        answer = Math.round(2 * 3.14 * r * (r + height) * 100) / 100;
         hint = 'SA = 2πr(r + h)';
       }
       break;
     case 'sphere':
       const radius = randInt(3, 8);
+      usesPI = true;
       if (measurement === 'volume') {
         problemText = `Find the volume of a sphere with radius ${radius}. (Use π ≈ 3.14)`;
-        answer = Math.round((4 / 3) * Math.PI * radius * radius * radius * 100) / 100;
+        answer = Math.round((4 / 3) * 3.14 * radius * radius * radius * 100) / 100;
         hint = 'Volume = (4/3)πr³';
       } else {
         problemText = `Find the surface area of a sphere with radius ${radius}. (Use π ≈ 3.14)`;
-        answer = Math.round(4 * Math.PI * radius * radius * 100) / 100;
+        answer = Math.round(4 * 3.14 * radius * radius * 100) / 100;
         hint = 'SA = 4πr²';
       }
       break;
@@ -714,13 +764,26 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
       hint = '';
   }
 
+  // Use exact numeric matching for integer answers, tolerance only for π-based
+  if (usesPI) {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'volume-surface-area',
+      problemText,
+      answerType: 'decimal-tolerance',
+      correctAnswer: answer,
+      tolerance: 0.5,
+      explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
+      hint,
+    };
+  }
+
   return {
     id: crypto.randomUUID(),
     topicId: 'volume-surface-area',
     problemText,
-    answerType: 'decimal-tolerance',
+    answerType: 'numeric',
     correctAnswer: answer,
-    tolerance: 1,
     explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
     hint,
   };
@@ -934,10 +997,10 @@ const generateLimitsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'limits',
-    problemText: `Evaluate: lim (x→${x}) [${a}x + ${b}]`,
+    problemText: `Evaluate: lim (x→${x}) [${a}x ${formatTerm(b)}]`,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Explain how to evaluate the limit as x approaches ${x} of ${a}x + ${b}.`,
+    explanationPrompt: `Explain how to evaluate the limit as x approaches ${x} of ${a}x ${formatTerm(b)}.`,
     hint: 'For polynomial functions, just substitute the value!',
   };
 };
@@ -962,9 +1025,17 @@ const generateDerivativesBasicProblem = (): Problem => {
 
 const generateDerivativesProductQuotientProblem = (): Problem => {
   const a = randInt(2, 6);
-  const b = randInt(2, 6);
+  let b = randInt(2, 6);
 
   const problemType = randChoice(['product', 'quotient']);
+
+  // For quotient rule, ensure a !== b so d/dx[x^a/x^b] isn't d/dx[1] = 0
+  // which would give exponent "a-b-1 = -1" (wrong — the derivative of 1 is 0, not x^(-1))
+  if (problemType === 'quotient') {
+    while (b === a) {
+      b = randInt(2, 6);
+    }
+  }
 
   if (problemType === 'product') {
     // d/dx[x^a × x^b] = (a+b)x^(a+b-1)
@@ -1041,6 +1112,7 @@ const generateIntegrationSubstitutionProblem = (): Problem => {
     problemText: `∫ 2x(x² + ${c})^${n} dx\nWhat substitution u should you use?`,
     answerType: 'expression',
     correctAnswer: `x^2+${c}`,
+    acceptableAnswers: [`x²+${c}`, `x^2 + ${c}`, `x² + ${c}`],
     explanationPrompt: `Explain how to use u-substitution for ∫ 2x(x² + ${c})^${n} dx.`,
     hint: 'Look for a function whose derivative is also in the integrand.',
   };
@@ -1051,12 +1123,12 @@ const generateIntegrationSubstitutionProblem = (): Problem => {
 // ===========================
 
 const generateTrigIdentitiesProblem = (): Problem => {
-  const identities = [
+  const identities: { question: string; answer: string; name: string; alts?: string[] }[] = [
     { question: 'sin²θ + cos²θ = ?', answer: '1', name: 'Pythagorean identity' },
-    { question: 'tan θ = ?', answer: 'sinθ/cosθ', name: 'tangent identity' },
-    { question: '1 + tan²θ = ?', answer: 'sec^2θ', name: 'Pythagorean identity' },
-    { question: 'sin(90° - θ) = ?', answer: 'cosθ', name: 'cofunction identity' },
-    { question: 'cos(90° - θ) = ?', answer: 'sinθ', name: 'cofunction identity' },
+    { question: 'tan θ = ?', answer: 'sinθ/cosθ', name: 'tangent identity', alts: ['sin(θ)/cos(θ)', 'sin θ/cos θ'] },
+    { question: '1 + tan²θ = ?', answer: 'sec^2θ', name: 'Pythagorean identity', alts: ['sec²θ', 'sec^2(θ)'] },
+    { question: 'sin(90° - θ) = ?', answer: 'cosθ', name: 'cofunction identity', alts: ['cos θ', 'cos(θ)'] },
+    { question: 'cos(90° - θ) = ?', answer: 'sinθ', name: 'cofunction identity', alts: ['sin θ', 'sin(θ)'] },
   ];
 
   const chosen = randChoice(identities);
@@ -1067,6 +1139,7 @@ const generateTrigIdentitiesProblem = (): Problem => {
     problemText: `Complete the identity: ${chosen.question}`,
     answerType: 'expression',
     correctAnswer: chosen.answer,
+    acceptableAnswers: chosen.alts,
     explanationPrompt: `Explain the ${chosen.name}: ${chosen.question}`,
     hint: `This is a ${chosen.name}.`,
   };
@@ -1175,6 +1248,7 @@ const generatePolynomialFunctionsProblem = (): Problem => {
     problemText: `Find a root of: x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0`,
     answerType: 'numeric',
     correctAnswer: a,
+    acceptableAnswers: a !== b ? [b] : undefined,
     explanationPrompt: `Find the roots of x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0.`,
     hint: 'Factor the polynomial or use the quadratic formula.',
   };
@@ -1371,7 +1445,12 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
     case 'numeric':
       const userNum = parseFloat(userAnswer);
       if (isNaN(userNum)) return false;
-      return userNum === (problem.correctAnswer as number);
+      if (userNum === (problem.correctAnswer as number)) return true;
+      // Check additional acceptable answers
+      if (problem.acceptableAnswers) {
+        return problem.acceptableAnswers.some(alt => userNum === (alt as number));
+      }
+      return false;
 
     case 'decimal-tolerance':
       const userDec = parseFloat(userAnswer);
@@ -1395,11 +1474,55 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
         userSimplified.denominator === correctFraction.denominator
       );
 
-    case 'expression':
-      // For now, just do string comparison (will improve later)
-      const cleanUser = userAnswer.replace(/\s/g, '');
-      const cleanCorrect = (problem.correctAnswer as string).replace(/\s/g, '');
-      return cleanUser === cleanCorrect;
+    case 'expression': {
+      const normalizeExpr = (s: string) =>
+        s.replace(/\s/g, '').toLowerCase()
+         .replace(/\.0(?!\d)/g, '')   // strip trailing .0
+         .replace(/[θ]/g, 'theta');   // normalize theta symbol
+
+      // For inequalities, also check equivalent forms (e.g., "x < 2" === "2 > x")
+      const flipOperator = (op: string): string => {
+        const flips: Record<string, string> = { '<': '>', '>': '<', '≤': '≥', '≥': '≤', '<=': '>=', '>=': '<=' };
+        return flips[op] || op;
+      };
+      const parseInequality = (s: string): { lhs: string; op: string; rhs: string } | null => {
+        const match = s.match(/^(.+?)(<=|>=|≤|≥|<|>)(.+)$/);
+        if (!match) return null;
+        return { lhs: match[1], op: match[2], rhs: match[3] };
+      };
+
+      const cleanUser = normalizeExpr(userAnswer);
+      const cleanCorrect = normalizeExpr(problem.correctAnswer as string);
+      if (cleanUser === cleanCorrect) return true;
+
+      // Check flipped inequality: "x < 2" should match "2 > x"
+      const parsedCorrect = parseInequality(cleanCorrect);
+      const parsedUser = parseInequality(cleanUser);
+      if (parsedCorrect && parsedUser) {
+        // Direct match already checked above; check flipped form
+        if (parsedUser.lhs === parsedCorrect.rhs &&
+            parsedUser.rhs === parsedCorrect.lhs &&
+            parsedUser.op === flipOperator(parsedCorrect.op)) {
+          return true;
+        }
+      }
+
+      // Check additional acceptable answers
+      if (problem.acceptableAnswers) {
+        return problem.acceptableAnswers.some(alt => {
+          const cleanAlt = normalizeExpr(String(alt));
+          if (cleanAlt === cleanUser) return true;
+          const parsedAlt = parseInequality(cleanAlt);
+          if (parsedAlt && parsedUser) {
+            return (parsedUser.lhs === parsedAlt.rhs &&
+                    parsedUser.rhs === parsedAlt.lhs &&
+                    parsedUser.op === flipOperator(parsedAlt.op));
+          }
+          return false;
+        });
+      }
+      return false;
+    }
 
     case 'multiple-choice':
       return userAnswer === problem.correctAnswer;

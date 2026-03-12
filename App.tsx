@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Topic, TopicId, UserProgress } from './types';
 import { CURRICULUM } from './constants';
 import TopicSelector from './components/TopicSelector';
@@ -41,6 +41,13 @@ export default function App() {
     return undefined;
   }, [selectedTopicId]);
 
+  // Derive mastery from data using current threshold, not persisted boolean
+  const isMastered = useCallback((topicId: TopicId): boolean => {
+    const progress = userProgress.topicProgress[topicId];
+    if (!progress) return false;
+    return progress.correct >= settings.masteryThreshold;
+  }, [userProgress, settings.masteryThreshold]);
+
   const unlockedTopics = useMemo(() => {
     const unlocked = new Set<TopicId>();
 
@@ -59,13 +66,13 @@ export default function App() {
              const lastTopicOfPrevLevel = prevLevel.topics
                 .filter(t => t.type !== 'reference')
                 .slice(-1)[0];
-             if(lastTopicOfPrevLevel && userProgress.topicProgress[lastTopicOfPrevLevel.id]?.mastery) {
+             if(lastTopicOfPrevLevel && isMastered(lastTopicOfPrevLevel.id)) {
                 unlocked.add(topic.id);
              }
           }
         } else {
           const prevTopic = level.topics[index - 1];
-          if (userProgress.topicProgress[prevTopic.id]?.mastery || (prevTopic.type === 'reference' && unlocked.has(prevTopic.id))) {
+          if (isMastered(prevTopic.id) || (prevTopic.type === 'reference' && unlocked.has(prevTopic.id))) {
             unlocked.add(topic.id);
           }
         }
@@ -75,7 +82,7 @@ export default function App() {
         unlocked.add(CURRICULUM[0].topics[0].id);
     }
     return unlocked;
-  }, [userProgress, settings.unlockMode]);
+  }, [userProgress, settings.unlockMode, isMastered]);
 
   const renderContent = () => {
     if (!selectedTopicId || !selectedTopic) {

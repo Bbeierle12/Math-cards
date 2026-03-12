@@ -90,6 +90,7 @@ export interface Problem {
   hint?: string;
   multipleChoiceOptions?: string[];
   tolerance?: number; // For decimal-tolerance answers
+  acceptableAnswers?: ProblemAnswer[]; // Additional correct answers
   diagram?: string;   // SVG or description for geometry
 }
 
