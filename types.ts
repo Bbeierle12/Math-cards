@@ -45,14 +45,26 @@ export type TopicId =
   'rational-functions' |
   'exponential-functions' |
   'conic-sections' |
-  // Calculus
+  // Calculus 1
   'calculus-formulas' |
   'limits' |
   'derivatives-basic' |
   'derivatives-product-quotient' |
   'chain-rule' |
   'integrals-basic' |
-  'integration-substitution';
+  'integration-substitution' |
+  // Calculus 2
+  'calc2-formulas' |
+  'integration-by-parts' |
+  'trig-integrals' |
+  'partial-fractions' |
+  'improper-integrals' |
+  'sequences' |
+  'series-convergence' |
+  'power-series' |
+  'taylor-maclaurin' |
+  'parametric-equations' |
+  'polar-coordinates';
 
 export type AnswerType =
   | 'numeric'           // Single number: 42

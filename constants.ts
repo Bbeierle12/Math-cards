@@ -241,8 +241,8 @@ export const CURRICULUM: Level[] = [
     ]
   },
   {
-    id: 'calculus',
-    title: 'Calculus',
+    id: 'calculus-1',
+    title: 'Calculus 1',
     topics: [
       {
         id: 'calculus-formulas',
@@ -279,6 +279,68 @@ export const CURRICULUM: Level[] = [
         id: 'integration-substitution',
         title: 'U-Substitution',
         description: 'Integration by substitution.'
+      }
+    ]
+  },
+  {
+    id: 'calculus-2',
+    title: 'Calculus 2',
+    topics: [
+      {
+        id: 'calc2-formulas',
+        title: 'Calc 2 Formula Reference',
+        description: 'Reference sheet for Calc 2 integration techniques, series tests, and more.',
+        type: 'reference'
+      },
+      {
+        id: 'integration-by-parts',
+        title: 'Integration by Parts',
+        description: 'Apply ∫ u dv = uv − ∫ v du to evaluate integrals.'
+      },
+      {
+        id: 'trig-integrals',
+        title: 'Trigonometric Integrals',
+        description: 'Integrate powers and products of trig functions.'
+      },
+      {
+        id: 'partial-fractions',
+        title: 'Partial Fractions',
+        description: 'Decompose rational functions for integration.'
+      },
+      {
+        id: 'improper-integrals',
+        title: 'Improper Integrals',
+        description: 'Evaluate integrals with infinite limits or discontinuities.'
+      },
+      {
+        id: 'sequences',
+        title: 'Sequences',
+        description: 'Determine convergence and find terms of sequences.'
+      },
+      {
+        id: 'series-convergence',
+        title: 'Series & Convergence',
+        description: 'Apply convergence tests to infinite series.'
+      },
+      {
+        id: 'power-series',
+        title: 'Power Series',
+        description: 'Find radius and interval of convergence.'
+      },
+      {
+        id: 'taylor-maclaurin',
+        title: 'Taylor & Maclaurin Series',
+        description: 'Expand functions as infinite series.'
+      },
+      {
+        id: 'parametric-equations',
+        title: 'Parametric Equations',
+        description: 'Work with curves defined by parametric equations.'
+      },
+      {
+        id: 'polar-coordinates',
+        title: 'Polar Coordinates',
+        description: 'Convert and graph in polar coordinate systems.'
       }
     ]
   }
