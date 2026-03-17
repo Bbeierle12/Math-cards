@@ -1110,8 +1110,6 @@ const generateDerivativesProductQuotientProblem = (): Problem => {
 
   if (problemType === 'product') {
     // d/dx[x^a × x^b] = (a+b)x^(a+b-1)
-    const derivativeCoeff = a + b;
-
     return {
       id: crypto.randomUUID(),
       topicId: 'derivatives-product-quotient',
@@ -1158,7 +1156,6 @@ const generateIntegralsBasicProblem = (): Problem => {
   const coefficient = randInt(2, 10);
   const exponent = randInt(1, 4);
 
-  const integralCoeff = coefficient / (exponent + 1);
   const integralExp = exponent + 1;
 
   return {
@@ -1955,10 +1952,10 @@ const generateTaylorMaclaurinProblem = (): Problem => {
     },
     {
       text: 'Using the Lagrange error bound, estimate the max error when approximating $e^x$ by its 3rd-degree Maclaurin polynomial at $x = 0.5$.\n(Round to 4 decimal places)',
-      answer: '0.0026',
-      alts: ['0.003', '1/384'],
+      answer: '0.0043',
+      alts: ['0.004', '0.00429'],
       hint: 'The Lagrange remainder: $|R_n(x)| \\leq \\frac{M|x|^{n+1}}{(n+1)!}$ where $M = \\max|f^{(n+1)}(c)|$ on $[0, x]$.',
-      explanation: 'For eˣ, all derivatives are eˣ. M = e^0.5 ≈ 1.649. |R₃(0.5)| ≤ 1.649·(0.5)⁴/4! = 1.649·0.0625/24 ≈ 0.0043. (Using M=e^0.5). With M=1 (crude bound): 0.0625/24 ≈ 0.0026.',
+      explanation: 'For eˣ, all derivatives are eˣ. M = max|e^c| on [0, 0.5] = e^0.5 ≈ 1.649. |R₃(0.5)| ≤ 1.649·(0.5)⁴/4! = 1.649·0.0625/24 ≈ 0.0043.',
     },
     {
       text: 'The alternating series $\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{n}$ is approximated by its first 4 terms.\nWhat is the maximum error?',
