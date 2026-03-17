@@ -144,7 +144,7 @@ const generateSubtractionProblem = (opts?: NumberRangeOptions): Problem => {
     answerType: 'numeric',
     correctAnswer: a - b,
     explanationPrompt: `Explain step-by-step how to solve ${a} - ${b}.`,
-    hint: 'Remember: subtracting a negative is the same as adding a positive.',
+    hint: b < 0 ? 'Remember: subtracting a negative is the same as adding a positive.' : 'Subtract the second number from the first.',
   };
 };
 
@@ -160,7 +160,7 @@ const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
     answerType: 'numeric',
     correctAnswer: a * b,
     explanationPrompt: `Explain step-by-step how to solve ${a} * ${b}.`,
-    hint: 'A negative times a negative gives a positive!',
+    hint: (a < 0 && b < 0) ? 'A negative times a negative gives a positive!' : (a < 0 || b < 0) ? 'A positive times a negative gives a negative.' : 'Multiply the two numbers together.',
   };
 };
 
@@ -372,7 +372,7 @@ const generateIntegersProblem = (): Problem => {
     answerType: 'numeric',
     correctAnswer: answer,
     explanationPrompt: `Explain how to work with negative numbers: ${formatNum(a)} ${op} ${formatNum(b)}.`,
-    hint: 'Two negatives make a positive when multiplying, but not when adding!',
+    hint: op === '×' ? 'Two negatives make a positive when multiplying!' : op === '-' ? 'Subtracting a negative is the same as adding.' : 'When adding, consider the signs of both numbers.',
   };
 };
 
@@ -386,7 +386,7 @@ const generateMultiStepEquationProblem = (): Problem => {
   const a = randInt(2, 8);
   const b = randInt(-15, 15);
   const c = randInt(1, a - 1);
-  const d = (a - c) * x - b;
+  const d = (a - c) * x + b;
 
   return {
     id: crypto.randomUUID(),
@@ -456,9 +456,9 @@ const generateExponentsProblem = (): Problem => {
   const exp2 = randInt(2, 4);
 
   const problemTypes = [
-    { text: `$${base}^{${exp1}} \\times ${base}^{${exp2}}$`, answer: Math.pow(base, exp1 + exp2), rule: 'multiplication' },
-    { text: `$${base}^{${exp1 + exp2}} \\div ${base}^{${exp2}}$`, answer: Math.pow(base, exp1), rule: 'division' },
-    { text: `$(${base}^{${exp1}})^{${exp2}}$`, answer: Math.pow(base, exp1 * exp2), rule: 'power' },
+    { text: `$${base}^{${exp1}} \\times ${base}^{${exp2}}$`, answer: exp1 + exp2, rule: 'multiplication', question: 'What is the simplified exponent?' },
+    { text: `$${base}^{${exp1 + exp2}} \\div ${base}^{${exp2}}$`, answer: exp1, rule: 'division', question: 'What is the simplified exponent?' },
+    { text: `$(${base}^{${exp1}})^{${exp2}}$`, answer: exp1 * exp2, rule: 'power', question: 'What is the simplified exponent?' },
   ];
 
   const chosen = randChoice(problemTypes);
@@ -466,7 +466,7 @@ const generateExponentsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'exponents',
-    problemText: `Simplify: ${chosen.text}`,
+    problemText: `Simplify: ${chosen.text}\n${chosen.question} (The answer is $${base}^{?}$)`,
     answerType: 'numeric',
     correctAnswer: chosen.answer,
     explanationPrompt: `Explain the exponent rule for ${chosen.text}.`,
@@ -662,11 +662,21 @@ const generateAreaPerimeterProblem = (): Problem => {
     case 'triangle': {
       const base = randInt(6, 12);
       const height = randInt(4, 10);
-      // Use even base*height to guarantee integer answer
-      const adjustedBase = base % 2 === 1 && height % 2 === 1 ? base + 1 : base;
-      problemText = `Find the area of a triangle with base $${adjustedBase}$ and height $${height}$.`;
-      answer = (adjustedBase * height) / 2;
-      hint = '$A = \\frac{1}{2}bh$';
+      if (measurement === 'area') {
+        // Use even base*height to guarantee integer answer
+        const adjustedBase = base % 2 === 1 && height % 2 === 1 ? base + 1 : base;
+        problemText = `Find the area of a triangle with base $${adjustedBase}$ and height $${height}$.`;
+        answer = (adjustedBase * height) / 2;
+        hint = '$A = \\frac{1}{2}bh$';
+      } else {
+        // Generate a triangle with three known sides for perimeter
+        const side1 = randInt(5, 12);
+        const side2 = randInt(5, 12);
+        const side3 = randInt(Math.abs(side1 - side2) + 1, side1 + side2 - 1); // triangle inequality
+        problemText = `Find the perimeter of a triangle with sides $${side1}$, $${side2}$, and $${side3}$.`;
+        answer = side1 + side2 + side3;
+        hint = '$P = a + b + c$';
+      }
       break;
     }
     case 'circle':

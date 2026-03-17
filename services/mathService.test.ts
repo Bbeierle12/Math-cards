@@ -255,9 +255,13 @@ const generatableTopics: TopicId[] = [
   'trig-ratios', 'trig-special-angles', 'trig-identities', 'trig-equations', 'inverse-trig',
   // Pre-Calculus
   'functions', 'polynomial-functions', 'rational-functions', 'exponential-functions', 'conic-sections',
-  // Calculus
+  // Calculus 1
   'limits', 'derivatives-basic', 'derivatives-product-quotient', 'chain-rule',
   'integrals-basic', 'integration-substitution',
+  // Calculus 2
+  'integration-by-parts', 'trig-integrals', 'partial-fractions', 'improper-integrals',
+  'sequences', 'series-convergence', 'power-series', 'taylor-maclaurin',
+  'parametric-equations', 'polar-coordinates', 'integration-applications', 'trig-substitution',
 ];
 
 describe('generateProblem', () => {
@@ -318,6 +322,117 @@ describe('edge cases', () => {
       // Should have at most 2 decimal places
       const decimalPlaces = (answer.toString().split('.')[1] || '').length;
       expect(decimalPlaces).toBeLessThanOrEqual(2);
+    }
+  });
+});
+
+// ===========================
+// ARITHMETIC CORRECTNESS: verify answers match the actual math
+// ===========================
+
+describe('arithmetic correctness', () => {
+  it('multi-step equations: stored answer actually solves the displayed equation', () => {
+    for (let i = 0; i < 50; i++) {
+      const p = generateProblem('multi-step-equations');
+      // Parse "ax + b = cx + d" from problem text
+      // Format: "$${a}x + ${b} = ${c}x + ${d}$" (with latexTerm signs)
+      const match = p.problemText.match(/\$(\d+)x\s*([+-])\s*(\d+)\s*=\s*(\d+)x\s*([+-])\s*(\d+)\$/);
+      if (!match) throw new Error(`Could not parse multi-step equation: ${p.problemText}`);
+      const a = parseInt(match[1]);
+      const bSign = match[2] === '+' ? 1 : -1;
+      const b = bSign * parseInt(match[3]);
+      const c = parseInt(match[4]);
+      const dSign = match[5] === '+' ? 1 : -1;
+      const d = dSign * parseInt(match[6]);
+      // Solve: (a-c)x = d - b → x = (d - b) / (a - c)
+      const solved = (d - b) / (a - c);
+      expect(solved).toBe(p.correctAnswer as number);
+    }
+  });
+
+  it('simple linear equations: stored answer actually solves the displayed equation', () => {
+    for (let i = 0; i < 50; i++) {
+      const p = generateProblem('simple-linear-equations');
+      // Parse "ax + b = c"
+      const match = p.problemText.match(/\$(\d+)x\s*\+\s*(\d+)\s*=\s*(\d+)\$/);
+      if (!match) throw new Error(`Could not parse linear equation: ${p.problemText}`);
+      const a = parseInt(match[1]);
+      const b = parseInt(match[2]);
+      const c = parseInt(match[3]);
+      const solved = (c - b) / a;
+      expect(solved).toBe(p.correctAnswer as number);
+    }
+  });
+
+  it('addition: a + b = stored answer', () => {
+    for (let i = 0; i < 20; i++) {
+      const p = generateProblem('addition');
+      // Parse the two operands from the LaTeX
+      const match = p.problemText.match(/\$(-?\d+)\s*\+\s*\(?(-?\d+)\)?\s*=/);
+      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
+      expect(parseInt(match[1]) + parseInt(match[2])).toBe(p.correctAnswer as number);
+    }
+  });
+
+  it('subtraction: a - b = stored answer', () => {
+    for (let i = 0; i < 20; i++) {
+      const p = generateProblem('subtraction');
+      const match = p.problemText.match(/\$(-?\d+)\s*-\s*\(?(-?\d+)\)?\s*=/);
+      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
+      expect(parseInt(match[1]) - parseInt(match[2])).toBe(p.correctAnswer as number);
+    }
+  });
+
+  it('multiplication: a * b = stored answer', () => {
+    for (let i = 0; i < 20; i++) {
+      const p = generateProblem('multiplication');
+      const match = p.problemText.match(/\$(-?\d+)\s*\\times\s*\(?(-?\d+)\)?\s*=/);
+      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
+      expect(parseInt(match[1]) * parseInt(match[2])).toBe(p.correctAnswer as number);
+    }
+  });
+
+  it('division: a / b = stored answer', () => {
+    for (let i = 0; i < 20; i++) {
+      const p = generateProblem('division');
+      const match = p.problemText.match(/\$(-?\d+)\s*\\div\s*\(?(-?\d+)\)?\s*=/);
+      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
+      const quotient = parseInt(match[1]) / parseInt(match[2]);
+      // Use == to treat -0 and 0 as equal (Object.is distinguishes them)
+      expect(quotient == (p.correctAnswer as number) && Math.abs(quotient - (p.correctAnswer as number)) === 0).toBe(true);
+    }
+  });
+
+  it('quadratic equations: stored answer is a root of the displayed equation', () => {
+    for (let i = 0; i < 30; i++) {
+      const p = generateProblem('quadratic-equations');
+      // Parse "x^2 + sx + p = 0"
+      const match = p.problemText.match(/x\^2\s*([+-])\s*(\d+)x\s*([+-])\s*(\d+)\s*=\s*0/);
+      if (!match) throw new Error(`Could not parse quadratic: ${p.problemText}`);
+      const sSign = match[1] === '+' ? 1 : -1;
+      const s = sSign * parseInt(match[2]);
+      const pSign = match[3] === '+' ? 1 : -1;
+      const prod = pSign * parseInt(match[4]);
+      const x = p.correctAnswer as number;
+      // x should satisfy x² + s*x + prod = 0
+      expect(x * x + s * x + prod).toBe(0);
+    }
+  });
+
+  it('factoring: stored answer is a valid factor constant', () => {
+    for (let i = 0; i < 30; i++) {
+      const p = generateProblem('factoring');
+      // Parse "x^2 + sx + p"
+      const match = p.problemText.match(/x\^2\s*([+-])\s*(\d+)x\s*([+-])\s*(\d+)/);
+      if (!match) throw new Error(`Could not parse factoring: ${p.problemText}`);
+      const sSign = match[1] === '+' ? 1 : -1;
+      const sum = sSign * parseInt(match[2]);
+      const pSign = match[3] === '+' ? 1 : -1;
+      const product = pSign * parseInt(match[4]);
+      const k = p.correctAnswer as number;
+      // k should be one of the factors: k + other = sum, k * other = product
+      const other = sum - k;
+      expect(k * other).toBe(product);
     }
   });
 });
