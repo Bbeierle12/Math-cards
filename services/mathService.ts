@@ -386,7 +386,7 @@ const generateMultiStepEquationProblem = (): Problem => {
   const a = randInt(2, 8);
   const b = randInt(-15, 15);
   const c = randInt(1, a - 1);
-  const d = (a - c) * x - b;
+  const d = (a - c) * x + b;
 
   return {
     id: crypto.randomUUID(),
