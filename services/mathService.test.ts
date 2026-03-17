@@ -255,9 +255,13 @@ const generatableTopics: TopicId[] = [
   'trig-ratios', 'trig-special-angles', 'trig-identities', 'trig-equations', 'inverse-trig',
   // Pre-Calculus
   'functions', 'polynomial-functions', 'rational-functions', 'exponential-functions', 'conic-sections',
-  // Calculus
+  // Calculus 1
   'limits', 'derivatives-basic', 'derivatives-product-quotient', 'chain-rule',
   'integrals-basic', 'integration-substitution',
+  // Calculus 2
+  'integration-by-parts', 'trig-integrals', 'partial-fractions', 'improper-integrals',
+  'sequences', 'series-convergence', 'power-series', 'taylor-maclaurin',
+  'parametric-equations', 'polar-coordinates', 'integration-applications', 'trig-substitution',
 ];
 
 describe('generateProblem', () => {
