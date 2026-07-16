@@ -6,10 +6,22 @@
     {
       "ts": "2026-07-16T01:43:30.137Z",
       "msg": "Harness scaffolded: fidelity.eval.ts, status.mjs, gates.mjs, dashboard.mjs, RUNBOOK.md"
+    },
+    {
+      "ts": "2026-07-16T01:46:45.064Z",
+      "msg": "KILL TEST starting (drill)"
+    },
+    {
+      "ts": "2026-07-16T01:48:37.803Z",
+      "msg": "KILL switch detected — aborting at phase boundary"
+    },
+    {
+      "ts": "2026-07-16T01:49:05.771Z",
+      "msg": "KILL TEST passed: torn-write, resume, kill-switch all green. Documented pattern-kill procedure in RUNBOOK."
     }
   ],
   "objective": "Maximize Grading Fidelity Score (GFS)",
-  "phase_status": "running",
+  "phase_status": "kill-test-passed",
   "phases": {
     "T0": "pending",
     "T1": "pending",
@@ -20,5 +32,5 @@
   "experiments": [],
   "winner": null,
   "next_action": "Run kill test per RUNBOOK.md, then T0 baseline: RESEARCH_LABEL=baseline RESEARCH_OUT=research/out/baseline.json npx vitest run --config research/harness/vitest.config.mts",
-  "updated_at": "2026-07-16T01:43:30.137Z"
+  "updated_at": "2026-07-16T01:49:05.772Z"
 }

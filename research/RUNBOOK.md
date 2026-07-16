@@ -101,9 +101,31 @@ corruption. Procedure (results recorded below when executed):
    verify exit code 3 and `phase_status=aborted-by-kill-switch`; remove `KILL`,
    verify killcheck exits 0.
 
-### Kill test results
+### Kill test results — EXECUTED 2026-07-16T01:47Z, ALL PASS
 
-_(pending — filled in by the run before T0)_
+1. **Torn-write test — PASS.** A drill eval (N=5000, ~60s+ of work) was `kill -9`'d
+   4s in; `research/out/drill.json` was never created (the atomic rename only happens
+   on completion) and no stray `.tmp-*` files were promoted. Concurrently, a loop
+   hammering `status.mjs set` was `kill -9`'d mid-write after 66 writes;
+   `status.json` parsed as valid JSON with the last completed write intact.
+2. **Resume test — PASS.** Re-running the same drill to completion produced a full
+   valid metrics file (GFS 99.1, 1.1s wall) and `status.json`'s `next_action`
+   survived untouched — no state corruption from the kills.
+3. **Kill-switch test — PASS.** With `research/KILL` present, `killcheck` exited 3
+   and set `phase_status=aborted-by-kill-switch`; after removing the file it exited 0.
+
+**Operational lesson learned (now the documented kill procedure):** killing the
+wrapper shell orphans the vitest worker tree. To kill a running eval use pattern
+kills, not the wrapper PID — and note a plain pattern will match your own shell's
+command line, so bracket the first character:
+
+```bash
+pkill -9 -f "[v]itest run --config research/harness"   # runner
+pkill -9 -f "[n]ode_modules/vitest"                    # surviving fork workers
+```
+
+The orphan case is why the metrics write is atomic: an orphaned eval finishing
+late can only ever produce a *complete* file, never a torn one.
 
 ## How to launch
 
