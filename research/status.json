@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "run_id": "aral-2026-07-16",
-  "phase": "T0",
+  "phase": "T1",
   "events": [
     {
       "ts": "2026-07-16T01:43:30.137Z",
@@ -22,21 +22,41 @@
     {
       "ts": "2026-07-16T01:50:53.610Z",
       "msg": "T0 done: baseline GFS 99.10 (accept 99.19%, reject 98.88%). Defect clusters: inequalities/H1 (19 ascii accept-fails), circles/M10 (19 tolerance reject-fails), integration-applications (4 tolerance reject-fails). Tests 154/154, tsc clean, bundle 2443383B."
+    },
+    {
+      "ts": "2026-07-16T02:07:28.921Z",
+      "msg": "T1 done: 3 hypotheses ranked (exp-a H1 ascii-ineq ~63% defect reduction; exp-b M10 tolerance ~37%; exp-c combined ~100%). M8/M9 deferred: unmeasured at baseline, cannot pass G3."
     }
   ],
   "objective": "Maximize Grading Fidelity Score (GFS)",
   "phase_status": "done",
   "phases": {
     "T0": "done",
-    "T1": "pending",
+    "T1": "done",
     "T2": "pending",
     "T3": "pending",
     "T4": "pending"
   },
-  "experiments": [],
+  "experiments": [
+    {
+      "id": "exp-a-ascii-ineq",
+      "title": "ASCII <=/>= normalization (H1)",
+      "state": "queued"
+    },
+    {
+      "id": "exp-b-tolerance",
+      "title": "Tolerance scoping (M10 + surface-area)",
+      "state": "queued"
+    },
+    {
+      "id": "exp-c-combined",
+      "title": "Combined A+B",
+      "state": "queued"
+    }
+  ],
   "winner": null,
-  "next_action": "T1: write research/out/hypotheses.json ranked from ADVERSARIAL_REVIEW.md x per-topic baseline breakdown, then T2 experiments",
-  "updated_at": "2026-07-16T01:50:53.610Z",
+  "next_action": "T2: launch 3 experiment agents in isolated worktrees, branches exp/<id> from harness HEAD; each implements fix + regression tests, self-checks tsc/tests/fidelity; then T3 verification",
+  "updated_at": "2026-07-16T02:07:28.921Z",
   "tests_baseline": "154/154",
   "baseline": {
     "gfs": 99.1,
