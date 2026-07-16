@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "run_id": "aral-2026-07-16",
+  "objective": "Maximize Grading Fidelity Score (GFS): correct, typeable answers accepted; wrong answers rejected.",
+  "seed": 20260716,
+  "n_per_topic": 40,
+  "gates": {
+    "tests_pass": true,
+    "tsc_clean": true,
+    "min_defect_reduction": 0.25,
+    "max_reject_rate_drop": 0.01,
+    "max_gen_errors_increase": 0,
+    "max_latency_ratio": 1.5,
+    "max_bundle_ratio": 1.01
+  },
+  "forbidden_paths": [
+    "research/",
+    ".github/",
+    "package.json",
+    "package-lock.json",
+    "vite.config.ts",
+    "tsconfig.json"
+  ],
+  "winner_policy": "single: highest gfs_delta among all-green candidates; ties broken by smaller diff",
+  "merge_target": "main"
+}

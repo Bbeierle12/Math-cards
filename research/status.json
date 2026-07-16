@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "run_id": "aral-2026-07-16",
+  "phase": "setup",
+  "events": [
+    {
+      "ts": "2026-07-16T01:43:30.137Z",
+      "msg": "Harness scaffolded: fidelity.eval.ts, status.mjs, gates.mjs, dashboard.mjs, RUNBOOK.md"
+    }
+  ],
+  "objective": "Maximize Grading Fidelity Score (GFS)",
+  "phase_status": "running",
+  "phases": {
+    "T0": "pending",
+    "T1": "pending",
+    "T2": "pending",
+    "T3": "pending",
+    "T4": "pending"
+  },
+  "experiments": [],
+  "winner": null,
+  "next_action": "Run kill test per RUNBOOK.md, then T0 baseline: RESEARCH_LABEL=baseline RESEARCH_OUT=research/out/baseline.json npx vitest run --config research/harness/vitest.config.mts",
+  "updated_at": "2026-07-16T01:43:30.137Z"
+}
