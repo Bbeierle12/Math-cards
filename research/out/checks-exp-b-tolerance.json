@@ -1,0 +1,7 @@
+{
+  "tests_pass": true,
+  "tsc_clean": true,
+  "bundle_bytes": 2443887,
+  "baseline_bundle_bytes": 2443383,
+  "measured_at": "2026-07-16T02:13:50.559Z"
+}

@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "phase": "T3",
+  "evaluated_at": "2026-07-16T02:14:56.763Z",
+  "baseline_gfs": 99.1,
+  "candidates": [
+    {
+      "id": "exp-a-ascii-ineq",
+      "gfs_delta": 0.56,
+      "all_green": true,
+      "gfs": 99.66
+    },
+    {
+      "id": "exp-b-tolerance",
+      "gfs_delta": 0.33,
+      "all_green": true,
+      "gfs": 99.43
+    },
+    {
+      "id": "exp-c-combined",
+      "gfs_delta": 0.9,
+      "all_green": true,
+      "gfs": 100
+    }
+  ],
+  "all_green_ranked": [
+    "exp-c-combined",
+    "exp-a-ascii-ineq",
+    "exp-b-tolerance"
+  ],
+  "winner": "exp-c-combined",
+  "winner_gfs": 100,
+  "winner_gfs_delta": 0.9,
+  "orchestrator_review": "APPROVED: exp-c source diff is the union of H1 (ASCII <=/>= normalization) + M10 (diameter exact numeric) + surface-area tolerance 0.05; minimal, scoped to services/, not metric-gaming (reject-rate rose to 100%). Test additions additive only.",
+  "runner_ups": [
+    "exp-a-ascii-ineq",
+    "exp-b-tolerance"
+  ]
+}

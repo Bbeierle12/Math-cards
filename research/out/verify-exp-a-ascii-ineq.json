@@ -1,0 +1,881 @@
+{
+  "schema": 1,
+  "label": "verify-exp-a-ascii-ineq",
+  "generated_at": "2026-07-16T02:13:37.986Z",
+  "git_head": "a59e2a3f7ca1083f314aa303c544ff830fa95966",
+  "seed": 20260716,
+  "n_per_topic": 40,
+  "totals": {
+    "gfs": 99.66,
+    "accept_rate_pct": 100,
+    "reject_rate_pct": 98.88,
+    "accept": {
+      "pass": 2347,
+      "total": 2347
+    },
+    "reject": {
+      "pass": 2035,
+      "total": 2058
+    },
+    "gen_errors": 0
+  },
+  "latency": {
+    "gen_ms_mean": 0.01,
+    "gen_ms_p95": 0.03,
+    "val_ms_mean": 0.21,
+    "val_ms_p95": 1.34,
+    "wall_ms": 945
+  },
+  "per_topic": {
+    "addition": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "subtraction": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "multiplication": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "division": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "simple-linear-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "fractions-basic": {
+      "gfs": 100,
+      "accept": {
+        "pass": 80,
+        "total": 80
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "decimals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "order-of-operations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integers": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "multi-step-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "inequalities": {
+      "gfs": 100,
+      "accept": {
+        "pass": 99,
+        "total": 99
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "systems-of-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "exponents": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "polynomials": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "factoring": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "quadratic-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "angles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "triangles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "pythagorean-theorem": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "area-perimeter": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "circles": {
+      "gfs": 85.75,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 21,
+        "total": 40
+      },
+      "fail_by_label": {
+        "dec-wrong-nearmiss": 19
+      }
+    },
+    "volume-surface-area": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "complex-numbers": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "rational-expressions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "radicals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "logarithms": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "sequences-series": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-ratios": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-special-angles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-identities": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 16,
+        "total": 16
+      },
+      "fail_by_label": {}
+    },
+    "trig-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "inverse-trig": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "polynomial-functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "rational-functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "exponential-functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "conic-sections": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "limits": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "derivatives-basic": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "derivatives-product-quotient": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "chain-rule": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integrals-basic": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integration-substitution": {
+      "gfs": 100,
+      "accept": {
+        "pass": 80,
+        "total": 80
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integration-by-parts": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 0,
+        "total": 0
+      },
+      "fail_by_label": {}
+    },
+    "trig-integrals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "partial-fractions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "improper-integrals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 48,
+        "total": 48
+      },
+      "reject": {
+        "pass": 37,
+        "total": 37
+      },
+      "fail_by_label": {}
+    },
+    "sequences": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "series-convergence": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 5,
+        "total": 5
+      },
+      "fail_by_label": {}
+    },
+    "power-series": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "taylor-maclaurin": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "parametric-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "polar-coordinates": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "integration-applications": {
+      "gfs": 97,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 36,
+        "total": 40
+      },
+      "fail_by_label": {
+        "dec-wrong-nearmiss": 4
+      }
+    },
+    "trig-substitution": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    }
+  },
+  "failures_sample": [
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "20.4",
+      "problemText": "A circle has radius $10$. What is its diameter?",
+      "correctAnswer": 20
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "10.4",
+      "problemText": "A circle has radius $5$. What is its diameter?",
+      "correctAnswer": 10
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "14.4",
+      "problemText": "A circle has radius $7$. What is its diameter?",
+      "correctAnswer": 14
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "10.4",
+      "problemText": "A circle has radius $5$. What is its diameter?",
+      "correctAnswer": 10
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "20.4",
+      "problemText": "A circle has radius $10$. What is its diameter?",
+      "correctAnswer": 20
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "6.4",
+      "problemText": "A circle has radius $3$. What is its diameter?",
+      "correctAnswer": 6
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "14.4",
+      "problemText": "A circle has radius $7$. What is its diameter?",
+      "correctAnswer": 14
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "18.4",
+      "problemText": "A circle has radius $9$. What is its diameter?",
+      "correctAnswer": 18
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "18.4",
+      "problemText": "A circle has radius $9$. What is its diameter?",
+      "correctAnswer": 18
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "20.4",
+      "problemText": "A circle has radius $10$. What is its diameter?",
+      "correctAnswer": 20
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "18.4",
+      "problemText": "A circle has radius $9$. What is its diameter?",
+      "correctAnswer": 18
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "14.4",
+      "problemText": "A circle has radius $7$. What is its diameter?",
+      "correctAnswer": 14
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "10.4",
+      "problemText": "A circle has radius $5$. What is its diameter?",
+      "correctAnswer": 10
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "8.4",
+      "problemText": "A circle has radius $4$. What is its diameter?",
+      "correctAnswer": 8
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "20.4",
+      "problemText": "A circle has radius $10$. What is its diameter?",
+      "correctAnswer": 20
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "10.4",
+      "problemText": "A circle has radius $5$. What is its diameter?",
+      "correctAnswer": 10
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "14.4",
+      "problemText": "A circle has radius $7$. What is its diameter?",
+      "correctAnswer": 14
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "18.4",
+      "problemText": "A circle has radius $9$. What is its diameter?",
+      "correctAnswer": 18
+    },
+    {
+      "topic": "circles",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "20.4",
+      "problemText": "A circle has radius $10$. What is its diameter?",
+      "correctAnswer": 20
+    },
+    {
+      "topic": "integration-applications",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "71.49",
+      "problemText": "Find the surface area when $y = x$ from $x = 0$ to $x = 4$ is revolved around the x-axis.\n(Round to 2 decimal places.)",
+      "correctAnswer": 71.09
+    },
+    {
+      "topic": "integration-applications",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "40.39",
+      "problemText": "Find the surface area when $y = x$ from $x = 0$ to $x = 3$ is revolved around the x-axis.\n(Round to 2 decimal places.)",
+      "correctAnswer": 39.99
+    },
+    {
+      "topic": "integration-applications",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "18.17",
+      "problemText": "Find the surface area when $y = x$ from $x = 0$ to $x = 2$ is revolved around the x-axis.\n(Round to 2 decimal places.)",
+      "correctAnswer": 17.77
+    },
+    {
+      "topic": "integration-applications",
+      "kind": "reject",
+      "label": "dec-wrong-nearmiss",
+      "input": "18.17",
+      "problemText": "Find the surface area when $y = x$ from $x = 0$ to $x = 2$ is revolved around the x-axis.\n(Round to 2 decimal places.)",
+      "correctAnswer": 17.77
+    }
+  ]
+}

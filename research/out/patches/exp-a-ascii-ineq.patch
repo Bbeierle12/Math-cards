@@ -1,0 +1,110 @@
+diff --git a/services/mathService.test.ts b/services/mathService.test.ts
+index a6e4261..099a7ec 100644
+--- a/services/mathService.test.ts
++++ b/services/mathService.test.ts
+@@ -486,3 +486,90 @@ describe('self-validation: generated answers pass validateAnswer', () => {
+     });
+   }
+ });
++
++// ===========================
++// REGRESSION: H1 — ASCII <= / >= in inequality answers
++// Stored answers use Unicode ≤/≥ but the answer box is a plain text input,
++// so students can only type ASCII '<=' / '>='. validateAnswer must treat
++// them as equivalent.
++// ===========================
++
++describe('regression H1: ASCII inequality operators', () => {
++  const lteProblem: Problem = {
++    id: 'test-h1-lte',
++    topicId: 'inequalities',
++    problemText: 'Solve for x: 2x + 1 ≤ 9',
++    answerType: 'expression',
++    correctAnswer: 'x ≤ 4',
++    explanationPrompt: '',
++  };
++
++  const gteProblem: Problem = {
++    id: 'test-h1-gte',
++    topicId: 'inequalities',
++    problemText: 'Solve for x: 2x - 3 ≥ 11',
++    answerType: 'expression',
++    correctAnswer: 'x ≥ 7',
++    explanationPrompt: '',
++  };
++
++  it('accepts ASCII <= against stored ≤', () => {
++    expect(validateAnswer(lteProblem, 'x <= 4')).toBe(true);
++    expect(validateAnswer(lteProblem, 'x<=4')).toBe(true);
++    expect(validateAnswer(lteProblem, ' x  <=  4 ')).toBe(true);
++  });
++
++  it('accepts ASCII >= against stored ≥', () => {
++    expect(validateAnswer(gteProblem, 'x >= 7')).toBe(true);
++    expect(validateAnswer(gteProblem, 'x>=7')).toBe(true);
++    expect(validateAnswer(gteProblem, ' x >= 7 ')).toBe(true);
++  });
++
++  it('still accepts the Unicode form directly', () => {
++    expect(validateAnswer(lteProblem, 'x ≤ 4')).toBe(true);
++    expect(validateAnswer(gteProblem, 'x ≥ 7')).toBe(true);
++  });
++
++  it('rejects wrong-direction ASCII operators', () => {
++    expect(validateAnswer(lteProblem, 'x >= 4')).toBe(false);
++    expect(validateAnswer(lteProblem, 'x>=4')).toBe(false);
++    expect(validateAnswer(gteProblem, 'x <= 7')).toBe(false);
++    expect(validateAnswer(gteProblem, 'x<=7')).toBe(false);
++  });
++
++  it('rejects strict ASCII operators against non-strict stored answers', () => {
++    expect(validateAnswer(lteProblem, 'x < 4')).toBe(false);
++    expect(validateAnswer(gteProblem, 'x > 7')).toBe(false);
++  });
++
++  it('accepts flipped-sides forms, both Unicode and ASCII', () => {
++    expect(validateAnswer(lteProblem, '4 ≥ x')).toBe(true);
++    expect(validateAnswer(lteProblem, '4 >= x')).toBe(true);
++    expect(validateAnswer(lteProblem, '4>=x')).toBe(true);
++    expect(validateAnswer(gteProblem, '7 ≤ x')).toBe(true);
++    expect(validateAnswer(gteProblem, '7 <= x')).toBe(true);
++  });
++
++  it('rejects wrong-direction flipped ASCII forms', () => {
++    expect(validateAnswer(lteProblem, '4 <= x')).toBe(false);
++    expect(validateAnswer(gteProblem, '7 >= x')).toBe(false);
++  });
++
++  it('ASCII-typed stored answer validates for ~40 generated inequalities problems', () => {
++    for (let i = 0; i < 40; i++) {
++      const problem = generateProblem('inequalities');
++      const stored = problem.correctAnswer as string;
++      // What a student would actually type in a plain text input
++      const asciiInput = stored.replace(/≤/g, '<=').replace(/≥/g, '>=');
++      const result = validateAnswer(problem, asciiInput);
++      if (!result) {
++        throw new Error(
++          `ASCII input rejected for generated inequality:\n` +
++          `  Problem: ${problem.problemText}\n` +
++          `  Stored answer: "${stored}"\n` +
++          `  ASCII input: "${asciiInput}"`
++        );
++      }
++    }
++  });
++});
+diff --git a/services/mathService.ts b/services/mathService.ts
+index f7a2ae3..df01601 100644
+--- a/services/mathService.ts
++++ b/services/mathService.ts
+@@ -2438,6 +2438,10 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
+     case 'expression': {
+       const normalizeExpr = (s: string) =>
+         s.replace(/\s/g, '').toLowerCase()
++         // Map ASCII inequality digraphs to Unicode BEFORE any single-char
++         // handling so '<=' / '>=' never half-match as '<' / '>'
++         .replace(/<=/g, '≤')         // ASCII '<=' -> '≤'
++         .replace(/>=/g, '≥')         // ASCII '>=' -> '≥'
+          .replace(/\.0(?!\d)/g, '')   // strip trailing .0
+          .replace(/[θ]/g, 'theta');   // normalize theta symbol
+ 
