@@ -486,3 +486,119 @@ describe('self-validation: generated answers pass validateAnswer', () => {
     });
   }
 });
+
+// ===========================
+// REGRESSION: H1 — ASCII inequality operators (<= / >=) must match stored ≤ / ≥
+// ===========================
+
+describe('regression H1: ASCII inequality operators', () => {
+  const leProblem: Problem = {
+    id: 'test-ascii-le',
+    topicId: 'inequalities',
+    problemText: 'Solve for x: 2x + 1 ≤ 9',
+    answerType: 'expression',
+    correctAnswer: 'x ≤ 4',
+    explanationPrompt: '',
+  };
+  const geProblem: Problem = {
+    ...leProblem,
+    id: 'test-ascii-ge',
+    problemText: 'Solve for x: 2x + 1 ≥ 9',
+    correctAnswer: 'x ≥ 4',
+  };
+
+  it('accepts ASCII <= for a stored ≤ answer', () => {
+    expect(validateAnswer(leProblem, 'x <= 4')).toBe(true);
+    expect(validateAnswer(leProblem, 'x<=4')).toBe(true);
+  });
+
+  it('accepts ASCII >= for a stored ≥ answer', () => {
+    expect(validateAnswer(geProblem, 'x >= 4')).toBe(true);
+    expect(validateAnswer(geProblem, 'x>=4')).toBe(true);
+  });
+
+  it('rejects wrong-direction ASCII operators', () => {
+    expect(validateAnswer(leProblem, 'x >= 4')).toBe(false);
+    expect(validateAnswer(geProblem, 'x <= 4')).toBe(false);
+  });
+
+  it('rejects strict ASCII operators for inclusive stored answers', () => {
+    expect(validateAnswer(leProblem, 'x < 4')).toBe(false);
+    expect(validateAnswer(geProblem, 'x > 4')).toBe(false);
+  });
+
+  it('accepts flipped ASCII forms ("4 >= x" for stored "x ≤ 4")', () => {
+    expect(validateAnswer(leProblem, '4 >= x')).toBe(true);
+    expect(validateAnswer(geProblem, '4 <= x')).toBe(true);
+  });
+
+  it('rejects flipped ASCII forms with the wrong direction', () => {
+    expect(validateAnswer(leProblem, '4 <= x')).toBe(false);
+    expect(validateAnswer(geProblem, '4 >= x')).toBe(false);
+  });
+
+  it('generated inequalities validate their ASCII-ized stored answer (40 runs)', () => {
+    for (let i = 0; i < 40; i++) {
+      const p = generateProblem('inequalities');
+      const stored = String(p.correctAnswer);
+      const ascii = stored.replace(/≤/g, '<=').replace(/≥/g, '>=');
+      expect(
+        validateAnswer(p, ascii),
+        `stored "${stored}" should accept ASCII input "${ascii}"`
+      ).toBe(true);
+    }
+  });
+});
+
+// ===========================
+// REGRESSION: M10 — tolerance scoped to π-based answers only
+// ===========================
+
+describe('regression M10: circles tolerance scoping', () => {
+  it('diameter grades exactly; circumference/area accept true-π answers (40 runs)', () => {
+    for (let i = 0; i < 40; i++) {
+      const p = generateProblem('circles');
+      const answer = p.correctAnswer as number;
+      const radiusMatch = p.problemText.match(/radius \$(\d+)\$/);
+      if (!radiusMatch) throw new Error(`Could not parse radius: ${p.problemText}`);
+      const r = parseInt(radiusMatch[1]);
+
+      if (/diameter/.test(p.problemText)) {
+        // d = 2r is an exact integer: no tolerance, off-by-0.4 must be wrong
+        expect(p.answerType).toBe('numeric');
+        expect(answer).toBe(2 * r);
+        expect(validateAnswer(p, String(answer))).toBe(true);
+        expect(validateAnswer(p, String(answer + 0.4))).toBe(false);
+        expect(validateAnswer(p, String(answer - 0.4))).toBe(false);
+      } else if (/circumference/.test(p.problemText)) {
+        // Stored answer uses 3.14; a user computing with true π must still pass
+        expect(validateAnswer(p, String(2 * Math.PI * r))).toBe(true);
+        expect(validateAnswer(p, String(answer))).toBe(true);
+      } else {
+        // area
+        expect(validateAnswer(p, String(Math.PI * r * r))).toBe(true);
+        expect(validateAnswer(p, String(answer))).toBe(true);
+      }
+    }
+  });
+});
+
+describe('regression M10: integration-applications surface-area tolerance', () => {
+  it('surface-area uses a tolerance consistent with "Round to 2 decimal places"', () => {
+    let found = 0;
+    for (let i = 0; i < 300 && found < 10; i++) {
+      const p = generateProblem('integration-applications');
+      if (!/surface area/.test(p.problemText)) continue;
+      found++;
+      const answer = p.correctAnswer as number;
+      expect(p.tolerance).toBe(0.05);
+      expect(validateAnswer(p, String(answer))).toBe(true);
+      // A 3.14-or-rounding-level deviation (~0.03) is still acceptable
+      expect(validateAnswer(p, String(answer + 0.03))).toBe(true);
+      // But a 0.4 miss is a wrong answer, not a rounding difference
+      expect(validateAnswer(p, String(answer + 0.4))).toBe(false);
+      expect(validateAnswer(p, String(answer - 0.4))).toBe(false);
+    }
+    expect(found).toBeGreaterThan(0);
+  });
+});

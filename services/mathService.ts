@@ -754,6 +754,20 @@ const generateCirclesProblem = (): Problem => {
       hint = '';
   }
 
+  // Diameter is an exact integer (d = 2r, no π involved) — require the exact value.
+  // Circumference/area keep ±0.5 to cover π vs 3.14 differences.
+  if (problemType === 'diameter') {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'circles',
+      problemText,
+      answerType: 'numeric',
+      correctAnswer: answer,
+      explanationPrompt: `Explain how to find the ${problemType} of a circle.`,
+      hint,
+    };
+  }
+
   return {
     id: crypto.randomUUID(),
     topicId: 'circles',
@@ -2199,7 +2213,7 @@ const generateIntegrationApplicationsProblem = (): Problem => {
       problemText: `Find the surface area when $y = x$ from $x = 0$ to $x = ${a}$ is revolved around the x-axis.\n(Round to 2 decimal places.)`,
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
-      tolerance: 0.5,
+      tolerance: 0.05,
       explanationPrompt: `S = 2π∫₀^${a} x√(1+1) dx = 2π√2·[x²/2]₀^${a} = π√2·${a * a} ≈ ${answer}`,
       hint: 'Surface area: $S = 2\\pi \\int f(x)\\sqrt{1 + [f\'(x)]^2}\\,dx$.',
     };
@@ -2438,6 +2452,8 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
     case 'expression': {
       const normalizeExpr = (s: string) =>
         s.replace(/\s/g, '').toLowerCase()
+         .replace(/<=/g, '≤')         // map ASCII two-char operators to Unicode
+         .replace(/>=/g, '≥')         // (before any single-char handling)
          .replace(/\.0(?!\d)/g, '')   // strip trailing .0
          .replace(/[θ]/g, 'theta');   // normalize theta symbol
 
