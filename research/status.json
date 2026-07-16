@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "run_id": "aral-2026-07-16",
-  "phase": "setup",
+  "phase": "T0",
   "events": [
     {
       "ts": "2026-07-16T01:43:30.137Z",
@@ -18,12 +18,16 @@
     {
       "ts": "2026-07-16T01:49:05.771Z",
       "msg": "KILL TEST passed: torn-write, resume, kill-switch all green. Documented pattern-kill procedure in RUNBOOK."
+    },
+    {
+      "ts": "2026-07-16T01:50:53.610Z",
+      "msg": "T0 done: baseline GFS 99.10 (accept 99.19%, reject 98.88%). Defect clusters: inequalities/H1 (19 ascii accept-fails), circles/M10 (19 tolerance reject-fails), integration-applications (4 tolerance reject-fails). Tests 154/154, tsc clean, bundle 2443383B."
     }
   ],
   "objective": "Maximize Grading Fidelity Score (GFS)",
-  "phase_status": "kill-test-passed",
+  "phase_status": "done",
   "phases": {
-    "T0": "pending",
+    "T0": "done",
     "T1": "pending",
     "T2": "pending",
     "T3": "pending",
@@ -31,6 +35,15 @@
   },
   "experiments": [],
   "winner": null,
-  "next_action": "Run kill test per RUNBOOK.md, then T0 baseline: RESEARCH_LABEL=baseline RESEARCH_OUT=research/out/baseline.json npx vitest run --config research/harness/vitest.config.mts",
-  "updated_at": "2026-07-16T01:49:05.772Z"
+  "next_action": "T1: write research/out/hypotheses.json ranked from ADVERSARIAL_REVIEW.md x per-topic baseline breakdown, then T2 experiments",
+  "updated_at": "2026-07-16T01:50:53.610Z",
+  "tests_baseline": "154/154",
+  "baseline": {
+    "gfs": 99.1,
+    "accept_pct": 99.19,
+    "reject_pct": 98.88,
+    "defect_pts": 0.9,
+    "bundle_bytes": 2443383,
+    "wall_ms": 1302
+  }
 }

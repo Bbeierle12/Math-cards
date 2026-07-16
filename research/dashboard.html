@@ -60,18 +60,18 @@
 <div class="aral">
   <h1>Overnight autoresearch — Math-cards</h1>
   <div class="sub">Maximize Grading Fidelity Score (GFS): correct, typeable answers accepted; wrong answers rejected.<br>
-    run <code>aral-2026-07-16</code> · phase <b>setup</b> (running) · updated 2026-07-16T01:43:30.137Z</div>
+    run <code>aral-2026-07-16</code> · phase <b>T0</b> (done) · updated 2026-07-16T01:50:53.610Z</div>
 
   <div class="rail">
-    <div class="ph pending"><b>T0</b> · pending</div><div class="ph pending"><b>T1</b> · pending</div><div class="ph pending"><b>T2</b> · pending</div><div class="ph pending"><b>T3</b> · pending</div><div class="ph pending"><b>T4</b> · pending</div>
+    <div class="ph done"><b>T0</b> ✓ done</div><div class="ph pending"><b>T1</b> · pending</div><div class="ph pending"><b>T2</b> · pending</div><div class="ph pending"><b>T3</b> · pending</div><div class="ph pending"><b>T4</b> · pending</div>
   </div>
 
   <div class="tiles">
     
   <div class="tile">
     <div class="tile-label">Baseline GFS</div>
-    <div class="tile-value">—</div>
-    <div class="tile-sub">pending T0</div>
+    <div class="tile-value">99.10</div>
+    <div class="tile-sub">accept 99.19% · reject 98.88%</div>
   </div>
     
   <div class="tile">
@@ -88,7 +88,7 @@
     
   <div class="tile">
     <div class="tile-label">Test suite</div>
-    <div class="tile-value">—</div>
+    <div class="tile-value">154/154</div>
     <div class="tile-sub">vitest, baseline</div>
   </div>
     
@@ -103,10 +103,70 @@
   <div class="muted">No experiments yet — waiting for T1/T2.</div>
 
   <h2>Baseline: 12 lowest-fidelity topics (GFS per topic, 0–100)</h2>
-  <div class="muted">Pending T0 baseline.</div>
+  <div class="bars">
+  <div class="bar-row">
+    <div class="bar-label" title="circles">circles</div>
+    <div class="bar-track"><div class="bar-fill" style="width:85.75%"></div></div>
+    <div class="bar-value">85.75</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="inequalities">inequalities</div>
+    <div class="bar-track"><div class="bar-fill" style="width:86.57%"></div></div>
+    <div class="bar-value">86.57</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="integration-applications">integration-applications</div>
+    <div class="bar-track"><div class="bar-fill" style="width:97%"></div></div>
+    <div class="bar-value">97</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="addition">addition</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="subtraction">subtraction</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="multiplication">multiplication</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="division">division</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="simple-linear-equations">simple-linear-equations</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="fractions-basic">fractions-basic</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="decimals">decimals</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="order-of-operations">order-of-operations</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="integers">integers</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div></div>
 
   <h2>Event log</h2>
-  <div class="log"><div><span class="ts">2026-07-16T01:43:30.137Z</span>Harness scaffolded: fidelity.eval.ts, status.mjs, gates.mjs, dashboard.mjs, RUNBOOK.md</div></div>
+  <div class="log"><div><span class="ts">2026-07-16T01:50:53.610Z</span>T0 done: baseline GFS 99.10 (accept 99.19%, reject 98.88%). Defect clusters: inequalities/H1 (19 ascii accept-fails), circles/M10 (19 tolerance reject-fails), integration-applications (4 tolerance reject-fails). Tests 154/154, tsc clean, bundle 2443383B.</div><div><span class="ts">2026-07-16T01:49:05.771Z</span>KILL TEST passed: torn-write, resume, kill-switch all green. Documented pattern-kill procedure in RUNBOOK.</div><div><span class="ts">2026-07-16T01:48:37.803Z</span>KILL switch detected — aborting at phase boundary</div><div><span class="ts">2026-07-16T01:46:45.064Z</span>KILL TEST starting (drill)</div><div><span class="ts">2026-07-16T01:43:30.137Z</span>Harness scaffolded: fidelity.eval.ts, status.mjs, gates.mjs, dashboard.mjs, RUNBOOK.md</div></div>
 
   <div class="foot">
     Kill switch: <code>touch research/KILL</code> stops the loop at the next phase boundary.
