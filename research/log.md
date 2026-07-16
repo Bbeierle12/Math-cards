@@ -8,3 +8,4 @@
 - `2026-07-16T02:07:28.921Z` T1 done: 3 hypotheses ranked (exp-a H1 ascii-ineq ~63% defect reduction; exp-b M10 tolerance ~37%; exp-c combined ~100%). M8/M9 deferred: unmeasured at baseline, cannot pass G3.
 - `2026-07-16T02:09:16.698Z` T2 launched: 3 experiment agents in isolated worktrees (exp-a, exp-b, exp-c)
 - `2026-07-16T02:15:10.516Z` T3 done: all 3 candidates pass all 8 gates independently. Winner=exp-c-combined (GFS 100.0, delta +0.90, 100% defect reduction). Ranked: exp-c > exp-a(99.66) > exp-b(99.43). Orchestrator diff review APPROVED.
+- `2026-07-16T02:17:20.354Z` T4 done: winner exp-c-combined MERGED to main (PR #7, squash, sha 2a935d9). GFS 99.10->100.0. Runner-ups exp-a/exp-b recorded (both subsets of winner). Loop complete.

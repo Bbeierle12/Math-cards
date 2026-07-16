@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "run_id": "aral-2026-07-16",
+  "phase": "T4",
+  "completed_at": "2026-07-16T02:20:00Z",
+  "objective": "Maximize Grading Fidelity Score (GFS)",
+  "baseline_gfs": 99.10,
+  "winner": {
+    "id": "exp-c-combined",
+    "gfs": 100.0,
+    "gfs_delta": 0.90,
+    "defect_reduction_pct": 100,
+    "fixes": ["H1 ASCII inequality normalization", "M10 exact diameter grading", "surface-area tolerance 0.5->0.05"],
+    "merged_pr": 7,
+    "merged_sha": "2a935d95a6c5c3f8ed1c54fdec5306c39c417793",
+    "merge_method": "squash"
+  },
+  "runner_ups": [
+    { "id": "exp-a-ascii-ineq", "gfs": 99.66, "gfs_delta": 0.56, "all_green": true, "note": "H1 only; subset of winner" },
+    { "id": "exp-b-tolerance", "gfs": 99.43, "gfs_delta": 0.33, "all_green": true, "note": "M10 + surface-area only; subset of winner" }
+  ],
+  "gates_all_green": true,
+  "harness_pr": 6,
+  "deferred_followups": [
+    "M8/M9 algebraic-equivalence hardening (real, but unmeasured by current probe corpus)",
+    "H3 timer double-fail, H4 localStorage bricking, and other component-behavior findings (outside the GFS objective)"
+  ]
+}

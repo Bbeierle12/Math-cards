@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "run_id": "aral-2026-07-16",
-  "phase": "T3",
+  "phase": "T4",
   "events": [
     {
       "ts": "2026-07-16T01:43:30.137Z",
@@ -34,6 +34,10 @@
     {
       "ts": "2026-07-16T02:15:10.515Z",
       "msg": "T3 done: all 3 candidates pass all 8 gates independently. Winner=exp-c-combined (GFS 100.0, delta +0.90, 100% defect reduction). Ranked: exp-c > exp-a(99.66) > exp-b(99.43). Orchestrator diff review APPROVED."
+    },
+    {
+      "ts": "2026-07-16T02:17:20.353Z",
+      "msg": "T4 done: winner exp-c-combined MERGED to main (PR #7, squash, sha 2a935d9). GFS 99.10->100.0. Runner-ups exp-a/exp-b recorded (both subsets of winner). Loop complete."
     }
   ],
   "objective": "Maximize Grading Fidelity Score (GFS)",
@@ -43,7 +47,7 @@
     "T1": "done",
     "T2": "done",
     "T3": "done",
-    "T4": "pending"
+    "T4": "done"
   },
   "experiments": [
     {
@@ -198,8 +202,8 @@
     }
   ],
   "winner": "exp-c-combined",
-  "next_action": "T4: branch claude/autoresearch-winner-exp-c from origin/main, cherry-pick e38193d, push, open PR to main, merge (all gates green, pre-authorized).",
-  "updated_at": "2026-07-16T02:15:10.516Z",
+  "next_action": "DONE. Loop complete. Winner merged to main. Harness on PR #6 (draft) for review.",
+  "updated_at": "2026-07-16T02:17:20.353Z",
   "tests_baseline": "154/154",
   "baseline": {
     "gfs": 99.1,
@@ -209,5 +213,5 @@
     "bundle_bytes": 2443383,
     "wall_ms": 1302
   },
-  "winner_state": "verified green — pending merge"
+  "winner_state": "MERGED to main via PR #7 (sha 2a935d9)"
 }
