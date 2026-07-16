@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "run_id": "aral-2026-07-16",
-  "phase": "T1",
+  "phase": "T2",
   "events": [
     {
       "ts": "2026-07-16T01:43:30.137Z",
@@ -26,14 +26,18 @@
     {
       "ts": "2026-07-16T02:07:28.921Z",
       "msg": "T1 done: 3 hypotheses ranked (exp-a H1 ascii-ineq ~63% defect reduction; exp-b M10 tolerance ~37%; exp-c combined ~100%). M8/M9 deferred: unmeasured at baseline, cannot pass G3."
+    },
+    {
+      "ts": "2026-07-16T02:09:16.698Z",
+      "msg": "T2 launched: 3 experiment agents in isolated worktrees (exp-a, exp-b, exp-c)"
     }
   ],
   "objective": "Maximize Grading Fidelity Score (GFS)",
-  "phase_status": "done",
+  "phase_status": "running",
   "phases": {
     "T0": "done",
     "T1": "done",
-    "T2": "pending",
+    "T2": "running",
     "T3": "pending",
     "T4": "pending"
   },
@@ -41,22 +45,22 @@
     {
       "id": "exp-a-ascii-ineq",
       "title": "ASCII <=/>= normalization (H1)",
-      "state": "queued"
+      "state": "running"
     },
     {
       "id": "exp-b-tolerance",
       "title": "Tolerance scoping (M10 + surface-area)",
-      "state": "queued"
+      "state": "running"
     },
     {
       "id": "exp-c-combined",
       "title": "Combined A+B",
-      "state": "queued"
+      "state": "running"
     }
   ],
   "winner": null,
-  "next_action": "T2: launch 3 experiment agents in isolated worktrees, branches exp/<id> from harness HEAD; each implements fix + regression tests, self-checks tsc/tests/fidelity; then T3 verification",
-  "updated_at": "2026-07-16T02:07:28.921Z",
+  "next_action": "Wait for 3 experiment agents; then T3: research/harness/verify.sh exp/<id> <id> <base-sha> per candidate",
+  "updated_at": "2026-07-16T02:09:16.698Z",
   "tests_baseline": "154/154",
   "baseline": {
     "gfs": 99.1,

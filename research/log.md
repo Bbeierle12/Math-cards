@@ -6,3 +6,4 @@
 - `2026-07-16T01:49:05.772Z` KILL TEST passed: torn-write, resume, kill-switch all green. Documented pattern-kill procedure in RUNBOOK.
 - `2026-07-16T01:50:53.610Z` T0 done: baseline GFS 99.10 (accept 99.19%, reject 98.88%). Defect clusters: inequalities/H1 (19 ascii accept-fails), circles/M10 (19 tolerance reject-fails), integration-applications (4 tolerance reject-fails). Tests 154/154, tsc clean, bundle 2443383B.
 - `2026-07-16T02:07:28.921Z` T1 done: 3 hypotheses ranked (exp-a H1 ascii-ineq ~63% defect reduction; exp-b M10 tolerance ~37%; exp-c combined ~100%). M8/M9 deferred: unmeasured at baseline, cannot pass G3.
+- `2026-07-16T02:09:16.698Z` T2 launched: 3 experiment agents in isolated worktrees (exp-a, exp-b, exp-c)
