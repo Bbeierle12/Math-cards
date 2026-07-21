@@ -1,0 +1,202 @@
+<title>Math-cards autoresearch — aral-2026-07-16</title>
+<style>
+  .aral { color-scheme: light;
+    --surface-1:#fcfcfb; --plane:#f9f9f7; --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,0.10);
+    --seq:#2a78d6; --good:#0ca30c; --good-text:#006300; --critical:#d03b3b;
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink);
+    background: var(--plane); padding: 24px; max-width: 1080px; margin: 0 auto; }
+  @media (prefers-color-scheme: dark) { :root:where(:not([data-theme="light"])) .aral {
+    color-scheme: dark; --surface-1:#1a1a19; --plane:#0d0d0d; --ink:#ffffff; --ink-2:#c3c2b7;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10); --seq:#3987e5;
+    --good-text:#0ca30c; } }
+  :root[data-theme="dark"] .aral { color-scheme: dark; --surface-1:#1a1a19; --plane:#0d0d0d;
+    --ink:#ffffff; --ink-2:#c3c2b7; --grid:#2c2c2a; --baseline:#383835;
+    --ring:rgba(255,255,255,0.10); --seq:#3987e5; --good-text:#0ca30c; }
+  .aral h1 { font-size: 20px; margin: 0 0 4px; }
+  .aral h2 { font-size: 15px; margin: 28px 0 10px; }
+  .aral .sub { color: var(--ink-2); margin-bottom: 20px; }
+  .aral .rail { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 20px; }
+  .aral .ph { border: 1px solid var(--ring); background: var(--surface-1); border-radius: 8px;
+    padding: 6px 12px; color: var(--ink-2); }
+  .aral .ph b { color: var(--ink); }
+  .aral .ph.done { border-color: var(--good); }
+  .aral .ph.running { border-color: var(--seq); color: var(--ink); }
+  .aral .ph.failed, .aral .ph.aborted { border-color: var(--critical); }
+  .aral .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .aral .tile { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 10px; padding: 12px 14px; }
+  .aral .tile-label { color: var(--muted); font-size: 12px; }
+  .aral .tile-value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+  .aral .tile-sub { color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+  .aral .delta { font-size: 13px; font-weight: 600; margin-left: 8px; }
+  .aral .delta.up { color: var(--good-text); }
+  .aral .delta.down { color: var(--critical); }
+  .aral table { width: 100%; border-collapse: collapse; background: var(--surface-1);
+    border: 1px solid var(--ring); border-radius: 10px; overflow: hidden; }
+  .aral th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; }
+  .aral th, .aral td { padding: 8px 12px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  .aral tr:last-child td { border-bottom: none; }
+  .aral td.num, .aral th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .aral .chip { display: inline-block; font-size: 11px; border: 1px solid var(--ring);
+    border-radius: 999px; padding: 1px 8px; margin: 1px 0; white-space: nowrap; }
+  .aral .chip-good { color: var(--good-text); border-color: var(--good); }
+  .aral .chip-bad { color: var(--critical); border-color: var(--critical); }
+  .aral .muted { color: var(--muted); }
+  .aral .bars { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 10px; padding: 14px; }
+  .aral .bar-row { display: grid; grid-template-columns: 220px 1fr 48px; gap: 10px; align-items: center; padding: 3px 0; }
+  .aral .bar-label { color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .aral .bar-track { background: transparent; border-left: 2px solid var(--baseline); height: 14px; }
+  .aral .bar-fill { background: var(--seq); height: 100%; border-radius: 0 4px 4px 0; }
+  .aral .bar-value { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  .aral .log { background: var(--surface-1); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 10px 14px; max-height: 340px; overflow-y: auto; }
+  .aral .log div { padding: 3px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px; }
+  .aral .log div:last-child { border-bottom: none; }
+  .aral .log .ts { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .aral .foot { color: var(--muted); font-size: 12px; margin-top: 24px; }
+  .aral code { font-size: 12px; }
+  @media (max-width: 640px) { .aral .bar-row { grid-template-columns: 120px 1fr 42px; } }
+</style>
+<div class="aral">
+  <h1>Overnight autoresearch — Math-cards</h1>
+  <div class="sub">Maximize Grading Fidelity Score (GFS): correct, typeable answers accepted; wrong answers rejected.<br>
+    run <code>aral-2026-07-16</code> · phase <b>T4</b> (done) · updated 2026-07-16T02:17:20.353Z</div>
+
+  <div class="rail">
+    <div class="ph done"><b>T0</b> ✓ done</div><div class="ph done"><b>T1</b> ✓ done</div><div class="ph done"><b>T2</b> ✓ done</div><div class="ph done"><b>T3</b> ✓ done</div><div class="ph done"><b>T4</b> ✓ done</div>
+  </div>
+
+  <div class="tiles">
+    
+  <div class="tile">
+    <div class="tile-label">Baseline GFS</div>
+    <div class="tile-value">99.10</div>
+    <div class="tile-sub">accept 99.19% · reject 98.88%</div>
+  </div>
+    
+  <div class="tile">
+    <div class="tile-label">Best candidate GFS</div>
+    <div class="tile-value">100<span class="delta up">▲ 0.90</span></div>
+    <div class="tile-sub">exp-c-combined</div>
+  </div>
+    
+  <div class="tile">
+    <div class="tile-label">Experiments</div>
+    <div class="tile-value">3</div>
+    <div class="tile-sub">3 all-green</div>
+  </div>
+    
+  <div class="tile">
+    <div class="tile-label">Test suite</div>
+    <div class="tile-value">154/154</div>
+    <div class="tile-sub">vitest, baseline</div>
+  </div>
+    
+  <div class="tile">
+    <div class="tile-label">Winner</div>
+    <div class="tile-value">exp-c-combined</div>
+    <div class="tile-sub">MERGED to main via PR #7 (sha 2a935d9)</div>
+  </div>
+  </div>
+
+  <h2>Experiments</h2>
+  <table>
+    <thead><tr><th>id</th><th>hypothesis</th><th class="num">GFS</th><th class="num">Δ</th><th>gates</th><th>verdict</th></tr></thead>
+    <tbody>
+  <tr>
+    <td><code>exp-a-ascii-ineq</code></td>
+    <td>ASCII &lt;=/&gt;= normalization (H1)</td>
+    <td class="num">99.66</td>
+    <td class="num">+0.56</td>
+    <td><span class="chip chip-good" title="vitest suite pass=true">✓ G1-tests</span> <span class="chip chip-good" title="tsc --noEmit clean=true">✓ G2-tsc</span> <span class="chip chip-good" title="GFS 99.1 -&gt; 99.66 (defect 0.90 -&gt; 0.34, reduction 62.2%, need &gt;= 25%)">✓ G3-gfs-improves</span> <span class="chip chip-good" title="reject-rate 98.88% -&gt; 98.88% (drop 0.00pp, allowed 1pp)">✓ G4-reject-no-regress</span> <span class="chip chip-good" title="gen_errors 0 -&gt; 0">✓ G5-gen-errors</span> <span class="chip chip-good" title="val p95 x0.84, corpus wall x0.73 (allowed x1.5)">✓ G6-latency</span> <span class="chip chip-good" title="bundle 2443383 -&gt; 2443749 bytes (x1.0001, allowed x1.01)">✓ G7-bundle</span> <span class="chip chip-good" title="all 2 changed files in allowed scope">✓ G8-diff-scope</span></td>
+    <td>green</td>
+  </tr>
+  <tr>
+    <td><code>exp-b-tolerance</code></td>
+    <td>Tolerance scoping (M10 + surface-area)</td>
+    <td class="num">99.43</td>
+    <td class="num">+0.33</td>
+    <td><span class="chip chip-good" title="vitest suite pass=true">✓ G1-tests</span> <span class="chip chip-good" title="tsc --noEmit clean=true">✓ G2-tsc</span> <span class="chip chip-good" title="GFS 99.1 -&gt; 99.43 (defect 0.90 -&gt; 0.57, reduction 36.7%, need &gt;= 25%)">✓ G3-gfs-improves</span> <span class="chip chip-good" title="reject-rate 98.88% -&gt; 100% (drop -1.12pp, allowed 1pp)">✓ G4-reject-no-regress</span> <span class="chip chip-good" title="gen_errors 0 -&gt; 0">✓ G5-gen-errors</span> <span class="chip chip-good" title="val p95 x0.81, corpus wall x0.71 (allowed x1.5)">✓ G6-latency</span> <span class="chip chip-good" title="bundle 2443383 -&gt; 2443887 bytes (x1.0002, allowed x1.01)">✓ G7-bundle</span> <span class="chip chip-good" title="all 2 changed files in allowed scope">✓ G8-diff-scope</span></td>
+    <td>green</td>
+  </tr>
+  <tr>
+    <td><code>exp-c-combined</code></td>
+    <td>Combined A+B</td>
+    <td class="num">100</td>
+    <td class="num">+0.90</td>
+    <td><span class="chip chip-good" title="vitest suite pass=true">✓ G1-tests</span> <span class="chip chip-good" title="tsc --noEmit clean=true">✓ G2-tsc</span> <span class="chip chip-good" title="GFS 99.1 -&gt; 100 (defect 0.90 -&gt; 0.00, reduction 100.0%, need &gt;= 25%)">✓ G3-gfs-improves</span> <span class="chip chip-good" title="reject-rate 98.88% -&gt; 100% (drop -1.12pp, allowed 1pp)">✓ G4-reject-no-regress</span> <span class="chip chip-good" title="gen_errors 0 -&gt; 0">✓ G5-gen-errors</span> <span class="chip chip-good" title="val p95 x0.96, corpus wall x0.82 (allowed x1.5)">✓ G6-latency</span> <span class="chip chip-good" title="bundle 2443383 -&gt; 2443929 bytes (x1.0002, allowed x1.01)">✓ G7-bundle</span> <span class="chip chip-good" title="all 2 changed files in allowed scope">✓ G8-diff-scope</span></td>
+    <td>green</td>
+  </tr></tbody>
+  </table>
+
+  <h2>Baseline: 12 lowest-fidelity topics (GFS per topic, 0–100)</h2>
+  <div class="bars">
+  <div class="bar-row">
+    <div class="bar-label" title="circles">circles</div>
+    <div class="bar-track"><div class="bar-fill" style="width:85.75%"></div></div>
+    <div class="bar-value">85.75</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="inequalities">inequalities</div>
+    <div class="bar-track"><div class="bar-fill" style="width:86.57%"></div></div>
+    <div class="bar-value">86.57</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="integration-applications">integration-applications</div>
+    <div class="bar-track"><div class="bar-fill" style="width:97%"></div></div>
+    <div class="bar-value">97</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="addition">addition</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="subtraction">subtraction</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="multiplication">multiplication</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="division">division</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="simple-linear-equations">simple-linear-equations</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="fractions-basic">fractions-basic</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="decimals">decimals</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="order-of-operations">order-of-operations</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label" title="integers">integers</div>
+    <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+    <div class="bar-value">100</div>
+  </div></div>
+
+  <h2>Event log</h2>
+  <div class="log"><div><span class="ts">2026-07-16T02:17:20.353Z</span>T4 done: winner exp-c-combined MERGED to main (PR #7, squash, sha 2a935d9). GFS 99.10-&gt;100.0. Runner-ups exp-a/exp-b recorded (both subsets of winner). Loop complete.</div><div><span class="ts">2026-07-16T02:15:10.515Z</span>T3 done: all 3 candidates pass all 8 gates independently. Winner=exp-c-combined (GFS 100.0, delta +0.90, 100% defect reduction). Ranked: exp-c &gt; exp-a(99.66) &gt; exp-b(99.43). Orchestrator diff review APPROVED.</div><div><span class="ts">2026-07-16T02:09:16.698Z</span>T2 launched: 3 experiment agents in isolated worktrees (exp-a, exp-b, exp-c)</div><div><span class="ts">2026-07-16T02:07:28.921Z</span>T1 done: 3 hypotheses ranked (exp-a H1 ascii-ineq ~63% defect reduction; exp-b M10 tolerance ~37%; exp-c combined ~100%). M8/M9 deferred: unmeasured at baseline, cannot pass G3.</div><div><span class="ts">2026-07-16T01:50:53.610Z</span>T0 done: baseline GFS 99.10 (accept 99.19%, reject 98.88%). Defect clusters: inequalities/H1 (19 ascii accept-fails), circles/M10 (19 tolerance reject-fails), integration-applications (4 tolerance reject-fails). Tests 154/154, tsc clean, bundle 2443383B.</div><div><span class="ts">2026-07-16T01:49:05.771Z</span>KILL TEST passed: torn-write, resume, kill-switch all green. Documented pattern-kill procedure in RUNBOOK.</div><div><span class="ts">2026-07-16T01:48:37.803Z</span>KILL switch detected — aborting at phase boundary</div><div><span class="ts">2026-07-16T01:46:45.064Z</span>KILL TEST starting (drill)</div><div><span class="ts">2026-07-16T01:43:30.137Z</span>Harness scaffolded: fidelity.eval.ts, status.mjs, gates.mjs, dashboard.mjs, RUNBOOK.md</div></div>
+
+  <div class="foot">
+    Kill switch: <code>touch research/KILL</code> stops the loop at the next phase boundary.
+    Resume protocol: see <code>research/RUNBOOK.md</code> — state lives in <code>research/status.json</code>.
+  </div>
+</div>

@@ -1,0 +1,102 @@
+diff --git a/services/mathService.test.ts b/services/mathService.test.ts
+index a6e4261..9827bc0 100644
+--- a/services/mathService.test.ts
++++ b/services/mathService.test.ts
+@@ -486,3 +486,63 @@ describe('self-validation: generated answers pass validateAnswer', () => {
+     });
+   }
+ });
++
++// ===========================
++// TOLERANCE SCOPING (M10 regression):
++// decimal-tolerance must not be over-applied to exact answers
++// ===========================
++
++describe('tolerance scoping (M10 regression)', () => {
++  it('circles: diameter is graded exactly; circumference/area still accept true-π answers', () => {
++    let sawDiameter = false;
++    let sawPiBased = false;
++
++    for (let i = 0; i < 40; i++) {
++      const p = generateProblem('circles');
++      const ans = p.correctAnswer as number;
++
++      if (/diameter/i.test(p.problemText)) {
++        sawDiameter = true;
++        // d = 2r is an exact integer — no tolerance should apply
++        expect(p.answerType).toBe('numeric');
++        expect(validateAnswer(p, String(ans))).toBe(true);
++        expect(validateAnswer(p, String(ans + 0.4))).toBe(false);
++      } else {
++        sawPiBased = true;
++        // π-based subtypes keep the 0.5 tolerance (π vs 3.14)
++        expect(p.answerType).toBe('decimal-tolerance');
++        expect(p.tolerance).toBe(0.5);
++        const match = p.problemText.match(/radius \$(\d+)\$/);
++        if (!match) throw new Error(`Could not parse radius: ${p.problemText}`);
++        const r = parseInt(match[1]);
++        const truePiAnswer = /circumference/i.test(p.problemText)
++          ? 2 * Math.PI * r
++          : Math.PI * r * r;
++        expect(validateAnswer(p, String(truePiAnswer))).toBe(true);
++        expect(validateAnswer(p, String(ans))).toBe(true);
++      }
++    }
++
++    expect(sawDiameter).toBe(true);
++    expect(sawPiBased).toBe(true);
++  });
++
++  it('integration-applications: surface-area tolerance is tight enough to reject wrong answers', () => {
++    let sawSurfaceArea = false;
++
++    for (let i = 0; i < 60; i++) {
++      const p = generateProblem('integration-applications');
++      if (!/surface area/i.test(p.problemText)) continue;
++      sawSurfaceArea = true;
++
++      const ans = p.correctAnswer as number;
++      // Honest precision spread (π vs 3.14 at a ≤ 4) is ~0.04, so ±0.05 suffices
++      expect(validateAnswer(p, String(ans))).toBe(true);
++      expect(validateAnswer(p, (ans + 0.03).toFixed(2))).toBe(true);
++      // A flatly wrong answer must be rejected (was accepted under tolerance 0.5)
++      expect(validateAnswer(p, (ans + 0.4).toFixed(2))).toBe(false);
++    }
++
++    expect(sawSurfaceArea).toBe(true);
++  });
++});
+diff --git a/services/mathService.ts b/services/mathService.ts
+index f7a2ae3..e81e033 100644
+--- a/services/mathService.ts
++++ b/services/mathService.ts
+@@ -754,6 +754,20 @@ const generateCirclesProblem = (): Problem => {
+       hint = '';
+   }
+ 
++  // Diameter is an exact integer (d = 2r, no π involved) — grade it exactly.
++  // Circumference/area keep a 0.5 tolerance since students may use π or 3.14.
++  if (problemType === 'diameter') {
++    return {
++      id: crypto.randomUUID(),
++      topicId: 'circles',
++      problemText,
++      answerType: 'numeric',
++      correctAnswer: answer,
++      explanationPrompt: `Explain how to find the ${problemType} of a circle.`,
++      hint,
++    };
++  }
++
+   return {
+     id: crypto.randomUUID(),
+     topicId: 'circles',
+@@ -2199,7 +2213,7 @@ const generateIntegrationApplicationsProblem = (): Problem => {
+       problemText: `Find the surface area when $y = x$ from $x = 0$ to $x = ${a}$ is revolved around the x-axis.\n(Round to 2 decimal places.)`,
+       answerType: 'decimal-tolerance',
+       correctAnswer: answer,
+-      tolerance: 0.5,
++      tolerance: 0.05,
+       explanationPrompt: `S = 2π∫₀^${a} x√(1+1) dx = 2π√2·[x²/2]₀^${a} = π√2·${a * a} ≈ ${answer}`,
+       hint: 'Surface area: $S = 2\\pi \\int f(x)\\sqrt{1 + [f\'(x)]^2}\\,dx$.',
+     };

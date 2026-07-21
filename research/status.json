@@ -1,0 +1,217 @@
+{
+  "schema": 1,
+  "run_id": "aral-2026-07-16",
+  "phase": "T4",
+  "events": [
+    {
+      "ts": "2026-07-16T01:43:30.137Z",
+      "msg": "Harness scaffolded: fidelity.eval.ts, status.mjs, gates.mjs, dashboard.mjs, RUNBOOK.md"
+    },
+    {
+      "ts": "2026-07-16T01:46:45.064Z",
+      "msg": "KILL TEST starting (drill)"
+    },
+    {
+      "ts": "2026-07-16T01:48:37.803Z",
+      "msg": "KILL switch detected — aborting at phase boundary"
+    },
+    {
+      "ts": "2026-07-16T01:49:05.771Z",
+      "msg": "KILL TEST passed: torn-write, resume, kill-switch all green. Documented pattern-kill procedure in RUNBOOK."
+    },
+    {
+      "ts": "2026-07-16T01:50:53.610Z",
+      "msg": "T0 done: baseline GFS 99.10 (accept 99.19%, reject 98.88%). Defect clusters: inequalities/H1 (19 ascii accept-fails), circles/M10 (19 tolerance reject-fails), integration-applications (4 tolerance reject-fails). Tests 154/154, tsc clean, bundle 2443383B."
+    },
+    {
+      "ts": "2026-07-16T02:07:28.921Z",
+      "msg": "T1 done: 3 hypotheses ranked (exp-a H1 ascii-ineq ~63% defect reduction; exp-b M10 tolerance ~37%; exp-c combined ~100%). M8/M9 deferred: unmeasured at baseline, cannot pass G3."
+    },
+    {
+      "ts": "2026-07-16T02:09:16.698Z",
+      "msg": "T2 launched: 3 experiment agents in isolated worktrees (exp-a, exp-b, exp-c)"
+    },
+    {
+      "ts": "2026-07-16T02:15:10.515Z",
+      "msg": "T3 done: all 3 candidates pass all 8 gates independently. Winner=exp-c-combined (GFS 100.0, delta +0.90, 100% defect reduction). Ranked: exp-c > exp-a(99.66) > exp-b(99.43). Orchestrator diff review APPROVED."
+    },
+    {
+      "ts": "2026-07-16T02:17:20.353Z",
+      "msg": "T4 done: winner exp-c-combined MERGED to main (PR #7, squash, sha 2a935d9). GFS 99.10->100.0. Runner-ups exp-a/exp-b recorded (both subsets of winner). Loop complete."
+    }
+  ],
+  "objective": "Maximize Grading Fidelity Score (GFS)",
+  "phase_status": "done",
+  "phases": {
+    "T0": "done",
+    "T1": "done",
+    "T2": "done",
+    "T3": "done",
+    "T4": "done"
+  },
+  "experiments": [
+    {
+      "id": "exp-a-ascii-ineq",
+      "title": "ASCII <=/>= normalization (H1)",
+      "gfs": 99.66,
+      "gfs_delta": 0.56,
+      "gates": [
+        {
+          "id": "G1-tests",
+          "pass": true,
+          "detail": "vitest suite pass=true"
+        },
+        {
+          "id": "G2-tsc",
+          "pass": true,
+          "detail": "tsc --noEmit clean=true"
+        },
+        {
+          "id": "G3-gfs-improves",
+          "pass": true,
+          "detail": "GFS 99.1 -> 99.66 (defect 0.90 -> 0.34, reduction 62.2%, need >= 25%)"
+        },
+        {
+          "id": "G4-reject-no-regress",
+          "pass": true,
+          "detail": "reject-rate 98.88% -> 98.88% (drop 0.00pp, allowed 1pp)"
+        },
+        {
+          "id": "G5-gen-errors",
+          "pass": true,
+          "detail": "gen_errors 0 -> 0"
+        },
+        {
+          "id": "G6-latency",
+          "pass": true,
+          "detail": "val p95 x0.84, corpus wall x0.73 (allowed x1.5)"
+        },
+        {
+          "id": "G7-bundle",
+          "pass": true,
+          "detail": "bundle 2443383 -> 2443749 bytes (x1.0001, allowed x1.01)"
+        },
+        {
+          "id": "G8-diff-scope",
+          "pass": true,
+          "detail": "all 2 changed files in allowed scope"
+        }
+      ],
+      "verdict": "green",
+      "state": "verified"
+    },
+    {
+      "id": "exp-b-tolerance",
+      "title": "Tolerance scoping (M10 + surface-area)",
+      "gfs": 99.43,
+      "gfs_delta": 0.33,
+      "gates": [
+        {
+          "id": "G1-tests",
+          "pass": true,
+          "detail": "vitest suite pass=true"
+        },
+        {
+          "id": "G2-tsc",
+          "pass": true,
+          "detail": "tsc --noEmit clean=true"
+        },
+        {
+          "id": "G3-gfs-improves",
+          "pass": true,
+          "detail": "GFS 99.1 -> 99.43 (defect 0.90 -> 0.57, reduction 36.7%, need >= 25%)"
+        },
+        {
+          "id": "G4-reject-no-regress",
+          "pass": true,
+          "detail": "reject-rate 98.88% -> 100% (drop -1.12pp, allowed 1pp)"
+        },
+        {
+          "id": "G5-gen-errors",
+          "pass": true,
+          "detail": "gen_errors 0 -> 0"
+        },
+        {
+          "id": "G6-latency",
+          "pass": true,
+          "detail": "val p95 x0.81, corpus wall x0.71 (allowed x1.5)"
+        },
+        {
+          "id": "G7-bundle",
+          "pass": true,
+          "detail": "bundle 2443383 -> 2443887 bytes (x1.0002, allowed x1.01)"
+        },
+        {
+          "id": "G8-diff-scope",
+          "pass": true,
+          "detail": "all 2 changed files in allowed scope"
+        }
+      ],
+      "verdict": "green",
+      "state": "verified"
+    },
+    {
+      "id": "exp-c-combined",
+      "title": "Combined A+B",
+      "gfs": 100,
+      "gfs_delta": 0.9,
+      "gates": [
+        {
+          "id": "G1-tests",
+          "pass": true,
+          "detail": "vitest suite pass=true"
+        },
+        {
+          "id": "G2-tsc",
+          "pass": true,
+          "detail": "tsc --noEmit clean=true"
+        },
+        {
+          "id": "G3-gfs-improves",
+          "pass": true,
+          "detail": "GFS 99.1 -> 100 (defect 0.90 -> 0.00, reduction 100.0%, need >= 25%)"
+        },
+        {
+          "id": "G4-reject-no-regress",
+          "pass": true,
+          "detail": "reject-rate 98.88% -> 100% (drop -1.12pp, allowed 1pp)"
+        },
+        {
+          "id": "G5-gen-errors",
+          "pass": true,
+          "detail": "gen_errors 0 -> 0"
+        },
+        {
+          "id": "G6-latency",
+          "pass": true,
+          "detail": "val p95 x0.96, corpus wall x0.82 (allowed x1.5)"
+        },
+        {
+          "id": "G7-bundle",
+          "pass": true,
+          "detail": "bundle 2443383 -> 2443929 bytes (x1.0002, allowed x1.01)"
+        },
+        {
+          "id": "G8-diff-scope",
+          "pass": true,
+          "detail": "all 2 changed files in allowed scope"
+        }
+      ],
+      "verdict": "green",
+      "state": "verified"
+    }
+  ],
+  "winner": "exp-c-combined",
+  "next_action": "DONE. Loop complete. Winner merged to main. Harness on PR #6 (draft) for review.",
+  "updated_at": "2026-07-16T02:17:20.353Z",
+  "tests_baseline": "154/154",
+  "baseline": {
+    "gfs": 99.1,
+    "accept_pct": 99.19,
+    "reject_pct": 98.88,
+    "defect_pts": 0.9,
+    "bundle_bytes": 2443383,
+    "wall_ms": 1302
+  },
+  "winner_state": "MERGED to main via PR #7 (sha 2a935d9)"
+}

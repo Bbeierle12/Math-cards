@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "generated_at": "2026-07-16T01:55:00Z",
+  "phase": "T1",
+  "basis": "ADVERSARIAL_REVIEW.md confirmed findings x T0 per-topic GFS breakdown (baseline GFS 99.10, defect 0.90 pts: 19/2347 accept fails, 23/2058 reject fails)",
+  "hypotheses": [
+    {
+      "id": "exp-a-ascii-ineq",
+      "title": "Normalize ASCII <= / >= in expression grading (review H1)",
+      "claim": "Mapping '<=' to '≤' and '>=' to '≥' inside validateAnswer's normalizeExpr makes every keyboard-typeable inequality answer gradeable, eliminating all 19 measured accept-failures (topic 'inequalities', label expr-ascii-ineq).",
+      "evidence": "Review H1: 60/60 generated ≤/≥ problems rejected 'x <= 4'. T0: inequalities GFS 86.57, all fails expr-ascii-ineq.",
+      "expected_gfs": 99.66,
+      "expected_defect_reduction_pct": 63,
+      "risk": "low - normalization is additive; reject probes (wrong direction) unaffected because direction still differs after mapping",
+      "scope": ["services/mathService.ts (normalizeExpr in validateAnswer)", "services/mathService.test.ts (regression tests, additions only)"]
+    },
+    {
+      "id": "exp-b-tolerance",
+      "title": "Scope decimal tolerance to stated precision (review M10 + surface-area overshoot)",
+      "claim": "Exact-integer circle 'diameter' answers graded as numeric (not ±0.5 tolerance), and integration-applications 'surface-area' tolerance tightened from 0.5 to 0.05 (pi-precision spread at a≤4 is ~0.036; stated rounding is 2dp), eliminates all 23 measured reject-failures.",
+      "evidence": "Review M10: 19.6 graded correct for diameter 20. T0: circles GFS 85.75 (19 dec-wrong-nearmiss rejects), integration-applications 97.0 (4).",
+      "expected_gfs": 99.43,
+      "expected_defect_reduction_pct": 37,
+      "risk": "low-medium - must not break pi-based problems where 0.5 tolerance is legitimate (students using pi vs 3.14); change only the diameter branch and the surface-area subtype",
+      "scope": ["services/mathService.ts (generateCirclesProblem, generateIntegrationApplicationsProblem)", "services/mathService.test.ts (regression tests, additions only)"]
+    },
+    {
+      "id": "exp-c-combined",
+      "title": "Combined: ASCII inequality normalization + tolerance scoping",
+      "claim": "The union of exp-a and exp-b removes every measured defect (expected GFS ~100). Run as a separate experiment to verify the two fixes compose without interaction effects.",
+      "evidence": "Fix domains are disjoint (expression grading vs decimal-tolerance problem generation).",
+      "expected_gfs": 100.0,
+      "expected_defect_reduction_pct": 100,
+      "risk": "low - union of two low-risk diffs; if an interaction appears, exp-a or exp-b can still win alone",
+      "scope": ["services/mathService.ts", "services/mathService.test.ts (additions only)"]
+    }
+  ],
+  "rejected_hypotheses": [
+    {
+      "id": "rej-equivalence-hardening",
+      "title": "Relative-tolerance spot check in expressionsAlgebraicallyEqual (review M9) + parseable canonical forms (M8)",
+      "reason": "Real defects, but not measured by the current probe corpus at baseline - cannot pass gate G3 (>=25% measured-defect reduction). Recorded for a future round with richer probes."
+    },
+    {
+      "id": "rej-unmeasured-app-bugs",
+      "title": "Timer double-fail (H3), localStorage bricking (H4), UI findings",
+      "reason": "Outside the GFS objective (component behavior, not grading fidelity). Listed in the final report as recommended follow-ups, not overnight-mergeable."
+    }
+  ]
+}

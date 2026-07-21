@@ -1,0 +1,847 @@
+{
+  "schema": 1,
+  "label": "verify-exp-b-tolerance",
+  "generated_at": "2026-07-16T02:13:50.463Z",
+  "git_head": "a59e2a3f7ca1083f314aa303c544ff830fa95966",
+  "seed": 20260716,
+  "n_per_topic": 40,
+  "totals": {
+    "gfs": 99.43,
+    "accept_rate_pct": 99.19,
+    "reject_rate_pct": 100,
+    "accept": {
+      "pass": 2328,
+      "total": 2347
+    },
+    "reject": {
+      "pass": 2058,
+      "total": 2058
+    },
+    "gen_errors": 0
+  },
+  "latency": {
+    "gen_ms_mean": 0.01,
+    "gen_ms_p95": 0.03,
+    "val_ms_mean": 0.2,
+    "val_ms_p95": 1.28,
+    "wall_ms": 930
+  },
+  "per_topic": {
+    "addition": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "subtraction": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "multiplication": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "division": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "simple-linear-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "fractions-basic": {
+      "gfs": 100,
+      "accept": {
+        "pass": 80,
+        "total": 80
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "decimals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "order-of-operations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integers": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "multi-step-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "inequalities": {
+      "gfs": 86.57,
+      "accept": {
+        "pass": 80,
+        "total": 99
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {
+        "expr-ascii-ineq": 19
+      }
+    },
+    "systems-of-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "exponents": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "polynomials": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "factoring": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "quadratic-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "angles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "triangles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "pythagorean-theorem": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "area-perimeter": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "circles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "volume-surface-area": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "complex-numbers": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "rational-expressions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "radicals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "logarithms": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "sequences-series": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-ratios": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-special-angles": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-identities": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 16,
+        "total": 16
+      },
+      "fail_by_label": {}
+    },
+    "trig-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "inverse-trig": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "polynomial-functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "rational-functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "exponential-functions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "conic-sections": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "limits": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "derivatives-basic": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "derivatives-product-quotient": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "chain-rule": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integrals-basic": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integration-substitution": {
+      "gfs": 100,
+      "accept": {
+        "pass": 80,
+        "total": 80
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "integration-by-parts": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 0,
+        "total": 0
+      },
+      "fail_by_label": {}
+    },
+    "trig-integrals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "partial-fractions": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "improper-integrals": {
+      "gfs": 100,
+      "accept": {
+        "pass": 48,
+        "total": 48
+      },
+      "reject": {
+        "pass": 37,
+        "total": 37
+      },
+      "fail_by_label": {}
+    },
+    "sequences": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "series-convergence": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 5,
+        "total": 5
+      },
+      "fail_by_label": {}
+    },
+    "power-series": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "taylor-maclaurin": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "parametric-equations": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "polar-coordinates": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 30,
+        "total": 30
+      },
+      "fail_by_label": {}
+    },
+    "integration-applications": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    },
+    "trig-substitution": {
+      "gfs": 100,
+      "accept": {
+        "pass": 40,
+        "total": 40
+      },
+      "reject": {
+        "pass": 40,
+        "total": 40
+      },
+      "fail_by_label": {}
+    }
+  },
+  "failures_sample": [
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 14",
+      "problemText": "Solve for $x$: $2x + 8 \\geq 36$",
+      "correctAnswer": "x ≥ 14"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 14",
+      "problemText": "Solve for $x$: $3x + 5 \\geq 47$",
+      "correctAnswer": "x ≥ 14"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 15",
+      "problemText": "Solve for $x$: $3x + 4 \\geq 49$",
+      "correctAnswer": "x ≥ 15"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 11",
+      "problemText": "Solve for $x$: $2x + 6 \\leq 28$",
+      "correctAnswer": "x ≤ 11"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 13",
+      "problemText": "Solve for $x$: $5x + 1 \\leq 66$",
+      "correctAnswer": "x ≤ 13"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 6",
+      "problemText": "Solve for $x$: $5x + 7 \\leq 37$",
+      "correctAnswer": "x ≤ 6"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 17",
+      "problemText": "Solve for $x$: $5x + 10 \\leq 95$",
+      "correctAnswer": "x ≤ 17"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 16",
+      "problemText": "Solve for $x$: $2x + 4 \\geq 36$",
+      "correctAnswer": "x ≥ 16"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 12",
+      "problemText": "Solve for $x$: $5x + 6 \\geq 66$",
+      "correctAnswer": "x ≥ 12"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 8",
+      "problemText": "Solve for $x$: $3x + 3 \\geq 27$",
+      "correctAnswer": "x ≥ 8"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 7",
+      "problemText": "Solve for $x$: $5x + 4 \\geq 39$",
+      "correctAnswer": "x ≥ 7"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 7",
+      "problemText": "Solve for $x$: $5x + 2 \\geq 37$",
+      "correctAnswer": "x ≥ 7"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 17",
+      "problemText": "Solve for $x$: $2x + 4 \\leq 38$",
+      "correctAnswer": "x ≤ 17"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 3",
+      "problemText": "Solve for $x$: $4x + 7 \\geq 19$",
+      "correctAnswer": "x ≥ 3"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 4",
+      "problemText": "Solve for $x$: $2x + 5 \\leq 13$",
+      "correctAnswer": "x ≤ 4"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 7",
+      "problemText": "Solve for $x$: $5x + 5 \\leq 40$",
+      "correctAnswer": "x ≤ 7"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 5",
+      "problemText": "Solve for $x$: $2x + 8 \\geq 18$",
+      "correctAnswer": "x ≥ 5"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x >= 8",
+      "problemText": "Solve for $x$: $4x + 8 \\geq 40$",
+      "correctAnswer": "x ≥ 8"
+    },
+    {
+      "topic": "inequalities",
+      "kind": "accept",
+      "label": "expr-ascii-ineq",
+      "input": "x <= 16",
+      "problemText": "Solve for $x$: $4x + 1 \\leq 65$",
+      "correctAnswer": "x ≤ 16"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "evaluated_at": "2026-07-16T02:13:38.123Z",
+  "candidate_label": "verify-exp-a-ascii-ineq",
+  "baseline_label": "baseline",
+  "gfs_delta": 0.56,
+  "all_green": true,
+  "gates": [
+    {
+      "id": "G1-tests",
+      "pass": true,
+      "detail": "vitest suite pass=true"
+    },
+    {
+      "id": "G2-tsc",
+      "pass": true,
+      "detail": "tsc --noEmit clean=true"
+    },
+    {
+      "id": "G3-gfs-improves",
+      "pass": true,
+      "detail": "GFS 99.1 -> 99.66 (defect 0.90 -> 0.34, reduction 62.2%, need >= 25%)"
+    },
+    {
+      "id": "G4-reject-no-regress",
+      "pass": true,
+      "detail": "reject-rate 98.88% -> 98.88% (drop 0.00pp, allowed 1pp)"
+    },
+    {
+      "id": "G5-gen-errors",
+      "pass": true,
+      "detail": "gen_errors 0 -> 0"
+    },
+    {
+      "id": "G6-latency",
+      "pass": true,
+      "detail": "val p95 x0.84, corpus wall x0.73 (allowed x1.5)"
+    },
+    {
+      "id": "G7-bundle",
+      "pass": true,
+      "detail": "bundle 2443383 -> 2443749 bytes (x1.0001, allowed x1.01)"
+    },
+    {
+      "id": "G8-diff-scope",
+      "pass": true,
+      "detail": "all 2 changed files in allowed scope"
+    }
+  ],
+  "changed_files": [
+    "services/mathService.test.ts",
+    "services/mathService.ts"
+  ]
+}
