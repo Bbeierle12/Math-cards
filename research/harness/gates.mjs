@@ -8,7 +8,7 @@
  *   node research/harness/gates.mjs \
  *     --baseline research/out/baseline.json \
  *     --candidate /path/to/candidate-metrics.json \
- *     --checks /path/to/checks.json \        # {"tests_pass":true,"tsc_clean":true,"bundle_bytes":123,"baseline_bundle_bytes":120}
+ *     --checks /path/to/checks.json \        # {"tests_pass":true,"tsc_clean":true,"build_ok":true,"bundle_bytes":123,"baseline_bundle_bytes":120}
  *     --diff-names /path/to/changed-files.txt \
  *     [--out /path/to/verdict.json]
  *
@@ -69,11 +69,16 @@ const wallRatio = baseline.latency.wall_ms > 0
 add('G6-latency', latRatio <= G.max_latency_ratio && wallRatio <= G.max_latency_ratio,
   `val p95 x${latRatio.toFixed(2)}, corpus wall x${wallRatio.toFixed(2)} (allowed x${G.max_latency_ratio})`);
 
+// The bundle gate requires an explicit successful build and a positive artifact
+// size; a failed build used to report 0 bytes and sail under the maximum.
+const buildOk = checks.build_ok === true && Number.isFinite(checks.bundle_bytes) && checks.bundle_bytes > 0;
 const bundleRatio = checks.baseline_bundle_bytes > 0
   ? checks.bundle_bytes / checks.baseline_bundle_bytes
   : 1;
-add('G7-bundle', bundleRatio <= G.max_bundle_ratio,
-  `bundle ${checks.baseline_bundle_bytes} -> ${checks.bundle_bytes} bytes (x${bundleRatio.toFixed(4)}, allowed x${G.max_bundle_ratio})`);
+add('G7-bundle', buildOk && bundleRatio <= G.max_bundle_ratio,
+  !buildOk
+    ? `build failed or produced no artifact (build_ok=${checks.build_ok}, bundle_bytes=${checks.bundle_bytes})`
+    : `bundle ${checks.baseline_bundle_bytes} -> ${checks.bundle_bytes} bytes (x${bundleRatio.toFixed(4)}, allowed x${G.max_bundle_ratio})`);
 
 const forbidden = diffNames.filter(f => CONFIG.forbidden_paths.some(p => f === p || f.startsWith(p)));
 add('G8-diff-scope', forbidden.length === 0,

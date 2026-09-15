@@ -50,7 +50,7 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Quotient Rule</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">d/dx[f(x)/g(x)] = [f'(x)g(x) - f(x)g'(x)] / [g(x)]<sup>2</sup></p>
+              <p className="font-mono text-sm text-slate-200 mt-1">d/dx[f(x)/g(x)] = [f'(x)g(x) - f(x)g'(x)] / [g(x)]<sup>2</sup>,  g(x) ≠ 0</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -83,11 +83,11 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">d/dx[ln(x)]</span>
-              <span className="font-mono text-green-300">= 1/x</span>
+              <span className="font-mono text-green-300">= 1/x  (x &gt; 0)</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">d/dx[log<sub>a</sub>(x)]</span>
-              <span className="font-mono text-green-300">= 1/(x ln(a))</span>
+              <span className="font-mono text-green-300">= 1/(x ln(a))  (x &gt; 0, a &gt; 0, a ≠ 1)</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">d/dx[sin(x)]</span>
@@ -171,7 +171,7 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">∫ a<sup>x</sup> dx</span>
-              <span className="font-mono text-green-300">= a<sup>x</sup>/ln(a) + C</span>
+              <span className="font-mono text-green-300">= a<sup>x</sup>/ln(a) + C  (a &gt; 0, a ≠ 1)</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">∫ sin(x) dx</span>
@@ -208,12 +208,12 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Fundamental Theorem of Calculus (Part 1)</p>
-            <p className="text-sm text-slate-300">If F(x) = ∫<sub>a</sub><sup>x</sup> f(t) dt, then F'(x) = f(x)</p>
+            <p className="text-sm text-slate-300">If f is continuous on [a,b] and F(x) = ∫<sub>a</sub><sup>x</sup> f(t) dt, then F is differentiable on (a,b) and F'(x) = f(x)</p>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Fundamental Theorem of Calculus (Part 2)</p>
-            <p className="text-sm text-slate-300">∫<sub>a</sub><sup>b</sup> f(x) dx = F(b) - F(a), where F'(x) = f(x)</p>
+            <p className="text-sm text-slate-300">If f is continuous on [a,b] and F is any antiderivative of f on [a,b] (F' = f), then ∫<sub>a</sub><sup>b</sup> f(x) dx = F(b) - F(a)</p>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
@@ -231,6 +231,7 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
       {/* Limits */}
       <div className="mt-6 bg-slate-900/50 rounded-lg p-5">
         <h3 className="text-xl font-bold text-amber-300 mb-4">🎲 Limit Laws</h3>
+        <p className="text-xs text-slate-400 mb-3">Valid when lim[x→c] f(x) = L and lim[x→c] g(x) = M both exist and are finite. The laws do not apply to ∞ − ∞, 0 · ∞ or 0/0 forms.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div className="bg-slate-800/50 p-3 rounded">
@@ -240,7 +241,7 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
             <p className="text-slate-300">lim[x→c] [f(x) · g(x)] = lim[x→c] f(x) · lim[x→c] g(x)</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
-            <p className="text-slate-300">lim[x→c] [f(x) / g(x)] = lim[x→c] f(x) / lim[x→c] g(x)</p>
+            <p className="text-slate-300">lim[x→c] [f(x) / g(x)] = lim[x→c] f(x) / lim[x→c] g(x),  provided lim[x→c] g(x) ≠ 0</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="text-slate-300">lim[x→c] [k · f(x)] = k · lim[x→c] f(x)</p>

@@ -109,7 +109,27 @@ export interface Problem {
   explanationPrompt: string;
   hint?: string;
   multipleChoiceOptions?: string[];
-  tolerance?: number; // For decimal-tolerance answers
+  tolerance?: number; // For decimal-tolerance answers: explicit absolute tolerance
+  /**
+   * For decimal-tolerance answers: the number of decimal places the problem
+   * text asks for. correctAnswer holds the EXACT value; grading accepts any
+   * input within half a unit of the last requested place (i.e. every input
+   * that rounds to the correctly rounded value, and more precise inputs).
+   * Ignored when `tolerance` is set explicitly.
+   */
+  roundTo?: number;
+  /**
+   * For expression answers: 'exact' (default) requires the submitted
+   * expression to equal the stored one; 'up-to-constant' accepts any
+   * expression differing from the stored one by an additive constant
+   * (indefinite integrals).
+   */
+  equivalence?: 'exact' | 'up-to-constant';
+  /**
+   * Human-readable (MathText/LaTeX) rendering of the correct answer for
+   * feedback. When absent the UI formats correctAnswer directly.
+   */
+  displayAnswer?: string;
   acceptableAnswers?: ProblemAnswer[]; // Additional correct answers
   diagram?: string;   // SVG or description for geometry
 }

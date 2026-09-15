@@ -4,6 +4,7 @@ import { CURRICULUM } from '../constants';
 import ProgressBar from './ProgressBar';
 import { LockIcon, PlayIcon, BookOpenIcon, TrophyIcon } from './Icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { isTopicMastered } from '../services/mastery';
 
 interface TopicSelectorProps {
   onSelectTopic: (topicId: TopicId) => void;
@@ -25,7 +26,8 @@ export default function TopicSelector({ onSelectTopic, userProgress, unlockedTop
               const isUnlocked = unlockedTopics.has(topic.id);
               const isPractice = topic.type !== 'reference';
               const progress = userProgress.topicProgress[topic.id];
-              const isMastered = progress?.mastery;
+              // Same definition as unlocking (App.tsx): derived from the current threshold.
+              const isMastered = isTopicMastered(progress, masteryThreshold);
               const masteryPercent = progress ? (progress.correct / masteryThreshold) * 100 : 0;
 
               return (

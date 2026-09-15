@@ -64,11 +64,11 @@ export default function Algebra1FormulaSheet({ onComplete }: Algebra1FormulaShee
               <span className="font-mono text-green-300"><MathText text="$(a^m)^n = a^{mn}$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Zero Exponent</span>
+              <span className="text-slate-300">Zero Exponent (<MathText text="$a \neq 0$" />)</span>
               <span className="font-mono text-green-300"><MathText text="$a^0 = 1$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Negative Exponent</span>
+              <span className="text-slate-300">Negative Exponent (<MathText text="$a \neq 0$" />)</span>
               <span className="font-mono text-green-300"><MathText text="$a^{-n} = \frac{1}{a^n}$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">

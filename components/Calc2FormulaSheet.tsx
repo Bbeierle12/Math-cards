@@ -78,7 +78,8 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Geometric Series</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">Σ arⁿ = a/(1−r) when |r| &lt; 1</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">Σ<sub>n=0</sub><sup>∞</sup> arⁿ = a/(1−r) when |r| &lt; 1</p>
+              <p className="text-xs text-slate-400 mt-1">Diverges when |r| ≥ 1</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -100,12 +101,13 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Alternating Series Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">Σ (−1)ⁿbₙ converges if bₙ is decreasing and lim bₙ = 0</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">Σ (−1)ⁿbₙ converges if bₙ &gt; 0, bₙ is (eventually) decreasing, and lim bₙ = 0</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Integral Test</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">Σ f(n) and ∫₁<sup>∞</sup> f(x)dx both converge or both diverge</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">If f is positive, continuous and decreasing on [N, ∞) and aₙ = f(n), then Σ<sub>n=N</sub><sup>∞</sup> aₙ and ∫<sub>N</sub><sup>∞</sup> f(x)dx both converge or both diverge</p>
+              <p className="text-xs text-slate-400 mt-1">All three hypotheses are needed; the test says nothing about the value of the sum</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -127,13 +129,15 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
 
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
-              <p className="font-semibold text-cyan-300">Taylor Series</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">f(x) = Σ f<sup>(n)</sup>(a)/n! · (x−a)ⁿ</p>
+              <p className="font-semibold text-cyan-300">Taylor Series of f at a</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">T(x) = Σ<sub>n=0</sub><sup>∞</sup> f<sup>(n)</sup>(a)/n! · (x−a)ⁿ</p>
+              <p className="text-xs text-slate-400 mt-1">f(x) = T(x) exactly when the remainder Rₙ(x) = f(x) − Tₙ(x) → 0 as n → ∞. Infinite differentiability alone is not enough (e.g. e<sup>−1/x²</sup> has Maclaurin series 0).</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Maclaurin Series (a = 0)</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">f(x) = Σ f<sup>(n)</sup>(0)/n! · xⁿ</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">T(x) = Σ<sub>n=0</sub><sup>∞</sup> f<sup>(n)</sup>(0)/n! · xⁿ</p>
+              <p className="text-xs text-slate-400 mt-1">The series below equal their functions on the stated intervals (their remainders → 0 there)</p>
             </div>
           </div>
 
@@ -141,15 +145,15 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="space-y-2 text-sm">
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">e<sup>x</sup></span>
-              <span className="font-mono text-green-300">= Σ xⁿ/n!</span>
+              <span className="font-mono text-green-300">= Σ xⁿ/n!, all x</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">sin(x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)!</span>
+              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)!, all x</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">cos(x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n</sup>/(2n)!</span>
+              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n</sup>/(2n)!, all x</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">1/(1−x)</span>
@@ -157,11 +161,11 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">ln(1+x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)<sup>n+1</sup>xⁿ/n, |x| ≤ 1</span>
+              <span className="font-mono text-green-300">= Σ<sub>n=1</sub><sup>∞</sup> (−1)<sup>n+1</sup>xⁿ/n, −1 &lt; x ≤ 1</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">arctan(x)</span>
-              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1)</span>
+              <span className="font-mono text-green-300">= Σ (−1)ⁿx<sup>2n+1</sup>/(2n+1), |x| ≤ 1</span>
             </div>
           </div>
 
@@ -170,11 +174,12 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             <div className="bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300 font-semibold">Lagrange Remainder</span>
               <p className="font-mono text-green-300 mt-1">|Rₙ(x)| ≤ M|x−a|<sup>n+1</sup>/(n+1)!</p>
-              <p className="text-xs text-slate-400 mt-1">where M = max|f<sup>(n+1)</sup>(c)| on the interval</p>
+              <p className="text-xs text-slate-400 mt-1">where M ≥ |f<sup>(n+1)</sup>(c)| for every c between a and x. M must bound the derivative on the whole interval — e.g. for e<sup>x</sup> on [0, 0.5] use M = e<sup>0.5</sup>, not 1.</p>
             </div>
             <div className="bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300 font-semibold">Alternating Series Remainder</span>
               <p className="font-mono text-green-300 mt-1">|Error| ≤ |a<sub>n+1</sub>| (first omitted term)</p>
+              <p className="text-xs text-slate-400 mt-1">Requires the Alternating Series Test hypotheses (terms decreasing in size to 0)</p>
             </div>
           </div>
         </div>
@@ -198,8 +203,9 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
               <p className="font-semibold text-cyan-300">Polar ↔ Cartesian</p>
               <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
                 <p>x = r cos(θ),  y = r sin(θ)</p>
-                <p>r = √(x² + y²),  θ = arctan(y/x)</p>
+                <p>r = √(x² + y²),  θ = atan2(y, x)</p>
               </div>
+              <p className="text-xs text-slate-400 mt-1">atan2 is the quadrant-aware angle: it equals arctan(y/x) only when x &gt; 0; add π (180°) when x &lt; 0; θ = ±π/2 when x = 0 and y ≠ 0. Fix an interval such as [0, 2π) or (−π, π] to make θ unique. At the origin r = 0 and θ is undefined.</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -242,7 +248,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
 
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Monotone Convergence Theorem</p>
-            <p className="text-sm text-slate-300">A bounded, monotonic sequence converges</p>
+            <p className="text-sm text-slate-300">A sequence that is bounded and monotonic (eventually non-decreasing or non-increasing) converges</p>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
@@ -259,7 +265,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Radius of Convergence</p>
-            <p className="text-slate-300 mt-1">R = lim |aₙ/aₙ₊₁| or R = 1/lim |aₙ|<sup>1/n</sup></p>
+            <p className="text-slate-300 mt-1">For Σ aₙ(x − c)ⁿ: R = lim |aₙ/aₙ₊₁| provided this limit exists (or is ∞); in general 1/R = lim sup |aₙ|<sup>1/n</sup> (Cauchy–Hadamard), with R = ∞ when the lim sup is 0 and R = 0 when it is ∞</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Interval of Convergence</p>
@@ -284,26 +290,27 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Disk Method</p>
             <p className="font-mono text-slate-200 mt-1">V = π ∫ₐᵇ [f(x)]² dx</p>
-            <p className="text-xs text-slate-400 mt-1">Revolve y=f(x) around x-axis</p>
+            <p className="text-xs text-slate-400 mt-1">Revolve the region between y=f(x) and the x-axis around the x-axis</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Washer Method</p>
             <p className="font-mono text-slate-200 mt-1">V = π ∫ₐᵇ ([R(x)]² − [r(x)]²) dx</p>
-            <p className="text-xs text-slate-400 mt-1">R = outer radius, r = inner radius</p>
+            <p className="text-xs text-slate-400 mt-1">R = outer radius ≥ r = inner radius ≥ 0 on [a, b]</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Shell Method</p>
             <p className="font-mono text-slate-200 mt-1">V = 2π ∫ₐᵇ x · f(x) dx</p>
-            <p className="text-xs text-slate-400 mt-1">Revolve around y-axis using vertical shells</p>
+            <p className="text-xs text-slate-400 mt-1">Revolve around the y-axis using vertical shells; requires 0 ≤ a ≤ b and f(x) ≥ 0</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Arc Length (y = f(x))</p>
             <p className="font-mono text-slate-200 mt-1">L = ∫ₐᵇ √(1 + [f'(x)]²) dx</p>
+            <p className="text-xs text-slate-400 mt-1">f' continuous on [a, b]</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Surface Area of Revolution</p>
-            <p className="font-mono text-slate-200 mt-1">S = 2π ∫ₐᵇ f(x)√(1 + [f'(x)]²) dx</p>
-            <p className="text-xs text-slate-400 mt-1">Revolve y=f(x) around x-axis</p>
+            <p className="font-mono text-slate-200 mt-1">S = 2π ∫ₐᵇ |f(x)| √(1 + [f'(x)]²) dx</p>
+            <p className="text-xs text-slate-400 mt-1">Revolve y=f(x) around the x-axis. The radius is the distance |f(x)|; the usual form without the absolute value assumes f(x) ≥ 0 on [a, b]</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Work</p>

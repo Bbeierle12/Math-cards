@@ -45,7 +45,7 @@ export default function MultiplicationTableView({ topicId, onComplete }: Multipl
       <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-700">
         <h3 className="text-2xl font-bold text-center text-amber-300 mb-4">Table of {selectedNumber}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 max-w-md mx-auto">
-          {Array.from({ length: 10 }, (_, i) => i + 1).map(multiplier => (
+          {Array.from({ length: 12 }, (_, i) => i + 1).map(multiplier => (
             <div key={multiplier} className="text-lg font-mono text-slate-300 p-2 rounded-md hover:bg-slate-700/50 transition-colors">
               <span className="inline-block w-8 text-right">{selectedNumber}</span>
               <span className="text-cyan-400 mx-2">×</span>

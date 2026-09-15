@@ -17,3 +17,29 @@ View your app in AI Studio: https://ai.studio/apps/drive/1jBXtFdC_GnUA1lrbxnWUN2
    `npm install`
 2. Run the app:
    `npm run dev`
+
+## Grading contract
+
+Answer checking lives in `services/mathService.ts` (`validateAnswer`) and
+`services/expressionGrader.ts`. The rules:
+
+- **numeric** answers are exact (floating-point margin only). Students may type
+  decimals, fractions (`3/5`) or exact constants (`sqrt(3)/2`, `pi/4`).
+- **decimal-tolerance** answers store the *exact* value plus `roundTo`, the
+  number of decimal places the problem text asks for. Any input within half a
+  unit of that last place is accepted, so the correctly rounded value passes
+  and the neighbouring rounded values fail. Problems that say "use π ≈ 3.14"
+  accept both the 3.14-based value and the true-π value.
+- **expression** answers are compared by numeric sampling after normalising
+  student notation (`xsin(x)`, `sin²θ`, `ln|cos x|`, `e^x`). A submission
+  must be a finite real number wherever the reference is defined; `0/0`, `NaN`
+  and complex-valued forms are always rejected. Indefinite integrals use
+  `equivalence: 'up-to-constant'`, so any antiderivative passes and the
+  integrand fails.
+
+`services/mathCorrectness.test.ts` recomputes every exercise family's answer
+from the displayed text (independently of the generator) and reproduces the
+grading cases from the reliability audit. The research fidelity score
+(`research/`) measures whether the grader accepts what the generator meant; it
+does not establish that the answer key is mathematically correct — that is
+what the correctness suite is for.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProgress } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { XIcon } from './Icons';
@@ -164,6 +164,15 @@ export default function SettingsPanel({ isOpen, onClose, userProgress, setUserPr
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
 
+  // Closing the panel disarms any pending destructive confirmation, so reopening
+  // never leaves "Reset All Progress" one click away.
+  useEffect(() => {
+    if (!isOpen) {
+      setShowResetConfirm(false);
+      setShowRestoreConfirm(false);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleResetProgress = () => {
@@ -257,7 +266,7 @@ export default function SettingsPanel({ isOpen, onClose, userProgress, setUserPr
               checked={settings.allowNegatives}
               onChange={v => updateSettings({ allowNegatives: v })}
               label="Allow Negatives"
-              description="Include negative numbers in basic arithmetic"
+              description="Off: basic arithmetic uses non-negative operands AND non-negative answers (the range below is clamped to 0)"
             />
             <SegmentedControl
               value={settings.unlockMode}

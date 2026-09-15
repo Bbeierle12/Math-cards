@@ -49,7 +49,7 @@ export default function GeometryFormulaSheet({ onComplete }: GeometryFormulaShee
               <span className="font-mono text-green-300"><MathText text="$A = \pi r^2$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Regular polygon</span>
+              <span className="text-slate-300">Regular polygon (<MathText text="$a$" /> apothem, <MathText text="$p$" /> perimeter)</span>
               <span className="font-mono text-green-300"><MathText text="$A = \frac{1}{2}ap$" /></span>
             </div>
           </div>
@@ -77,7 +77,7 @@ export default function GeometryFormulaSheet({ onComplete }: GeometryFormulaShee
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">Sector area</span>
-              <span className="font-mono text-green-300"><MathText text="$A = \frac{1}{2}r^2\theta$" /></span>
+              <span className="font-mono text-green-300"><MathText text="$A = \frac{1}{2}r^2\theta$" /> (radians)</span>
             </div>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function GeometryFormulaSheet({ onComplete }: GeometryFormulaShee
               <span className="font-mono text-green-300"><MathText text="$SA = 2\pi r^2 + 2\pi rh$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Cone</span>
+              <span className="text-slate-300">Cone (<MathText text="$l$" /> slant height)</span>
               <span className="font-mono text-green-300"><MathText text="$SA = \pi r^2 + \pi r l$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">

@@ -299,8 +299,10 @@ describe('edge cases', () => {
   it('division never divides by zero', () => {
     for (let i = 0; i < 50; i++) {
       const p = generateProblem('division');
-      // The problem text should not contain "÷ 0"
-      expect(p.problemText).not.toMatch(/÷\s*\(?\s*0\s*\)?/);
+      // Generated text uses LaTeX \div; parse the divisor and check it is non-zero
+      const match = p.problemText.match(/\\div\s*\(?\s*(-?\d+)\s*\)?/);
+      if (!match) throw new Error(`Could not parse divisor: ${p.problemText}`);
+      expect(parseInt(match[1], 10)).not.toBe(0);
     }
   });
 
@@ -315,10 +317,11 @@ describe('edge cases', () => {
     }
   });
 
-  it('decimal tolerance answers are rounded properly', () => {
+  it('decimal answers are exact values with at most 2 decimal places', () => {
     for (let i = 0; i < 20; i++) {
       const p = generateProblem('decimals');
       const answer = p.correctAnswer as number;
+      expect(p.answerType).toBe('numeric');
       // Should have at most 2 decimal places
       const decimalPlaces = (answer.toString().split('.')[1] || '').length;
       expect(decimalPlaces).toBeLessThanOrEqual(2);
@@ -584,18 +587,19 @@ describe('regression M10: circles tolerance scoping', () => {
 });
 
 describe('regression M10: integration-applications surface-area tolerance', () => {
-  it('surface-area uses a tolerance consistent with "Round to 2 decimal places"', () => {
+  it('surface-area grades exactly to the requested 2 decimal places', () => {
     let found = 0;
     for (let i = 0; i < 300 && found < 10; i++) {
       const p = generateProblem('integration-applications');
       if (!/surface area/.test(p.problemText)) continue;
       found++;
       const answer = p.correctAnswer as number;
-      expect(p.tolerance).toBe(0.05);
+      expect(p.roundTo).toBe(2);
       expect(validateAnswer(p, String(answer))).toBe(true);
-      // A 3.14-or-rounding-level deviation (~0.03) is still acceptable
-      expect(validateAnswer(p, String(answer + 0.03))).toBe(true);
-      // But a 0.4 miss is a wrong answer, not a rounding difference
+      // The correctly rounded value is accepted
+      expect(validateAnswer(p, answer.toFixed(2))).toBe(true);
+      // Anything that does not round to it is wrong: 0.03 off is a different 2-dp value
+      expect(validateAnswer(p, String(answer + 0.03))).toBe(false);
       expect(validateAnswer(p, String(answer + 0.4))).toBe(false);
       expect(validateAnswer(p, String(answer - 0.4))).toBe(false);
     }

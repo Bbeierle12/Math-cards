@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
 import { UserSettings } from '../types';
 import { DEFAULT_SETTINGS } from '../constants';
 import useLocalStorage from '../hooks/useLocalStorage';
+import { sanitizeSettings } from '../services/storageValidation';
 
 interface SettingsContextValue {
   settings: UserSettings;
@@ -11,35 +12,24 @@ interface SettingsContextValue {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
-function deepMergeSettings(stored: Partial<UserSettings>, defaults: UserSettings): UserSettings {
-  const merged = { ...defaults };
-  for (const key of Object.keys(defaults) as (keyof UserSettings)[]) {
-    if (key in stored && stored[key] !== undefined && stored[key] !== null) {
-      if (key === 'numberRange' && typeof stored[key] === 'object') {
-        merged.numberRange = { ...defaults.numberRange, ...(stored[key] as UserSettings['numberRange']) };
-      } else {
-        (merged as any)[key] = stored[key];
-      }
-    }
-  }
-  return merged;
-}
+const sanitize = (raw: unknown): UserSettings => sanitizeSettings(raw, DEFAULT_SETTINGS);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [rawSettings, setRawSettings] = useLocalStorage<Partial<UserSettings>>('userSettings', {});
-
-  const settings = deepMergeSettings(rawSettings, DEFAULT_SETTINGS);
+  // Stored value is always a complete, shape-validated UserSettings.
+  const [settings, setSettings] = useLocalStorage<UserSettings>('userSettings', DEFAULT_SETTINGS, sanitize);
 
   const updateSettings = useCallback((partial: Partial<UserSettings>) => {
-    setRawSettings(prev => ({ ...prev, ...partial }));
-  }, [setRawSettings]);
+    setSettings(prev => sanitize({ ...prev, ...partial }));
+  }, [setSettings]);
 
   const resetSettings = useCallback(() => {
-    setRawSettings({});
-  }, [setRawSettings]);
+    setSettings(DEFAULT_SETTINGS);
+  }, [setSettings]);
+
+  const value = useMemo(() => ({ settings, updateSettings, resetSettings }), [settings, updateSettings, resetSettings]);
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   );
