@@ -42,7 +42,7 @@ export default function Algebra1FormulaSheet({ onComplete }: Algebra1FormulaShee
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Slope Formula</p>
-              <p className="text-sm text-slate-200 mt-1"><MathText text="$m = \frac{y_2 - y_1}{x_2 - x_1}$" /></p>
+              <p className="text-sm text-slate-200 mt-1"><MathText text="$m = \frac{y_2 - y_1}{x_2 - x_1}$" /> (<MathText text="$x_2 \neq x_1$" />; a vertical line has no slope)</p>
             </div>
           </div>
         </div>
@@ -56,7 +56,7 @@ export default function Algebra1FormulaSheet({ onComplete }: Algebra1FormulaShee
               <span className="font-mono text-green-300"><MathText text="$a^m \cdot a^n = a^{m+n}$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Quotient Rule</span>
+              <span className="text-slate-300">Quotient Rule (<MathText text="$a \neq 0$" />)</span>
               <span className="font-mono text-green-300"><MathText text="$\frac{a^m}{a^n} = a^{m-n}$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">

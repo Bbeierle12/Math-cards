@@ -79,7 +79,7 @@ export default function CalculusFormulaSheet({ onComplete }: CalculusFormulaShee
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">d/dx[a<sup>x</sup>]</span>
-              <span className="font-mono text-green-300">= a<sup>x</sup> ln(a)</span>
+              <span className="font-mono text-green-300">= a<sup>x</sup> ln(a)  (a &gt; 0)</span>
             </div>
             <div className="flex justify-between bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">d/dx[ln(x)]</span>

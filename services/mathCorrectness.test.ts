@@ -179,6 +179,19 @@ describe('audit reproductions', () => {
     expect(validateAnswer(ps, 'p < 0')).toBe(false);
   });
 
+  it('identity answers reject domain-invalid rewrites such as θ/θ for 1', () => {
+    const [p] = sampleWhere('trig-identities', q => q.correctAnswer === '1', 1);
+    expect(validateAnswer(p, '1')).toBe(true);
+    expect(validateAnswer(p, 'theta/theta')).toBe(false);
+    expect(validateAnswer(p, 'sin(theta)^2+cos(theta)^2')).toBe(true);
+  });
+
+  it('tangent explanations do not claim a value at 90°', () => {
+    for (const p of sampleWhere('trig-equations', q => /\\tan/.test(q.problemText), 3)) {
+      expect(p.explanationPrompt).toMatch(/\[0°, 90°\)/);
+    }
+  });
+
   it('arithmetic answers cannot be restated as the problem itself', () => {
     const [p] = sampleWhere('addition', q => !/-/.test(q.problemText), 1);
     const m = p.problemText.match(/\$(\d+) \+ (\d+) =/)!;
@@ -350,12 +363,14 @@ describe('independent recomputation: geometry', () => {
       } else if ((m = t.match(/area of a circle with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(3.14 * r * r, 9);
-        expect(validateAnswer(p, (Math.PI * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (3.14 * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r).toFixed(2))).toBe(false); // instructed to use 3.14
         expect(validateAnswer(p, (3.14 * r * r + 0.4).toFixed(2))).toBe(false);
       } else if ((m = t.match(/circumference of a circle with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(2 * 3.14 * r, 9);
-        expect(validateAnswer(p, (2 * Math.PI * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * 3.14 * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * Math.PI * r).toFixed(2))).toBe(false);
         expect(validateAnswer(p, (2 * 3.14 * r + 0.4).toFixed(2))).toBe(false);
       } else throw new Error(`Could not parse: ${t}`);
     }
@@ -374,19 +389,23 @@ describe('independent recomputation: geometry', () => {
       } else if ((m = t.match(/volume of a cylinder with \$r=(\d+)\$, \$h=(\d+)\$/))) {
         const [r, h] = [int(m[1]), int(m[2])];
         expect(num(p)).toBeCloseTo(Math.round(3.14 * r * r * h * 100) / 100, 9);
-        expect(validateAnswer(p, (Math.PI * r * r * h).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (3.14 * r * r * h).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r * h).toFixed(2))).toBe(false);
       } else if ((m = t.match(/surface area of a cylinder with \$r=(\d+)\$, \$h=(\d+)\$/))) {
         const [r, h] = [int(m[1]), int(m[2])];
         expect(num(p)).toBeCloseTo(Math.round(2 * 3.14 * r * (r + h) * 100) / 100, 9);
-        expect(validateAnswer(p, (2 * Math.PI * r * (r + h)).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * 3.14 * r * (r + h)).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * Math.PI * r * (r + h)).toFixed(2))).toBe(false);
       } else if ((m = t.match(/volume of a sphere with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(Math.round((4 / 3) * 3.14 * r ** 3 * 100) / 100, 9);
-        expect(validateAnswer(p, ((4 / 3) * Math.PI * r ** 3).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, ((4 / 3) * 3.14 * r ** 3).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, ((4 / 3) * Math.PI * r ** 3).toFixed(2))).toBe(false);
       } else if ((m = t.match(/surface area of a sphere with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(Math.round(4 * 3.14 * r * r * 100) / 100, 9);
-        expect(validateAnswer(p, (4 * Math.PI * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (4 * 3.14 * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (4 * Math.PI * r * r).toFixed(2))).toBe(false);
       } else throw new Error(`Could not parse: ${t}`);
     }
   });
@@ -426,6 +445,14 @@ describe('independent recomputation: algebra 2', () => {
     }
   });
 
+  // A question that asks for convergence AND the limit is not answered by "yes".
+  const expectCompleteAnswer = (p: Problem, limit: string) => {
+    expect(validateAnswer(p, limit)).toBe(true);
+    expect(validateAnswer(p, `converges to ${limit}`)).toBe(true);
+    expect(validateAnswer(p, 'yes')).toBe(false);
+    expect(validateAnswer(p, 'converges')).toBe(false);
+  };
+
   it('sequences-series and sequences (nth terms)', () => {
     for (const p of [...sample('sequences-series'), ...sample('sequences', 80)]) {
       const t = p.problemText;
@@ -434,10 +461,10 @@ describe('independent recomputation: algebra 2', () => {
       else if ((m = t.match(/starts at \$(\d+)\$ with common ratio \$r = (\d+)\$. Find the \$(\d+)\$th term/))) expect(num(p)).toBe(int(m[1]) * int(m[2]) ** (int(m[3]) - 1));
       else if ((m = t.match(/Find the \$(\d+)\$th term of the arithmetic sequence:\n\$a_1 = (\d+)\$, \$d = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) + (int(m[1]) - 1) * int(m[3]));
       else if ((m = t.match(/Find the \$(\d+)\$th term of the geometric sequence:\n\$a_1 = (\d+)\$, \$r = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) * int(m[3]) ** (int(m[1]) - 1));
-      else if (/\\frac\{1\}\{n\}\$ converge/.test(t)) expect(p.correctAnswer).toBe('0');
-      else if (/\\frac\{n\+1\}\{n\}\$ converge/.test(t)) expect(p.correctAnswer).toBe('1');
-      else if (/\\frac\{n\}\{n\+1\}\$ is increasing/.test(t)) expect(p.correctAnswer).toBe('1');
-      else if (/\\frac\{1\}\{n!\}\$ is decreasing/.test(t)) expect(p.correctAnswer).toBe('0');
+      else if (/\\frac\{1\}\{n\}\$ converge/.test(t)) { expect(p.correctAnswer).toBe('0'); expectCompleteAnswer(p, '0'); }
+      else if (/\\frac\{n\+1\}\{n\}\$ converge/.test(t)) { expect(p.correctAnswer).toBe('1'); expectCompleteAnswer(p, '1'); }
+      else if (/\\frac\{n\}\{n\+1\}\$ is increasing/.test(t)) { expect(p.correctAnswer).toBe('1'); expectCompleteAnswer(p, '1'); }
+      else if (/\\frac\{1\}\{n!\}\$ is decreasing/.test(t)) { expect(p.correctAnswer).toBe('0'); expectCompleteAnswer(p, '0'); }
       else if (/\(-1\)\^n\$ converge/.test(t) || /n\^2\$ converge/.test(t)) expect(p.correctAnswer).toBe('diverges');
       else if (/monotonic\?/.test(t)) expect(p.correctAnswer).toBe('no');
       else throw new Error(`Unrecognised sequence problem: ${t}`);
@@ -763,6 +790,10 @@ describe('independent recomputation: calculus 2 — values', () => {
         expect(num(p)).toBeCloseTo(int(m[1]) * Math.sin(int(m[2]) * Math.PI / 180), 9);
       } else if (/What type of curve/.test(t)) {
         expect(/\\theta = /.test(t) ? 'line' : 'circle').toBe(p.correctAnswer);
+        if (/\\theta = /.test(t)) {
+          expect(t).toMatch(/allowed to be negative/); // the convention that makes "line" the unique answer
+          expect(validateAnswer(p, 'ray')).toBe(false);
+        }
       } else throw new Error(`Could not parse: ${t}`);
     }
   });

@@ -83,6 +83,42 @@ describe('expressionsEquivalent — exact', () => {
   });
 });
 
+describe('expressionsEquivalent — adversarial soundness', () => {
+  it('rejects rewrites that are undefined at critical points', () => {
+    expect(expressionsEquivalent('x/x', '1')).toBe(false);
+    expect(expressionsEquivalent('theta/theta', '1')).toBe(false);
+    expect(expressionsEquivalent('x^2/x', 'x')).toBe(false);
+    expect(expressionsEquivalent('x*sin(x)/sin(x)', 'x')).toBe(false);
+    expect(expressionsEquivalent('(x^2-1)/(x-1)', 'x+1')).toBe(false);
+  });
+
+  it('rejects a polynomial engineered to vanish on the old fixed sample points', () => {
+    const oldPoints = [0.37, 0.91, 1.43, 2.17, 2.86, 3.52, 4.31, -0.64, -1.77, -2.93, 5.09, -4.23];
+    const vanishing = oldPoints.map(p => `(x-(${p}))`).join('*');
+    expect(expressionsEquivalent(`x + ${vanishing}`, 'x')).toBe(false);
+    expect(expressionsEquivalent(`x + ${vanishing}`, 'x', 'up-to-constant')).toBe(false);
+    // and one that also vanishes at the new fixed critical points
+    const all = [...oldPoints, 0, 1, -1, 2, -2, 0.5].map(p => `(x-(${p}))`).join('*');
+    expect(expressionsEquivalent(`x + ${all}`, 'x')).toBe(false);
+  });
+
+  it('accepts genuinely equal rewrites at every point', () => {
+    expect(expressionsEquivalent('(x+1)^2', 'x^2+2x+1')).toBe(true);
+    expect(expressionsEquivalent('sin(x)^2+cos(x)^2', '1')).toBe(true);
+    expect(expressionsEquivalent('2*x/2', 'x')).toBe(true);
+  });
+
+  it('equations match up to a nonzero constant factor and rearrangement', () => {
+    expect(expressionsEquivalent('2*x=4*sin(theta)', 'x=2*sin(theta)')).toBe(true);
+    expect(expressionsEquivalent('x/2 = sin(t)', 'x=2sin(theta)')).toBe(true);
+    expect(expressionsEquivalent('x - 2sin(θ) = 0', 'x=2sin(theta)')).toBe(true);
+    expect(expressionsEquivalent('-x = -2sin(theta)', 'x=2sin(theta)')).toBe(true);
+    expect(expressionsEquivalent('x^2 = 4*sin(theta)^2', 'x=2sin(theta)')).toBe(false); // squaring changes the solution set
+    expect(expressionsEquivalent('x = 2sin(theta) + 1', 'x=2sin(theta)')).toBe(false);
+    expect(expressionsEquivalent('0*x = 0', 'x=2sin(theta)')).toBe(false);
+  });
+});
+
 describe('expressionsEquivalent — up to an additive constant (antiderivatives)', () => {
   const C = 'up-to-constant';
   it('accepts every antiderivative of x·cos x', () => {
@@ -137,10 +173,14 @@ describe('parseNumericInput', () => {
     expect(parseNumericInput('7*(5)')).toBeNull();
     expect(parseNumericInput('(7)(5)')).toBeNull();
     expect(parseNumericInput('3^2')).toBeNull();
-    // exact forms with a coefficient are still fine
+    expect(parseNumericInput('(7+5)/2')).toBeNull();
+    // exact forms with a coefficient are fine, whatever the operand order
     expect(parseNumericInput('4*sqrt(2)')).toBeCloseTo(4 * Math.SQRT2, 12);
+    expect(parseNumericInput('sqrt(2)*2')).toBeCloseTo(2 * Math.SQRT2, 12);
+    expect(parseNumericInput('2*(pi)')).toBeCloseTo(2 * Math.PI, 12);
     expect(parseNumericInput('2sqrt(2)')).toBeCloseTo(2 * Math.SQRT2, 12);
     expect(parseNumericInput('2pi')).toBeCloseTo(2 * Math.PI, 12);
+    expect(parseNumericInput('(1+sqrt(2))/2')).toBeCloseTo((1 + Math.SQRT2) / 2, 12);
     expect(parseNumericInput('sqrt(32)')).toBeCloseTo(4 * Math.SQRT2, 12);
   });
   it('rejects non-constants and undefined values', () => {

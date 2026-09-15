@@ -730,7 +730,9 @@ const generateAreaPerimeterProblem = (): Problem => {
       explanation = '';
   }
 
-  // π problems: the 3.14 value the text asks for, or the true-π value, to 2 places.
+  // π problems: the text instructs "use π ≈ 3.14", so ONLY the 3.14-based value
+  // (to the requested 2 places) is correct; the true-π value answers a different
+  // instruction and is not accepted.
   if (exactPi !== undefined) {
     return {
       id: crypto.randomUUID(),
@@ -739,7 +741,6 @@ const generateAreaPerimeterProblem = (): Problem => {
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
       roundTo: 2,
-      acceptableAnswers: [exactPi],
       explanationPrompt: explanation,
       hint,
     };
@@ -807,7 +808,7 @@ const generateCirclesProblem = (): Problem => {
     };
   }
 
-  // Circumference/area: the 3.14-based value the text asks for, or the true-π value, to 2 places.
+  // Circumference/area: only the 3.14-based value the text asks for, to 2 places.
   return {
     id: crypto.randomUUID(),
     topicId: 'circles',
@@ -815,7 +816,6 @@ const generateCirclesProblem = (): Problem => {
     answerType: 'decimal-tolerance',
     correctAnswer: answer,
     roundTo: 2,
-    acceptableAnswers: [exactPi],
     explanationPrompt: explanation,
     hint,
   };
@@ -906,7 +906,7 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
       explanation = '';
   }
 
-  // π problems: the 3.14 value the text asks for, or the true-π value, to 2 places.
+  // π problems: only the 3.14-based value the text asks for, to 2 places.
   if (exactPi !== undefined) {
     return {
       id: crypto.randomUUID(),
@@ -915,7 +915,6 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
       roundTo: 2,
-      acceptableAnswers: [exactPi],
       explanationPrompt: explanation,
       hint,
     };
@@ -1265,7 +1264,7 @@ const generateTrigEquationsProblem = (): Problem => {
     answerType: 'numeric',
     correctAnswer: angle,
     displayAnswer: `$${angle}°$`,
-    explanationPrompt: `$\\${ratio}(${angle}°) = ${exact.latex}$, and $\\${ratio}$ takes each value only once on $[0°, 90°]$, so $\\theta = ${angle}°$.`,
+    explanationPrompt: `$\\${ratio}(${angle}°) = ${exact.latex}$, and $\\${ratio}$ is ${ratio === 'cos' ? 'strictly decreasing' : 'strictly increasing'} on ${ratio === 'tan' ? '$[0°, 90°)$ (its domain within the given interval)' : '$[0°, 90°]$'}, so it takes this value only once: $\\theta = ${angle}°$.`,
     hint: 'Think about special angles: 30°, 45°, 60°.',
   };
 };
@@ -1693,14 +1692,14 @@ const generateSequencesProblem = (): Problem => {
       {
         text: 'The sequence $a_n = \\frac{n}{n+1}$ is increasing and bounded above by $1$.\nBy the Monotone Convergence Theorem, does it converge? If so, to what?',
         answer: '1',
-        alts: ['converges to 1', 'converges', 'yes'],
+        alts: ['converges to 1', 'yes, to 1', 'yes, 1'],
         hint: 'A bounded, monotonically increasing sequence must converge. Find the limit.',
         explanation: 'lim(n→∞) n/(n+1) = 1. The sequence is increasing and bounded above by 1, so by the MCT it converges to 1.',
       },
       {
         text: 'The sequence $a_n = \\frac{1}{n!}$ is decreasing and bounded below by $0$.\nBy the Monotone Convergence Theorem, does it converge? If so, to what?',
         answer: '0',
-        alts: ['converges to 0', 'converges', 'yes'],
+        alts: ['converges to 0', 'yes, to 0', 'yes, 0'],
         hint: 'A bounded, monotonically decreasing sequence must converge.',
         explanation: 'The sequence is decreasing (n! grows) and bounded below by 0. By MCT it converges. lim 1/n! = 0.',
       },
@@ -1731,14 +1730,14 @@ const generateSequencesProblem = (): Problem => {
       {
         text: 'Does the sequence $a_n = \\frac{1}{n}$ converge or diverge?\nIf converges, what is the limit?',
         answer: '0',
-        alts: ['converges to 0', 'converges'],
+        alts: ['converges to 0'],
         hint: 'As $n \\to \\infty$, what happens to $\\frac{1}{n}$?',
         explanation: 'lim(n→∞) 1/n = 0, so the sequence converges to 0.',
       },
       {
         text: 'Does the sequence $a_n = \\frac{n+1}{n}$ converge or diverge?\nIf converges, what is the limit?',
         answer: '1',
-        alts: ['converges to 1', 'converges'],
+        alts: ['converges to 1'],
         hint: 'Divide numerator and denominator by $n$.',
         explanation: 'lim(n→∞) (n+1)/n = lim(n→∞) (1 + 1/n) = 1.',
       },
@@ -2166,7 +2165,7 @@ const generatePolarCoordinatesProblem = (): Problem => {
     // Identify polar curves
     const curves: { eq: string; answer: string; alts: string[]; hint: string }[] = [
       { eq: '$r = 5$', answer: 'circle', alts: ['a circle'], hint: '$r = $ constant means all points are the same distance from the origin.' },
-      { eq: '$\\theta = \\frac{\\pi}{4}$', answer: 'line', alts: ['a line', 'ray'], hint: '$\\theta = $ constant is a ray/line from the origin.' },
+      { eq: '$\\theta = \\frac{\\pi}{4}$ (with $r$ allowed to be negative)', answer: 'line', alts: ['a line', 'straight line'], hint: '$\\theta = $ constant with $r \\in \\mathbb{R}$ is a full line through the origin ($r < 0$ gives the opposite ray); with $r \\geq 0$ only, it would be a ray.' },
       { eq: '$r = 2\\cos(\\theta)$', answer: 'circle', alts: ['a circle'], hint: '$r = a\\cos(\\theta)$ is a circle passing through the origin.' },
       { eq: '$r = 3\\sin(\\theta)$', answer: 'circle', alts: ['a circle'], hint: '$r = a\\sin(\\theta)$ is a circle passing through the origin.' },
     ];
