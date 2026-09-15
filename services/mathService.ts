@@ -1,5 +1,5 @@
 import { TopicId, Problem, ProblemAnswer, FractionAnswer } from '../types';
-import { PYTHAGOREAN_TRIPLES, SPECIAL_ANGLES } from '../constants';
+import { PYTHAGOREAN_TRIPLES } from '../constants';
 import { expressionsEquivalent, parseNumericInput, numbersEqual, roundingTolerance } from './expressionGrader';
 
 // ===========================
@@ -153,7 +153,7 @@ const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
     correctAnswer: a * b,
     explanationPrompt: `$${a} \\times ${latexNum(b)} = ${a * b}$` +
       ((a < 0) !== (b < 0) && a !== 0 && b !== 0 ? ' (one negative factor makes the product negative)' : (a < 0 && b < 0 ? ' (two negative factors make a positive product)' : '')),
-    hint: (a < 0 && b < 0) ? 'A negative times a negative gives a positive!' : (a < 0 || b < 0) ? 'A positive times a negative gives a negative.' : 'Multiply the two numbers together.',
+    hint: (a === 0 || b === 0) ? 'Anything times zero is zero.' : (a < 0 && b < 0) ? 'A negative times a negative gives a positive!' : (a < 0 || b < 0) ? 'A positive times a negative gives a negative.' : 'Multiply the two numbers together.',
   };
 };
 
@@ -1589,7 +1589,7 @@ const generatePartialFractionsProblem = (): Problem => {
 const generateImproperIntegralsProblem = (): Problem => {
   const problems: { text: string; answer: string | number; type: 'numeric' | 'expression'; alts?: string[]; hint: string; explanation: string; tolerance?: number }[] = [
     {
-      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x^2}\\,dx$\nEvaluate (enter a number or "diverges")',
+      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x^2}\\,dx$\nEvaluate (enter the exact value)',
       answer: 1,
       type: 'numeric',
       hint: '$\\int x^{-2}\\,dx = -x^{-1}$. Evaluate the limit as $b \\to \\infty$.',
@@ -1618,7 +1618,7 @@ const generateImproperIntegralsProblem = (): Problem => {
       explanation: '$\\int_0^b e^{-x}\\,dx = \\left[-e^{-x}\\right]_0^b = 1 - e^{-b} \\to 1$ as $b \\to \\infty$.',
     },
     {
-      text: 'For the $p$-series test: $\\displaystyle\\int_1^{\\infty} \\frac{1}{x^p}\\,dx$ converges when $p$ is ___?\n(Enter an inequality like $p > 1$)',
+      text: 'For the $p$-series test: $\\displaystyle\\int_1^{\\infty} \\frac{1}{x^p}\\,dx$ converges when $p$ is ___?\n(Enter an inequality in $p$, in the form "p ... number")',
       answer: 'p>1',
       type: 'expression',
       alts: ['p > 1', 'p>1'],

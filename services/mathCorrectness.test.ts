@@ -169,10 +169,21 @@ describe('audit reproductions', () => {
     }
   });
 
-  it('partial-fraction prompts do not leak the answer denominator', () => {
+  it('partial-fraction and p-series prompts do not leak their answers', () => {
     for (const p of sampleWhere('partial-fractions', q => /What is \$A\$/.test(q.problemText) && /x \+ /.test(q.problemText), 6)) {
       expect(p.problemText).not.toMatch(/like \$\\frac/);
     }
+    const [ps] = sampleWhere('improper-integrals', q => /\$p\$-series/.test(q.problemText), 1);
+    expect(ps.problemText).not.toMatch(/p > 1|p>1/);
+    expect(validateAnswer(ps, 'p > 1')).toBe(true);
+    expect(validateAnswer(ps, 'p < 0')).toBe(false);
+  });
+
+  it('arithmetic answers cannot be restated as the problem itself', () => {
+    const [p] = sampleWhere('addition', q => !/-/.test(q.problemText), 1);
+    const m = p.problemText.match(/\$(\d+) \+ (\d+) =/)!;
+    expect(validateAnswer(p, `${m[1]}+${m[2]}`)).toBe(false);
+    expect(validateAnswer(p, String(Number(m[1]) + Number(m[2])))).toBe(true);
   });
 
   it('no-negatives setting applies to operands and answers', () => {

@@ -129,6 +129,20 @@ describe('parseNumericInput', () => {
     expect(parseNumericInput('e^0.5/384')).toBeCloseTo(Math.exp(0.5) / 384, 12);
     expect(parseNumericInput('1/2!')).toBe(0.5);
   });
+  it('rejects arithmetic that merely restates the problem', () => {
+    expect(parseNumericInput('7+5')).toBeNull();
+    expect(parseNumericInput('7*5')).toBeNull();
+    expect(parseNumericInput('7 - 5')).toBeNull();
+    expect(parseNumericInput('2(3)')).toBeNull();
+    expect(parseNumericInput('7*(5)')).toBeNull();
+    expect(parseNumericInput('(7)(5)')).toBeNull();
+    expect(parseNumericInput('3^2')).toBeNull();
+    // exact forms with a coefficient are still fine
+    expect(parseNumericInput('4*sqrt(2)')).toBeCloseTo(4 * Math.SQRT2, 12);
+    expect(parseNumericInput('2sqrt(2)')).toBeCloseTo(2 * Math.SQRT2, 12);
+    expect(parseNumericInput('2pi')).toBeCloseTo(2 * Math.PI, 12);
+    expect(parseNumericInput('sqrt(32)')).toBeCloseTo(4 * Math.SQRT2, 12);
+  });
   it('rejects non-constants and undefined values', () => {
     expect(parseNumericInput('abc')).toBeNull();
     expect(parseNumericInput('x')).toBeNull();

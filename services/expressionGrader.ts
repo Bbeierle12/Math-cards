@@ -254,6 +254,13 @@ export const parseNumericInput = (raw: string): number | null => {
   }
   const normalized = normalizeMathExpr(s);
   if (!normalized || normalized.includes('=') || /[<>≤≥]/.test(normalized)) return null;
+  // Exact forms only: radicals/constants with a coefficient, divisor or power
+  // (sqrt(3)/2, 4*sqrt(2), 2pi, pi/4, e^0.5/384, 1/2!). Arithmetic that merely
+  // restates the problem ("7+5", "7-5", "7*5", "7*(5)", "(7)(5)", "3^2") is
+  // not an answer and is rejected.
+  if (/\+/.test(normalized) || /(?<=.)-/.test(normalized) || /\d\^/.test(normalized) ||
+      /\d\*\d/.test(normalized) || /\*\(/.test(normalized) || /\d\(/.test(normalized) ||
+      /\)[\d(]/.test(normalized) || /\)\*\d/.test(normalized)) return null;
   try {
     if (freeVariables(normalized).length !== 0) return null;
   } catch {

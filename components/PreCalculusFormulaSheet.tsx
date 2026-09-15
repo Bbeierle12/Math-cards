@@ -70,7 +70,7 @@ export default function PreCalculusFormulaSheet({ onComplete }: PreCalculusFormu
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Rational Root Theorem</p>
-              <p className="text-sm text-slate-200 mt-1">Possible roots: <MathText text="$\pm\frac{p}{q}$" /> where <MathText text="$p$" /> | constant, <MathText text="$q$" /> | leading coeff.</p>
+              <p className="text-sm text-slate-200 mt-1">For a polynomial with integer coefficients, every rational root in lowest terms <MathText text="$\pm\frac{p}{q}$" /> has <MathText text="$p$" /> | constant term and <MathText text="$q$" /> | leading coefficient.</p>
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Remainder Theorem</p>
