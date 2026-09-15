@@ -574,13 +574,15 @@ describe('regression M10: circles tolerance scoping', () => {
         expect(validateAnswer(p, String(answer + 0.4))).toBe(false);
         expect(validateAnswer(p, String(answer - 0.4))).toBe(false);
       } else if (/circumference/.test(p.problemText)) {
-        // Stored answer uses 3.14; a user computing with true π must still pass
-        expect(validateAnswer(p, String(2 * Math.PI * r))).toBe(true);
+        // The text instructs "use π ≈ 3.14": only that value is correct
         expect(validateAnswer(p, String(answer))).toBe(true);
+        expect(validateAnswer(p, (2 * 3.14 * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * Math.PI * r).toFixed(2))).toBe(false);
       } else {
         // area
-        expect(validateAnswer(p, String(Math.PI * r * r))).toBe(true);
         expect(validateAnswer(p, String(answer))).toBe(true);
+        expect(validateAnswer(p, (3.14 * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r).toFixed(2))).toBe(false);
       }
     }
   });

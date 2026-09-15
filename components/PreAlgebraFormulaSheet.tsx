@@ -53,23 +53,23 @@ export default function PreAlgebraFormulaSheet({ onComplete }: PreAlgebraFormula
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">Adding (same denom.)</span>
-              <span className="font-mono text-green-300"><MathText text="$\frac{a}{c} + \frac{b}{c} = \frac{a+b}{c}$" /></span>
+              <span className="font-mono text-green-300"><MathText text="$\frac{a}{c} + \frac{b}{c} = \frac{a+b}{c}$" /> (<MathText text="$c \neq 0$" />)</span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">Adding (diff. denom.)</span>
-              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} + \frac{c}{d} = \frac{ad+bc}{bd}$" /></span>
+              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} + \frac{c}{d} = \frac{ad+bc}{bd}$" /> (<MathText text="$b, d \neq 0$" />)</span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">Multiplying</span>
-              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} \times \frac{c}{d} = \frac{ac}{bd}$" /></span>
+              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} \times \frac{c}{d} = \frac{ac}{bd}$" /> (<MathText text="$b, d \neq 0$" />)</span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">Dividing</span>
-              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} \div \frac{c}{d} = \frac{a}{b} \times \frac{d}{c}$" /></span>
+              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} \div \frac{c}{d} = \frac{a}{b} \times \frac{d}{c}$" /> (<MathText text="$b, c, d \neq 0$" />)</span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
               <span className="text-slate-300">Cross multiply</span>
-              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} = \frac{c}{d} \Rightarrow ad = bc$" /></span>
+              <span className="font-mono text-green-300"><MathText text="$\frac{a}{b} = \frac{c}{d} \iff ad = bc$" /> (<MathText text="$b, d \neq 0$" />)</span>
             </div>
           </div>
         </div>

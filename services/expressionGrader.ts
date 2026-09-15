@@ -28,9 +28,51 @@ const CONSTANTS = new Set(['pi', 'e', 'i']);
 /** Bare single-letter symbols we recognise as variables (so they are not mistaken for word answers). */
 const VARIABLE_WORDS = new Set(['x', 'y', 't', 'u', 'n', 'p', 'theta']);
 
-const SAMPLE_POINTS = [0.37, 0.91, 1.43, 2.17, 2.86, 3.52, 4.31, -0.64, -1.77, -2.93, 5.09, -4.23];
-const MIN_VALID_POINTS = 4;
+/**
+ * Sample points. The fixed list includes the critical points 0, ±1, ±2 (where
+ * "x/x", "x^2/x" and similar domain-invalid rewrites are undefined) and
+ * irrational-looking values on both sides of zero. On top of these, each
+ * comparison adds RANDOM_SAMPLE_COUNT points from a PRNG seeded by a hash of
+ * the two expressions, so a polynomial engineered to vanish on a known list
+ * of points cannot be added to a correct answer.
+ */
+const FIXED_SAMPLE_POINTS = [0, 1, -1, 2, -2, 0.5, 0.37, 0.91, 1.43, 2.17, 2.86, 3.52, 4.31, -0.64, -1.77, -2.93, 5.09, -4.23];
+const RANDOM_SAMPLE_COUNT = 16;
+const MIN_VALID_POINTS = 6;
 const REL_TOL = 1e-8;
+
+const fnv1a = (s: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+
+const mulberry32 = (seed: number) => {
+  let s = seed | 0;
+  return () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const samplePoints = (seedText: string): number[] => {
+  const pts = [...FIXED_SAMPLE_POINTS];
+  const rng = mulberry32(fnv1a(seedText));
+  for (let i = 0; i < RANDOM_SAMPLE_COUNT; i++) pts.push((rng() * 2 - 1) * 6);
+  return pts;
+};
+
+/** Scope for sample index i: each variable gets a distinct, shifted point. */
+const scopeAt = (vars: string[], pts: number[], i: number): Record<string, number> => {
+  const scope: Record<string, number> = {};
+  vars.forEach((v, k) => { scope[v] = pts[(i + 5 * k) % pts.length] * (1 + 0.137 * k); });
+  return scope;
+};
 
 /** Move `fn^n(` exponents behind the matching parenthesis: sin^2(x) -> (sin(x))^2. */
 const hoistFunctionPowers = (s: string): string => {
@@ -149,11 +191,11 @@ export const numericallyEquivalent = (user: string, correct: string, mode: Equiv
     return mode === 'up-to-constant' ? true : close(a, b);
   }
 
+  const pts = samplePoints(`${user}|${correct}`);
   const diffs: number[] = [];
   let scale = 1;
-  for (let i = 0; i < SAMPLE_POINTS.length; i++) {
-    const scope: Record<string, number> = {};
-    vars.forEach((v, k) => { scope[v] = SAMPLE_POINTS[(i + 3 * k) % SAMPLE_POINTS.length] * (1 + 0.137 * k); });
+  for (let i = 0; i < pts.length; i++) {
+    const scope = scopeAt(vars, pts, i);
     const cv = evalReal(cc, scope);
     if (cv === null) continue; // outside the reference's domain: not a comparison point
     const uv = evalReal(cu, scope);
@@ -164,6 +206,48 @@ export const numericallyEquivalent = (user: string, correct: string, mode: Equiv
   if (diffs.length < MIN_VALID_POINTS) return false;
   if (mode === 'exact') return diffs.every(d => Math.abs(d) <= REL_TOL * scale);
   return diffs.every(d => Math.abs(d - diffs[0]) <= REL_TOL * scale);
+};
+
+/**
+ * Equation equivalence: "lhs = rhs" forms describe the same equation when
+ * (lhs − rhs) of the submission is a fixed NONZERO constant multiple of
+ * (lhs − rhs) of the reference at every sample point (x = 2 sin θ,
+ * 2x = 4 sin θ, x/2 = sin θ, 2 sin θ = x). Squaring or otherwise changing
+ * the solution set breaks proportionality and is rejected.
+ */
+const equationsEquivalent = (userDiff: string, correctDiff: string): boolean => {
+  let vars: string[];
+  try {
+    vars = [...new Set([...freeVariables(correctDiff), ...freeVariables(userDiff)])];
+  } catch {
+    return false;
+  }
+  const cu = compile(userDiff);
+  const cc = compile(correctDiff);
+  if (!cu || !cc) return false;
+  const pts = samplePoints(`${userDiff}|${correctDiff}`);
+  let ratio: number | null = null;
+  let valid = 0;
+  let scale = 1;
+  for (let i = 0; i < Math.max(1, pts.length); i++) {
+    const scope = vars.length === 0 ? {} : scopeAt(vars, pts, i);
+    const cv = evalReal(cc, scope);
+    if (cv === null) continue;
+    const uv = evalReal(cu, scope);
+    if (uv === null) return false;
+    valid++;
+    scale = Math.max(scale, Math.abs(cv), Math.abs(uv));
+    const cZero = Math.abs(cv) <= REL_TOL * scale;
+    const uZero = Math.abs(uv) <= REL_TOL * scale;
+    if (cZero !== uZero) return false;      // different solution sets
+    if (cZero) continue;                     // both zero: consistent, no ratio information
+    const r = uv / cv;
+    if (ratio === null) ratio = r;
+    else if (Math.abs(r - ratio) > REL_TOL * Math.max(1, Math.abs(ratio))) return false;
+    if (vars.length === 0) break;
+  }
+  if (vars.length === 0) return valid > 0 && ratio !== null;
+  return valid >= MIN_VALID_POINTS && ratio !== null && Math.abs(ratio) > REL_TOL;
 };
 
 const INEQ_RE = /^(.+?)(≤|≥|<|>)(.+)$/;
@@ -221,10 +305,9 @@ export const expressionsEquivalent = (userRaw: string, correctRaw: string, mode:
   const uEq = parseEquation(user);
   if (cEq) {
     if (!uEq) return false;
-    const sameSides = (a: { lhs: string; rhs: string }, b: { lhs: string; rhs: string }) =>
-      numericallyEquivalent(alignParameter(a.lhs, b.lhs), b.lhs, 'exact') &&
-      numericallyEquivalent(alignParameter(a.rhs, b.rhs), b.rhs, 'exact');
-    return sameSides(uEq, cEq) || sameSides({ lhs: uEq.rhs, rhs: uEq.lhs }, cEq);
+    const correctDiff = `(${cEq.lhs})-(${cEq.rhs})`;
+    const userDiff = alignParameter(`(${uEq.lhs})-(${uEq.rhs})`, correctDiff);
+    return equationsEquivalent(userDiff, correctDiff);
   }
   if (uEq) {
     // "u = x^2 + 5" for a stored "x^2+5": the left side must be a fresh single symbol
@@ -254,20 +337,43 @@ export const parseNumericInput = (raw: string): number | null => {
   }
   const normalized = normalizeMathExpr(s);
   if (!normalized || normalized.includes('=') || /[<>≤≥]/.test(normalized)) return null;
-  // Exact forms only: radicals/constants with a coefficient, divisor or power
-  // (sqrt(3)/2, 4*sqrt(2), 2pi, pi/4, e^0.5/384, 1/2!). Arithmetic that merely
-  // restates the problem ("7+5", "7-5", "7*5", "7*(5)", "(7)(5)", "3^2") is
-  // not an answer and is rejected.
-  if (/\+/.test(normalized) || /(?<=.)-/.test(normalized) || /\d\^/.test(normalized) ||
-      /\d\*\d/.test(normalized) || /\*\(/.test(normalized) || /\d\(/.test(normalized) ||
-      /\)[\d(]/.test(normalized) || /\)\*\d/.test(normalized)) return null;
+  let node: MathNode;
   try {
+    node = parse(normalized);
     if (freeVariables(normalized).length !== 0) return null;
   } catch {
     return null;
   }
+  // Exact forms (sqrt(3)/2, 4*sqrt(2), sqrt(2)*2, 2*(pi), (1+sqrt(2))/2,
+  // e^0.5/384, 1/2!) are fine. Arithmetic on plain numbers ("7+5", "7-5",
+  // "7*5", "(7)(5)", "3^2") merely restates the problem and is not an answer.
+  if (restatesArithmetic(node)) return null;
   const c = compile(normalized);
   return c ? evalReal(c, {}) : null;
+};
+
+interface OperatorLike { op: string; fn: string; args: MathNode[] }
+
+/** A subtree made only of numeric literals (with parentheses / unary sign). */
+const isPureNumber = (n: MathNode): boolean => {
+  if (n.type === 'ConstantNode') return true;
+  if (n.type === 'ParenthesisNode') return isPureNumber((n as unknown as { content: MathNode }).content);
+  if (n.type === 'OperatorNode') {
+    const o = n as unknown as OperatorLike;
+    if ((o.fn === 'unaryMinus' || o.fn === 'unaryPlus') && o.args.length === 1) return isPureNumber(o.args[0]);
+  }
+  return false;
+};
+
+/** True when any +, −, × or ^ combines two plain numbers (a/b is a fraction and stays allowed). */
+const restatesArithmetic = (node: MathNode): boolean => {
+  let found = false;
+  node.traverse((n) => {
+    if (found || n.type !== 'OperatorNode') return;
+    const o = n as unknown as OperatorLike;
+    if (o.args.length === 2 && ['+', '-', '*', '^'].includes(o.op) && o.args.every(isPureNumber)) found = true;
+  });
+  return found;
 };
 
 /** Exact numeric comparison with a floating-point margin only. */

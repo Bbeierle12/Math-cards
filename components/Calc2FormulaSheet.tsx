@@ -131,7 +131,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Taylor Series of f at a</p>
               <p className="font-mono text-sm text-slate-200 mt-1">T(x) = Σ<sub>n=0</sub><sup>∞</sup> f<sup>(n)</sup>(a)/n! · (x−a)ⁿ</p>
-              <p className="text-xs text-slate-400 mt-1">f(x) = T(x) exactly when the remainder Rₙ(x) = f(x) − Tₙ(x) → 0 as n → ∞. Infinite differentiability alone is not enough (e.g. e<sup>−1/x²</sup> has Maclaurin series 0).</p>
+              <p className="text-xs text-slate-400 mt-1">f(x) = T(x) exactly when the remainder Rₙ(x) = f(x) − Tₙ(x) → 0 as n → ∞. Infinite differentiability alone is not enough: f(x) = e<sup>−1/x²</sup> for x ≠ 0 with f(0) = 0 is infinitely differentiable, every f<sup>(n)</sup>(0) = 0, so its Maclaurin series is 0 although f(x) ≠ 0 for x ≠ 0.</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -191,7 +191,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Parametric Derivative</p>
-              <p className="font-mono text-sm text-slate-200 mt-1">dy/dx = (dy/dt) / (dx/dt)</p>
+              <p className="font-mono text-sm text-slate-200 mt-1">dy/dx = (dy/dt) / (dx/dt),  dx/dt ≠ 0</p>
             </div>
 
             <div className="bg-slate-800/50 p-3 rounded">
@@ -203,7 +203,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
               <p className="font-semibold text-cyan-300">Polar ↔ Cartesian</p>
               <div className="font-mono text-sm text-slate-200 mt-1 space-y-1">
                 <p>x = r cos(θ),  y = r sin(θ)</p>
-                <p>r = √(x² + y²),  θ = atan2(y, x)</p>
+                <p>r = √(x² + y²) ≥ 0,  θ = atan2(y, x)</p>
               </div>
               <p className="text-xs text-slate-400 mt-1">atan2 is the quadrant-aware angle: it equals arctan(y/x) only when x &gt; 0; add π (180°) when x &lt; 0; θ = ±π/2 when x = 0 and y ≠ 0. Fix an interval such as [0, 2π) or (−π, π] to make θ unique. At the origin r = 0 and θ is undefined.</p>
             </div>
@@ -243,7 +243,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
 
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Geometric Sequence</p>
-            <p className="text-sm text-slate-300">aₙ = a₁ · rⁿ⁻¹, Sum = a₁(1−rⁿ)/(1−r)</p>
+            <p className="text-sm text-slate-300">aₙ = a₁ · rⁿ⁻¹,  Sₙ = a₁(1−rⁿ)/(1−r) for r ≠ 1  (Sₙ = n·a₁ when r = 1)</p>
           </div>
 
           <div className="bg-slate-800/50 p-4 rounded">
@@ -273,7 +273,7 @@ export default function Calc2FormulaSheet({ onComplete }: Calc2FormulaSheetProps
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Differentiation of Power Series</p>
-            <p className="text-slate-300 mt-1">d/dx[Σ cₙxⁿ] = Σ n·cₙxⁿ⁻¹ (same R)</p>
+            <p className="text-slate-300 mt-1">d/dx[Σ<sub>n=0</sub><sup>∞</sup> cₙxⁿ] = Σ<sub>n=1</sub><sup>∞</sup> n·cₙxⁿ⁻¹ (same R; the n = 0 term is constant)</p>
           </div>
           <div className="bg-slate-800/50 p-3 rounded">
             <p className="font-semibold text-cyan-300">Integration of Power Series</p>

@@ -125,7 +125,7 @@ export default function PreCalculusFormulaSheet({ onComplete }: PreCalculusFormu
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Natural Log Inverse</p>
-              <p className="text-sm text-slate-200 mt-1"><MathText text="$e^{\ln x} = x$" /> and <MathText text="$\ln(e^x) = x$" /></p>
+              <p className="text-sm text-slate-200 mt-1"><MathText text="$e^{\ln x} = x$" /> for <MathText text="$x > 0$" />, and <MathText text="$\ln(e^x) = x$" /> for all real <MathText text="$x$" /></p>
             </div>
           </div>
         </div>
