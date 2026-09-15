@@ -7,6 +7,7 @@ import ProgressBar from './ProgressBar';
 import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon } from './Icons';
 import { useSettings } from '../contexts/SettingsContext';
 import MathText from './MathText';
+import { isTopicMastered } from '../services/mastery';
 
 interface PracticeSessionProps {
   topicId: TopicId;
@@ -15,13 +16,24 @@ interface PracticeSessionProps {
   setUserProgress: (value: UserProgress | ((prev: UserProgress) => UserProgress)) => void;
 }
 
-function formatAnswer(answer: Problem['correctAnswer']): string {
-  if (typeof answer === 'number' || typeof answer === 'string') return String(answer);
+// Feedback text for the correct answer. Prefers the problem's own display form;
+// otherwise formats the stored value at the precision the problem asked for.
+function formatAnswer(problem: Problem): string {
+  if (problem.displayAnswer) return problem.displayAnswer;
+  const answer = problem.correctAnswer;
+  if (typeof answer === 'number') {
+    if (problem.roundTo !== undefined) return answer.toFixed(problem.roundTo);
+    return Number.isInteger(answer) ? String(answer) : String(Number(answer.toPrecision(10)));
+  }
+  if (typeof answer === 'string') return answer;
   if (Array.isArray(answer)) return answer.map((v, i) => `x${i + 1}=${v}`).join(', ');
   if ('numerator' in answer && 'denominator' in answer) return `${(answer as FractionAnswer).numerator}/${(answer as FractionAnswer).denominator}`;
   if ('x' in answer && 'y' in answer) return `(${(answer as CoordinateAnswer).x}, ${(answer as CoordinateAnswer).y})`;
   return String(answer);
 }
+
+const isNumericInput = (problem: Problem) =>
+  problem.answerType === 'numeric' || problem.answerType === 'decimal-tolerance';
 
 export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
   const { settings } = useSettings();
@@ -35,12 +47,16 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
   const [timerRemaining, setTimerRemaining] = useState(settings.timerDurationSeconds);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True only when the countdown for the CURRENT problem actually reached zero.
+  const timedOutRef = useRef(false);
 
   const masteryThreshold = settings.masteryThreshold;
 
   const topicProgress = useMemo(() => {
     return userProgress.topicProgress[topicId] || { correct: 0, attempted: 0, mastery: false };
   }, [userProgress, topicId]);
+  // Same definition as unlocking/badges: derived from the current threshold.
+  const isMastered = isTopicMastered(topicProgress, masteryThreshold);
 
   const topicInfo = useMemo(() => {
     for (const level of CURRICULUM) {
@@ -65,6 +81,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       setTimerRemaining(prev => {
         if (prev <= 1) {
           stopTimer();
+          timedOutRef.current = true;
           return 0;
         }
         return prev - 1;
@@ -90,7 +107,12 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     setAnswerStatus('idle');
     setShowHint(false);
     setSessionCount(prev => prev + 1);
-  }, [topicId, sessionCount, settings.problemsPerSession, settings.numberRange, settings.allowNegatives, onComplete]);
+    // Reset the countdown in the SAME batch as the status change. Otherwise the
+    // expiry effect below would observe {timerRemaining: 0, status: 'idle'} for
+    // the fresh problem and fail it before the timer restarts.
+    setTimerRemaining(settings.timerDurationSeconds);
+    timedOutRef.current = false;
+  }, [topicId, sessionCount, settings.problemsPerSession, settings.numberRange, settings.allowNegatives, settings.timerDurationSeconds, onComplete]);
 
   useEffect(() => {
     generateNewProblem();
@@ -114,9 +136,11 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     };
   }, []);
 
-  // Handle timer expiry (auto-submit as incorrect)
+  // Handle timer expiry (auto-submit as incorrect). Guarded by timedOutRef so a
+  // stale zero from the previous problem can never score the new one.
   useEffect(() => {
-    if (settings.timerEnabled && timerRemaining === 0 && answerStatus === 'idle' && currentProblem) {
+    if (settings.timerEnabled && timerRemaining === 0 && timedOutRef.current && answerStatus === 'idle' && currentProblem) {
+      timedOutRef.current = false;
       setAnswerStatus('incorrect');
       setUserProgress(prevProgress => {
         const newProgress = { ...prevProgress, topicProgress: { ...prevProgress.topicProgress } };
@@ -263,7 +287,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
         <div>
            <h2 className="text-2xl sm:text-3xl font-bold text-cyan-400 flex items-center gap-3">
             {topicInfo.title}
-            {topicProgress.mastery && (
+            {isMastered && (
               <span className="flex items-center gap-2 text-base font-semibold text-green-400 bg-green-500/10 px-3 py-1 rounded-full">
                 <TrophyIcon className="w-4 h-4" />
                 Mastered
@@ -330,12 +354,16 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
           </div>
         ) : (
           <input
-            type={currentProblem.answerType === 'numeric' || currentProblem.answerType === 'decimal-tolerance' ? 'number' : 'text'}
-            step="any"
+            // A text input (not type="number") so fractions like "3/5" and exact
+            // forms like "sqrt(3)/2" or "pi/4" can be typed for numeric answers.
+            type="text"
+            inputMode={isNumericInput(currentProblem) ? 'decimal' : 'text'}
+            autoComplete="off"
+            spellCheck={false}
             value={userAnswer}
             onChange={(e) => setUserAnswer(e.target.value)}
             disabled={answerStatus !== 'idle'}
-            placeholder="Your answer..."
+            placeholder={isNumericInput(currentProblem) ? 'Your answer (e.g. 12, -3, 3/5, 0.75)' : 'Your answer...'}
             autoFocus
             className={`w-full text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
               ${answerStatus === 'incorrect' ? `border-red-500 ${anim ? 'animate-shake' : ''}` : 'border-slate-600'}
@@ -396,10 +424,10 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
             {answerStatus === 'correct' ? 'Correct!' : timerRemaining === 0 && settings.timerEnabled ? "Time's up!" : 'Not quite.'}
           </p>
           {answerStatus === 'incorrect' && (
-            <p>The correct answer is: <span className="font-bold">{formatAnswer(currentProblem.correctAnswer)}</span></p>
+            <p>The correct answer is: <span className="font-bold"><MathText text={formatAnswer(currentProblem)} /></span></p>
           )}
           {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && currentProblem.explanationPrompt && (
-            <p className="mt-2 text-sm text-slate-300 italic">{currentProblem.explanationPrompt}</p>
+            <p className="mt-2 text-sm text-slate-300"><MathText text={currentProblem.explanationPrompt} /></p>
           )}
           {answerStatus === 'correct' && settings.autoAdvanceOnCorrect && (
             <p className="mt-1 text-sm text-green-400/60">Next question in a moment...</p>

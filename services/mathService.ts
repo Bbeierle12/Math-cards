@@ -1,6 +1,6 @@
 import { TopicId, Problem, ProblemAnswer, FractionAnswer } from '../types';
 import { PYTHAGOREAN_TRIPLES, SPECIAL_ANGLES } from '../constants';
-import { parse, simplify, evaluate, MathNode } from 'mathjs';
+import { expressionsEquivalent, parseNumericInput, numbersEqual, roundingTolerance } from './expressionGrader';
 
 // ===========================
 // UTILITY FUNCTIONS
@@ -16,12 +16,6 @@ const randChoice = <T>(arr: T[]): T => {
   return arr[randInt(0, arr.length - 1)];
 };
 
-// Helper to format negative numbers for display
-const formatNum = (n: number) => (n < 0 ? `(${n})` : n);
-
-// Helper to format a constant term with sign (e.g., + 5 or - 5)
-const formatTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}`);
-
 // LaTeX formatting helpers
 const latexNum = (n: number) => (n < 0 ? `(${n})` : `${n}`);
 const latexTerm = (n: number): string => (n >= 0 ? `+ ${n}` : `- ${Math.abs(n)}`);
@@ -32,59 +26,56 @@ const latexSignedCoeff = (n: number, varName: string): string => {
 };
 const latexFrac = (num: number, den: number): string => `\\frac{${num}}{${den}}`;
 
-// Helper to format a number, stripping unnecessary trailing ".0"
-const formatDecimal = (n: number): string => {
-  const s = n.toFixed(1);
-  return s.endsWith('.0') ? String(Math.round(n)) : s;
+// Round to a fixed number of decimal places (for stored approximations that the
+// problem text itself asks for, e.g. "Use pi ~ 3.14").
+const roundTo = (n: number, places: number): number => {
+  const f = Math.pow(10, places);
+  return Math.round(n * f) / f;
 };
 
-// Normalize expression string for mathjs parsing
-const normalizeMathExpr = (s: string): string =>
-  s.replace(/\s/g, '')
-   .replace(/[²]/g, '^2').replace(/[³]/g, '^3').replace(/[⁴]/g, '^4').replace(/[⁵]/g, '^5')
-   .replace(/\|([^|]+)\|/g, 'abs($1)')    // |x| → abs(x)
-   .replace(/·/g, '*');                     // · → *
+// Options for basic-arithmetic generators (from user settings).
+interface NumberRangeOptions {
+  numberRange?: { min: number; max: number };
+  allowNegatives?: boolean;
+}
 
-// Check if two math expressions are algebraically equal using mathjs.
-// Uses symbolic simplification and numeric spot-checking.
-const expressionsAlgebraicallyEqual = (userExpr: string, correctExpr: string): boolean => {
-  try {
-    const normUser = normalizeMathExpr(userExpr);
-    const normCorrect = normalizeMathExpr(correctExpr);
+// Resolve the effective operand range for basic arithmetic.
+// "Allow negatives" off means: no negative operands AND no negative answers.
+// An inverted range is repaired rather than fed to randInt.
+export const resolveRange = (
+  opts: NumberRangeOptions | undefined,
+  fallbackMin: number,
+  fallbackMax: number,
+): { min: number; max: number } => {
+  const rawMin = opts?.numberRange?.min;
+  const rawMax = opts?.numberRange?.max;
+  let min = typeof rawMin === 'number' && Number.isFinite(rawMin) ? Math.trunc(rawMin) : fallbackMin;
+  let max = typeof rawMax === 'number' && Number.isFinite(rawMax) ? Math.trunc(rawMax) : fallbackMax;
+  if (min > max) [min, max] = [max, min];
+  if (opts?.allowNegatives === false) {
+    min = Math.max(0, min);
+    max = Math.max(min, max);
+  }
+  return { min, max };
+};
 
-    // Skip non-math text answers (convergence, divergence, etc.)
-    if (/^[a-z]+$/i.test(normUser) || /^[a-z]+$/i.test(normCorrect)) return false;
-
-    // Try symbolic simplification: simplify(user - correct) === 0
-    try {
-      const diff = simplify(`(${normUser}) - (${normCorrect})`);
-      const diffStr = diff.toString();
-      if (diffStr === '0') return true;
-    } catch { /* symbolic simplification may fail on some expressions */ }
-
-    // Numeric spot-check: evaluate both expressions at several x values
-    const testPoints = [0.5, 1, 1.5, 2, 2.7, 3.1];
-    let allMatch = true;
-    let anyEvaluated = false;
-
-    for (const x of testPoints) {
-      try {
-        const userVal = evaluate(normUser, { x });
-        const correctVal = evaluate(normCorrect, { x });
-        if (typeof userVal === 'number' && typeof correctVal === 'number') {
-          anyEvaluated = true;
-          if (Math.abs(userVal - correctVal) > 0.001) {
-            allMatch = false;
-            break;
-          }
-        }
-      } catch { /* some points may cause evaluation errors (division by zero, etc.) */ }
-    }
-
-    if (anyEvaluated && allMatch) return true;
-  } catch { /* if parsing fails entirely, fall through */ }
-
-  return false;
+// Exact values of the special angles used by the trigonometry generators.
+const SPECIAL_TRIG: Record<30 | 45 | 60, Record<'sin' | 'cos' | 'tan', { latex: string; text: string; value: number }>> = {
+  30: {
+    sin: { latex: '\\frac{1}{2}', text: '1/2', value: 0.5 },
+    cos: { latex: '\\frac{\\sqrt{3}}{2}', text: '√3/2', value: Math.sqrt(3) / 2 },
+    tan: { latex: '\\frac{\\sqrt{3}}{3}', text: '√3/3', value: Math.sqrt(3) / 3 },
+  },
+  45: {
+    sin: { latex: '\\frac{\\sqrt{2}}{2}', text: '√2/2', value: Math.SQRT2 / 2 },
+    cos: { latex: '\\frac{\\sqrt{2}}{2}', text: '√2/2', value: Math.SQRT2 / 2 },
+    tan: { latex: '1', text: '1', value: 1 },
+  },
+  60: {
+    sin: { latex: '\\frac{\\sqrt{3}}{2}', text: '√3/2', value: Math.sqrt(3) / 2 },
+    cos: { latex: '\\frac{1}{2}', text: '1/2', value: 0.5 },
+    tan: { latex: '\\sqrt{3}', text: '√3', value: Math.sqrt(3) },
+  },
 };
 
 // Helper to simplify fractions (GCD)
@@ -117,8 +108,7 @@ export const simplifyFraction = (num: number, den: number): FractionAnswer => {
 // ===========================
 
 const generateAdditionProblem = (opts?: NumberRangeOptions): Problem => {
-  const min = opts?.allowNegatives === false ? Math.max(0, opts?.numberRange?.min ?? 0) : (opts?.numberRange?.min ?? -10);
-  const max = opts?.numberRange?.max ?? 10;
+  const { min, max } = resolveRange(opts, -10, 10);
   const a = randInt(min, max);
   const b = randInt(min, max);
   return {
@@ -127,30 +117,32 @@ const generateAdditionProblem = (opts?: NumberRangeOptions): Problem => {
     problemText: `$${a} + ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a + b,
-    explanationPrompt: `Explain step-by-step how to solve ${a} + ${b}.`,
+    explanationPrompt: `$${a} + ${latexNum(b)} = ${a + b}$`,
     hint: a < 0 && b < 0 ? 'Adding two negative numbers gives a negative result.' : undefined,
   };
 };
 
 const generateSubtractionProblem = (opts?: NumberRangeOptions): Problem => {
-  const min = opts?.allowNegatives === false ? Math.max(0, opts?.numberRange?.min ?? 0) : (opts?.numberRange?.min ?? -10);
-  const max = opts?.numberRange?.max ?? 10;
-  const a = randInt(min, max);
-  const b = randInt(min, max);
+  const { min, max } = resolveRange(opts, -10, 10);
+  let a = randInt(min, max);
+  let b = randInt(min, max);
+  // With negatives disabled the difference must not be negative either.
+  if (opts?.allowNegatives === false && a < b) [a, b] = [b, a];
   return {
     id: crypto.randomUUID(),
     topicId: 'subtraction',
     problemText: `$${a} - ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a - b,
-    explanationPrompt: `Explain step-by-step how to solve ${a} - ${b}.`,
+    explanationPrompt: b < 0
+      ? `Subtracting a negative is adding: $${a} - (${b}) = ${a} + ${-b} = ${a - b}$`
+      : `$${a} - ${b} = ${a - b}$`,
     hint: b < 0 ? 'Remember: subtracting a negative is the same as adding a positive.' : 'Subtract the second number from the first.',
   };
 };
 
 const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
-  const min = opts?.allowNegatives === false ? Math.max(0, opts?.numberRange?.min ?? 0) : (opts?.numberRange?.min ?? -10);
-  const max = opts?.numberRange?.max ?? 10;
+  const { min, max } = resolveRange(opts, -10, 10);
   const a = randInt(min, max);
   const b = randInt(min, max);
   return {
@@ -159,15 +151,15 @@ const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
     problemText: `$${a} \\times ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a * b,
-    explanationPrompt: `Explain step-by-step how to solve ${a} * ${b}.`,
+    explanationPrompt: `$${a} \\times ${latexNum(b)} = ${a * b}$` +
+      ((a < 0) !== (b < 0) && a !== 0 && b !== 0 ? ' (one negative factor makes the product negative)' : (a < 0 && b < 0 ? ' (two negative factors make a positive product)' : '')),
     hint: (a < 0 && b < 0) ? 'A negative times a negative gives a positive!' : (a < 0 || b < 0) ? 'A positive times a negative gives a negative.' : 'Multiply the two numbers together.',
   };
 };
 
 const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
-  const min = opts?.allowNegatives === false ? Math.max(1, opts?.numberRange?.min ?? 1) : (opts?.numberRange?.min ?? -10);
-  const max = opts?.numberRange?.max ?? 10;
-  // Guard against range that can only produce 0 (e.g., [0,0])
+  const { min, max } = resolveRange(opts, -10, 10);
+  // Guard against a range that can only produce 0 (e.g., [0,0])
   if (min === 0 && max === 0) {
     return {
       id: crypto.randomUUID(),
@@ -175,14 +167,15 @@ const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
       problemText: `$0 \\div 1 = \\;?$`,
       answerType: 'numeric',
       correctAnswer: 0,
-      explanationPrompt: `Explain step-by-step how to solve 0 / 1.`,
+      explanationPrompt: `$0 \\div 1 = 0$ because $0 \\times 1 = 0$.`,
       hint: 'Zero divided by any non-zero number is zero.',
     };
   }
   let b = 0;
-  while (b === 0) {
+  for (let tries = 0; b === 0 && tries < 100; tries++) {
     b = randInt(min, max);
   }
+  if (b === 0) b = 1;
   const result = randInt(min, max);
   const a = b * result;
   return {
@@ -191,7 +184,7 @@ const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
     problemText: `$${a} \\div ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: result,
-    explanationPrompt: `Explain step-by-step how to solve ${a} / ${b}.`,
+    explanationPrompt: `$${latexNum(b)} \\times ${latexNum(result)} = ${a}$, so $${a} \\div ${latexNum(b)} = ${result}$.`,
     hint: 'Think: what number times the divisor gives the dividend?',
   };
 };
@@ -212,7 +205,7 @@ const generateSimpleLinearEquationProblem = (): Problem => {
     problemText: `$${a}x + ${b} = ${c}$`,
     answerType: 'numeric',
     correctAnswer: x,
-    explanationPrompt: `Explain step-by-step how to solve for x in the equation ${a}x + ${b} = ${c}.`,
+    explanationPrompt: `Subtract $${b}$ from both sides: $${a}x = ${c - b}$. Divide by $${a}$: $x = ${x}$.`,
     hint: `First, subtract ${b} from both sides.`,
   };
 };
@@ -253,6 +246,14 @@ const generateFractionsBasicProblem = (): Problem => {
   }
 
   const simplified = simplifyFraction(answerNum, answerDen);
+  const simplifiedLatex = simplified.denominator === 1 ? `${simplified.numerator}` : latexFrac(simplified.numerator, simplified.denominator);
+  const unsimplified = latexFrac(answerNum, answerDen);
+  const simplifyNote = answerDen === simplified.denominator ? '' : `, which simplifies to $${simplifiedLatex}$`;
+  const explanation = op === '+' || op === '-'
+    ? `Common denominator $${den1 * den2}$: $${latexFrac(num1 * den2, den1 * den2)} ${op} ${latexFrac(num2 * den1, den1 * den2)} = ${unsimplified}$${simplifyNote}.`
+    : op === '×'
+      ? `Multiply numerators and denominators: $\\frac{${num1} \\times ${num2}}{${den1} \\times ${den2}} = ${unsimplified}$${simplifyNote}.`
+      : `Multiply by the reciprocal: $${latexFrac(num1, den1)} \\times ${latexFrac(den2, num2)} = ${unsimplified}$${simplifyNote}.`;
 
   return {
     id: crypto.randomUUID(),
@@ -260,7 +261,7 @@ const generateFractionsBasicProblem = (): Problem => {
     problemText: `$${latexFrac(num1, den1)} ${op === '×' ? '\\times' : op === '÷' ? '\\div' : op} ${latexFrac(num2, den2)} = \\;?$`,
     answerType: 'fraction',
     correctAnswer: simplified,
-    explanationPrompt: `Explain how to ${op === '+' ? 'add' : op === '-' ? 'subtract' : op === '×' ? 'multiply' : 'divide'} these fractions: ${num1}/${den1} ${op} ${num2}/${den2}.`,
+    explanationPrompt: explanation,
     hint: op === '+' || op === '-' ? 'Find a common denominator first.' : op === '×' ? 'Multiply numerators and denominators.' : 'Flip and multiply!',
   };
 };
@@ -288,15 +289,17 @@ const generateDecimalsProblem = (): Problem => {
       answer = 0;
   }
 
+  // Sums/differences of tenths and products of tenths are exact to 2 decimal
+  // places, so this is an exact-answer problem (no tolerance).
+  const exact = roundTo(answer, 2);
   return {
     id: crypto.randomUUID(),
     topicId: 'decimals',
     problemText: `$${a} ${op === '×' ? '\\times' : op} ${b} = \\;?$`,
-    answerType: 'decimal-tolerance',
-    correctAnswer: Math.round(answer * 100) / 100,
-    explanationPrompt: `Explain how to ${op === '+' ? 'add' : op === '-' ? 'subtract' : 'multiply'} ${a} ${op} ${b}.`,
-    tolerance: 0.01,
-    hint: 'Line up the decimal points when adding or subtracting.',
+    answerType: 'numeric',
+    correctAnswer: exact,
+    explanationPrompt: `$${a} ${op === '×' ? '\\times' : op} ${b} = ${exact}$`,
+    hint: op === '×' ? 'Multiply as whole numbers, then place the decimal point (count the decimal digits in both factors).' : 'Line up the decimal points when adding or subtracting.',
   };
 };
 
@@ -311,25 +314,31 @@ const generateOrderOfOperationsProblem = (): Problem => {
   let problemText: string;
   let answer: number;
 
+  let explanation: string;
+
   switch (problemType) {
     case 1:
       // a + b × c
       problemText = `$${a} + ${b} \\times ${c}$`;
       answer = a + b * c;
+      explanation = `Multiply first: $${b} \\times ${c} = ${b * c}$. Then add: $${a} + ${b * c} = ${answer}$.`;
       break;
     case 2:
       // (a + b) × c
       problemText = `$(${a} + ${b}) \\times ${c}$`;
       answer = (a + b) * c;
+      explanation = `Parentheses first: $${a} + ${b} = ${a + b}$. Then multiply: $${a + b} \\times ${c} = ${answer}$.`;
       break;
     case 3:
       // a × b + c × d
       problemText = `$${a} \\times ${b} + ${c} \\times ${d}$`;
       answer = a * b + c * d;
+      explanation = `Do both multiplications first: $${a} \\times ${b} = ${a * b}$ and $${c} \\times ${d} = ${c * d}$. Then add: $${a * b} + ${c * d} = ${answer}$.`;
       break;
     default:
       problemText = `$${a} + ${b}$`;
       answer = a + b;
+      explanation = `$${a} + ${b} = ${answer}$`;
   }
 
   return {
@@ -338,7 +347,7 @@ const generateOrderOfOperationsProblem = (): Problem => {
     problemText: `${problemText} $= \\;?$`,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Explain the order of operations (PEMDAS) for this problem.`,
+    explanationPrompt: explanation,
     hint: 'Remember PEMDAS: Parentheses, Exponents, Multiplication/Division, Addition/Subtraction.',
   };
 };
@@ -371,7 +380,8 @@ const generateIntegersProblem = (): Problem => {
     problemText: `$${latexNum(a)} ${op === '×' ? '\\times' : op} ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Explain how to work with negative numbers: ${formatNum(a)} ${op} ${formatNum(b)}.`,
+    explanationPrompt: `$${latexNum(a)} ${op === '×' ? '\\times' : op} ${latexNum(b)} = ${answer}$` +
+      (op === '×' && a < 0 && b < 0 ? ' (negative times negative is positive)' : op === '-' && b < 0 ? ` (subtracting $${b}$ is adding $${-b}$)` : ''),
     hint: op === '×' ? 'Two negatives make a positive when multiplying!' : op === '-' ? 'Subtracting a negative is the same as adding.' : 'When adding, consider the signs of both numbers.',
   };
 };
@@ -394,7 +404,7 @@ const generateMultiStepEquationProblem = (): Problem => {
     problemText: `$${a}x ${latexTerm(b)} = ${c}x ${latexTerm(d)}$`,
     answerType: 'numeric',
     correctAnswer: x,
-    explanationPrompt: `Solve for x: ${a}x ${formatTerm(b)} = ${c}x ${formatTerm(d)}.`,
+    explanationPrompt: `Subtract $${c}x$ from both sides: $${a - c}x ${latexTerm(b)} = ${d}$. Then ${b >= 0 ? 'subtract' : 'add'} $${Math.abs(b)}$: $${a - c}x = ${d - b}$. Divide by $${a - c}$: $x = ${x}$.`,
     hint: 'Move all x terms to one side and constants to the other.',
   };
 };
@@ -417,7 +427,7 @@ const generateInequalitiesProblem = (): Problem => {
     problemText: `Solve for $x$: $${a}x + ${b} ${op === '≤' ? '\\leq' : op === '≥' ? '\\geq' : op} ${c}$`,
     answerType: 'expression',
     correctAnswer: `x ${op} ${solution}`,
-    explanationPrompt: `Solve the inequality: ${a}x + ${b} ${op} ${c}.`,
+    explanationPrompt: `Subtract $${b}$: $${a}x ${op === '≤' ? '\\leq' : op === '≥' ? '\\geq' : op} ${c - b}$. Divide by $${a}$ (positive, so the inequality direction is unchanged): $x ${op === '≤' ? '\\leq' : op === '≥' ? '\\geq' : op} ${solution}$.`,
     hint: 'Solve like an equation, but remember: flip the sign when multiplying/dividing by a negative!',
   };
 };
@@ -445,7 +455,7 @@ const generateSystemsOfEquationsProblem = (): Problem => {
     problemText: `$${a1}x + ${b1}y = ${c1}$\n$${a2}x + ${b2}y = ${c2}$\nFind $x$:`,
     answerType: 'numeric',
     correctAnswer: x,
-    explanationPrompt: `Solve this system of equations for x:\n${a1}x + ${b1}y = ${c1}\n${a2}x + ${b2}y = ${c2}`,
+    explanationPrompt: `Eliminate $y$: multiply the first equation by $${b2}$ and the second by $${b1}$, then subtract: $(${a1 * b2} - ${a2 * b1})x = ${c1 * b2} - ${c2 * b1}$, so $${a1 * b2 - a2 * b1}x = ${c1 * b2 - c2 * b1}$ and $x = ${x}$. (Then $y = ${y}$.)`,
     hint: 'Try using substitution or elimination method.',
   };
 };
@@ -456,9 +466,12 @@ const generateExponentsProblem = (): Problem => {
   const exp2 = randInt(2, 4);
 
   const problemTypes = [
-    { text: `$${base}^{${exp1}} \\times ${base}^{${exp2}}$`, answer: exp1 + exp2, rule: 'multiplication', question: 'What is the simplified exponent?' },
-    { text: `$${base}^{${exp1 + exp2}} \\div ${base}^{${exp2}}$`, answer: exp1, rule: 'division', question: 'What is the simplified exponent?' },
-    { text: `$(${base}^{${exp1}})^{${exp2}}$`, answer: exp1 * exp2, rule: 'power', question: 'What is the simplified exponent?' },
+    { text: `$${base}^{${exp1}} \\times ${base}^{${exp2}}$`, answer: exp1 + exp2, rule: 'multiplication', question: 'What is the simplified exponent?',
+      explanation: `Same base, multiplying: add the exponents. $${base}^{${exp1}} \\times ${base}^{${exp2}} = ${base}^{${exp1} + ${exp2}} = ${base}^{${exp1 + exp2}}$.` },
+    { text: `$${base}^{${exp1 + exp2}} \\div ${base}^{${exp2}}$`, answer: exp1, rule: 'division', question: 'What is the simplified exponent?',
+      explanation: `Same base, dividing: subtract the exponents. $${base}^{${exp1 + exp2}} \\div ${base}^{${exp2}} = ${base}^{${exp1 + exp2} - ${exp2}} = ${base}^{${exp1}}$.` },
+    { text: `$(${base}^{${exp1}})^{${exp2}}$`, answer: exp1 * exp2, rule: 'power', question: 'What is the simplified exponent?',
+      explanation: `Power of a power: multiply the exponents. $(${base}^{${exp1}})^{${exp2}} = ${base}^{${exp1} \\cdot ${exp2}} = ${base}^{${exp1 * exp2}}$.` },
   ];
 
   const chosen = randChoice(problemTypes);
@@ -469,7 +482,7 @@ const generateExponentsProblem = (): Problem => {
     problemText: `Simplify: ${chosen.text}\n${chosen.question} (The answer is $${base}^{?}$)`,
     answerType: 'numeric',
     correctAnswer: chosen.answer,
-    explanationPrompt: `Explain the exponent rule for ${chosen.text}.`,
+    explanationPrompt: chosen.explanation,
     hint: chosen.rule === 'multiplication' ? 'When multiplying: add exponents.' : chosen.rule === 'division' ? 'When dividing: subtract exponents.' : 'When raising to a power: multiply exponents.',
   };
 };
@@ -502,7 +515,7 @@ const generatePolynomialsProblem = (): Problem => {
     problemText: `$(${poly1}) ${operation} (${poly2})$\nWhat is the coefficient of $x$?`,
     answerType: 'numeric',
     correctAnswer: resultB,
-    explanationPrompt: `Explain how to ${operation === '+' ? 'add' : 'subtract'} these polynomials.`,
+    explanationPrompt: `Combine the $x$ terms: $${b1}x ${operation} (${b2}x) = ${resultB}x$. (Full result: $${resultA}x^2 ${latexTerm(resultB)}x ${latexTerm(resultC)}$.)`,
     hint: 'Combine like terms: match x² with x², x with x, and constants with constants.',
   };
 };
@@ -524,7 +537,7 @@ const generateFactoringProblem = (): Problem => {
     problemText: `Factor: $${quadraticLatex}$\nWhat is the smaller constant in the factors?`,
     answerType: 'numeric',
     correctAnswer: Math.min(a, b),
-    explanationPrompt: `Explain how to factor this quadratic.`,
+    explanationPrompt: `Find two numbers that multiply to $${product}$ and add to $${sum}$: $${a}$ and $${b}$. So $${quadraticLatex} = (x ${latexTerm(a)})(x ${latexTerm(b)})$; the smaller constant is $${Math.min(a, b)}$.`,
     hint: `Find two numbers that multiply to $${product}$ and add to $${sum}$.`,
   };
 };
@@ -546,7 +559,7 @@ const generateQuadraticEquationsProblem = (): Problem => {
     problemText: `Solve for $x$: $${quadraticLatex}$\nWhat is the larger solution?`,
     answerType: 'numeric',
     correctAnswer: Math.max(a, b),
-    explanationPrompt: `Solve this quadratic by factoring or using the quadratic formula.`,
+    explanationPrompt: `Factor: $(x ${latexTerm(-a)})(x ${latexTerm(-b)}) = 0$, so $x = ${a}$ or $x = ${b}$. The larger solution is $${Math.max(a, b)}$.`,
     hint: `Try factoring first, or use the quadratic formula: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$`,
   };
 };
@@ -570,7 +583,7 @@ const generateAnglesProblem = (): Problem => {
     problemText: `What is the ${chosen.question} angle of $${angle1}°$?`,
     answerType: 'numeric',
     correctAnswer: chosen.angle2,
-    explanationPrompt: `Explain what ${chosen.question} angles are and how to find the ${chosen.question} of ${angle1}°.`,
+    explanationPrompt: `${chosen.question[0].toUpperCase()}${chosen.question.slice(1)} angles add to $${chosen.type === 'complement' ? 90 : 180}°$: $${chosen.type === 'complement' ? 90 : 180}° - ${angle1}° = ${chosen.angle2}°$.`,
     hint: chosen.type === 'complement' ? 'Complementary angles add to 90°.' : 'Supplementary angles add to 180°.',
   };
 };
@@ -587,7 +600,7 @@ const generateTrianglesProblem = (): Problem => {
     problemText: `A triangle has angles of $${angle1}°$ and $${angle2}°$. What is the third angle?`,
     answerType: 'numeric',
     correctAnswer: angle3,
-    explanationPrompt: `Explain how to find the missing angle in a triangle with angles ${angle1}° and ${angle2}°.`,
+    explanationPrompt: `The angles of a triangle add to $180°$: $180° - ${angle1}° - ${angle2}° = ${angle3}°$.`,
     hint: 'The sum of angles in a triangle is always 180°.',
   };
 };
@@ -602,15 +615,20 @@ const generatePythagoreanTheoremProblem = (): Problem => {
   let problemText: string;
   let answer: number;
 
+  let explanation: string;
+
   if (missing === 0) {
     problemText = `A right triangle has leg $b = ${b}$ and hypotenuse $c = ${c}$. Find leg $a$.`;
     answer = a;
+    explanation = `$a^2 = c^2 - b^2 = ${c * c} - ${b * b} = ${a * a}$, so $a = \\sqrt{${a * a}} = ${a}$.`;
   } else if (missing === 1) {
     problemText = `A right triangle has leg $a = ${a}$ and hypotenuse $c = ${c}$. Find leg $b$.`;
     answer = b;
+    explanation = `$b^2 = c^2 - a^2 = ${c * c} - ${a * a} = ${b * b}$, so $b = \\sqrt{${b * b}} = ${b}$.`;
   } else {
     problemText = `A right triangle has legs $a = ${a}$ and $b = ${b}$. Find the hypotenuse $c$.`;
     answer = c;
+    explanation = `$c^2 = a^2 + b^2 = ${a * a} + ${b * b} = ${c * c}$, so $c = \\sqrt{${c * c}} = ${c}$.`;
   }
 
   return {
@@ -619,7 +637,7 @@ const generatePythagoreanTheoremProblem = (): Problem => {
     problemText,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Use the Pythagorean theorem to solve this problem.`,
+    explanationPrompt: explanation,
     hint: 'Pythagorean theorem: $a^2 + b^2 = c^2$, where $c$ is the hypotenuse.',
   };
 };
@@ -631,34 +649,41 @@ const generateAreaPerimeterProblem = (): Problem => {
   let problemText: string;
   let answer: number;
   let hint: string;
-  let usesPI = false;
+  let explanation: string;
+  let exactPi: number | undefined; // true-π value for π problems
 
   switch (shape) {
-    case 'rectangle':
+    case 'rectangle': {
       const length = randInt(5, 15);
       const width = randInt(3, 10);
       if (measurement === 'area') {
         problemText = `Find the area of a rectangle with length $${length}$ and width $${width}$.`;
         answer = length * width;
         hint = '$A = l \\times w$';
+        explanation = `$A = l \\times w = ${length} \\times ${width} = ${answer}$`;
       } else {
         problemText = `Find the perimeter of a rectangle with length $${length}$ and width $${width}$.`;
         answer = 2 * (length + width);
         hint = '$P = 2(l + w)$';
+        explanation = `$P = 2(l + w) = 2(${length} + ${width}) = ${answer}$`;
       }
       break;
-    case 'square':
+    }
+    case 'square': {
       const side = randInt(5, 15);
       if (measurement === 'area') {
         problemText = `Find the area of a square with side length $${side}$.`;
         answer = side * side;
         hint = '$A = s^2$';
+        explanation = `$A = s^2 = ${side}^2 = ${answer}$`;
       } else {
         problemText = `Find the perimeter of a square with side length $${side}$.`;
         answer = 4 * side;
         hint = '$P = 4s$';
+        explanation = `$P = 4s = 4 \\times ${side} = ${answer}$`;
       }
       break;
+    }
     case 'triangle': {
       const base = randInt(6, 12);
       const height = randInt(4, 10);
@@ -668,6 +693,7 @@ const generateAreaPerimeterProblem = (): Problem => {
         problemText = `Find the area of a triangle with base $${adjustedBase}$ and height $${height}$.`;
         answer = (adjustedBase * height) / 2;
         hint = '$A = \\frac{1}{2}bh$';
+        explanation = `$A = \\frac{1}{2}bh = \\frac{1}{2} \\times ${adjustedBase} \\times ${height} = ${answer}$`;
       } else {
         // Generate a triangle with three known sides for perimeter
         const side1 = randInt(5, 12);
@@ -676,38 +702,45 @@ const generateAreaPerimeterProblem = (): Problem => {
         problemText = `Find the perimeter of a triangle with sides $${side1}$, $${side2}$, and $${side3}$.`;
         answer = side1 + side2 + side3;
         hint = '$P = a + b + c$';
+        explanation = `$P = ${side1} + ${side2} + ${side3} = ${answer}$`;
       }
       break;
     }
-    case 'circle':
+    case 'circle': {
       const radius = randInt(3, 10);
-      usesPI = true;
       if (measurement === 'area') {
-        problemText = `Find the area of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
-        answer = Math.round(3.14 * radius * radius * 100) / 100;
+        problemText = `Find the area of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+        answer = roundTo(3.14 * radius * radius, 2);
+        exactPi = Math.PI * radius * radius;
         hint = '$A = \\pi r^2$';
+        explanation = `$A = \\pi r^2 \\approx 3.14 \\times ${radius}^2 = 3.14 \\times ${radius * radius} = ${answer}$`;
       } else {
-        problemText = `Find the circumference of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
-        answer = Math.round(2 * 3.14 * radius * 100) / 100;
+        problemText = `Find the circumference of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+        answer = roundTo(2 * 3.14 * radius, 2);
+        exactPi = 2 * Math.PI * radius;
         hint = '$C = 2\\pi r$';
+        explanation = `$C = 2\\pi r \\approx 2 \\times 3.14 \\times ${radius} = ${answer}$`;
       }
       break;
+    }
     default:
       problemText = '';
       answer = 0;
       hint = '';
+      explanation = '';
   }
 
-  // Use exact numeric matching for integer answers, tolerance only for π-based
-  if (usesPI) {
+  // π problems: the 3.14 value the text asks for, or the true-π value, to 2 places.
+  if (exactPi !== undefined) {
     return {
       id: crypto.randomUUID(),
       topicId: 'area-perimeter',
       problemText,
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
-      tolerance: 0.5,
-      explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
+      roundTo: 2,
+      acceptableAnswers: [exactPi],
+      explanationPrompt: explanation,
       hint,
     };
   }
@@ -716,10 +749,9 @@ const generateAreaPerimeterProblem = (): Problem => {
     id: crypto.randomUUID(),
     topicId: 'area-perimeter',
     problemText,
-    answerType: Number.isInteger(answer) ? 'numeric' : 'decimal-tolerance',
+    answerType: 'numeric',
     correctAnswer: answer,
-    tolerance: Number.isInteger(answer) ? undefined : 0.1,
-    explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
+    explanationPrompt: explanation,
     hint,
   };
 };
@@ -731,51 +763,60 @@ const generateCirclesProblem = (): Problem => {
   let problemText: string;
   let answer: number;
   let hint: string;
+  let explanation: string;
+  let exactPi: number | undefined;
 
   switch (problemType) {
     case 'circumference':
-      problemText = `Find the circumference of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
-      answer = Math.round(2 * 3.14 * radius * 100) / 100;
+      problemText = `Find the circumference of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+      answer = roundTo(2 * 3.14 * radius, 2);
+      exactPi = 2 * Math.PI * radius;
       hint = '$C = 2\\pi r$';
+      explanation = `$C = 2\\pi r \\approx 2 \\times 3.14 \\times ${radius} = ${answer}$`;
       break;
     case 'area':
-      problemText = `Find the area of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
-      answer = Math.round(3.14 * radius * radius * 100) / 100;
+      problemText = `Find the area of a circle with radius $${radius}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+      answer = roundTo(3.14 * radius * radius, 2);
+      exactPi = Math.PI * radius * radius;
       hint = '$A = \\pi r^2$';
+      explanation = `$A = \\pi r^2 \\approx 3.14 \\times ${radius}^2 = 3.14 \\times ${radius * radius} = ${answer}$`;
       break;
     case 'diameter':
       problemText = `A circle has radius $${radius}$. What is its diameter?`;
       answer = 2 * radius;
       hint = '$d = 2r$';
+      explanation = `$d = 2r = 2 \\times ${radius} = ${answer}$`;
       break;
     default:
       problemText = '';
       answer = 0;
       hint = '';
+      explanation = '';
   }
 
   // Diameter is an exact integer (d = 2r, no π involved) — require the exact value.
-  // Circumference/area keep ±0.5 to cover π vs 3.14 differences.
-  if (problemType === 'diameter') {
+  if (exactPi === undefined) {
     return {
       id: crypto.randomUUID(),
       topicId: 'circles',
       problemText,
       answerType: 'numeric',
       correctAnswer: answer,
-      explanationPrompt: `Explain how to find the ${problemType} of a circle.`,
+      explanationPrompt: explanation,
       hint,
     };
   }
 
+  // Circumference/area: the 3.14-based value the text asks for, or the true-π value, to 2 places.
   return {
     id: crypto.randomUUID(),
     topicId: 'circles',
     problemText,
     answerType: 'decimal-tolerance',
     correctAnswer: answer,
-    tolerance: 0.5,
-    explanationPrompt: `Explain how to find the ${problemType} of a circle.`,
+    roundTo: 2,
+    acceptableAnswers: [exactPi],
+    explanationPrompt: explanation,
     hint,
   };
 };
@@ -787,22 +828,26 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
   let problemText: string;
   let answer: number;
   let hint: string;
-  let usesPI = false;
+  let explanation: string;
+  let exactPi: number | undefined;
 
   switch (shape) {
-    case 'cube':
+    case 'cube': {
       const side = randInt(3, 8);
       if (measurement === 'volume') {
         problemText = `Find the volume of a cube with side length $${side}$.`;
         answer = side * side * side;
         hint = '$V = s^3$';
+        explanation = `$V = s^3 = ${side}^3 = ${answer}$`;
       } else {
         problemText = `Find the surface area of a cube with side length $${side}$.`;
         answer = 6 * side * side;
         hint = '$SA = 6s^2$';
+        explanation = `$SA = 6s^2 = 6 \\times ${side}^2 = 6 \\times ${side * side} = ${answer}$`;
       }
       break;
-    case 'rectangular-prism':
+    }
+    case 'rectangular-prism': {
       const l = randInt(4, 10);
       const w = randInt(3, 8);
       const h = randInt(3, 8);
@@ -810,55 +855,68 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
         problemText = `Find the volume of a rectangular prism: $l=${l}$, $w=${w}$, $h=${h}$.`;
         answer = l * w * h;
         hint = '$V = lwh$';
+        explanation = `$V = lwh = ${l} \\times ${w} \\times ${h} = ${answer}$`;
       } else {
         problemText = `Find the surface area of a rectangular prism: $l=${l}$, $w=${w}$, $h=${h}$.`;
         answer = 2 * (l * w + l * h + w * h);
         hint = '$SA = 2(lw + lh + wh)$';
+        explanation = `$SA = 2(lw + lh + wh) = 2(${l * w} + ${l * h} + ${w * h}) = ${answer}$`;
       }
       break;
-    case 'cylinder':
+    }
+    case 'cylinder': {
       const r = randInt(3, 7);
       const height = randInt(5, 12);
-      usesPI = true;
       if (measurement === 'volume') {
-        problemText = `Find the volume of a cylinder with $r=${r}$, $h=${height}$. (Use $\\pi \\approx 3.14$)`;
-        answer = Math.round(3.14 * r * r * height * 100) / 100;
+        problemText = `Find the volume of a cylinder with $r=${r}$, $h=${height}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+        answer = roundTo(3.14 * r * r * height, 2);
+        exactPi = Math.PI * r * r * height;
         hint = '$V = \\pi r^2 h$';
+        explanation = `$V = \\pi r^2 h \\approx 3.14 \\times ${r * r} \\times ${height} = ${answer}$`;
       } else {
-        problemText = `Find the surface area of a cylinder with $r=${r}$, $h=${height}$. (Use $\\pi \\approx 3.14$)`;
-        answer = Math.round(2 * 3.14 * r * (r + height) * 100) / 100;
+        problemText = `Find the surface area of a cylinder with $r=${r}$, $h=${height}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+        answer = roundTo(2 * 3.14 * r * (r + height), 2);
+        exactPi = 2 * Math.PI * r * (r + height);
         hint = '$SA = 2\\pi r(r + h)$';
+        explanation = `$SA = 2\\pi r(r + h) \\approx 2 \\times 3.14 \\times ${r} \\times ${r + height} = ${answer}$`;
       }
       break;
-    case 'sphere':
+    }
+    case 'sphere': {
       const radius = randInt(3, 8);
-      usesPI = true;
       if (measurement === 'volume') {
-        problemText = `Find the volume of a sphere with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
-        answer = Math.round((4 / 3) * 3.14 * radius * radius * radius * 100) / 100;
+        problemText = `Find the volume of a sphere with radius $${radius}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+        answer = roundTo((4 / 3) * 3.14 * radius * radius * radius, 2);
+        exactPi = (4 / 3) * Math.PI * Math.pow(radius, 3);
         hint = '$V = \\frac{4}{3}\\pi r^3$';
+        explanation = `$V = \\frac{4}{3}\\pi r^3 \\approx \\frac{4}{3} \\times 3.14 \\times ${radius * radius * radius} = ${answer}$`;
       } else {
-        problemText = `Find the surface area of a sphere with radius $${radius}$. (Use $\\pi \\approx 3.14$)`;
-        answer = Math.round(4 * 3.14 * radius * radius * 100) / 100;
+        problemText = `Find the surface area of a sphere with radius $${radius}$. (Use $\\pi \\approx 3.14$; round to 2 decimal places.)`;
+        answer = roundTo(4 * 3.14 * radius * radius, 2);
+        exactPi = 4 * Math.PI * radius * radius;
         hint = '$SA = 4\\pi r^2$';
+        explanation = `$SA = 4\\pi r^2 \\approx 4 \\times 3.14 \\times ${radius * radius} = ${answer}$`;
       }
       break;
+    }
     default:
       problemText = '';
       answer = 0;
       hint = '';
+      explanation = '';
   }
 
-  // Use exact numeric matching for integer answers, tolerance only for π-based
-  if (usesPI) {
+  // π problems: the 3.14 value the text asks for, or the true-π value, to 2 places.
+  if (exactPi !== undefined) {
     return {
       id: crypto.randomUUID(),
       topicId: 'volume-surface-area',
       problemText,
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
-      tolerance: 0.5,
-      explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
+      roundTo: 2,
+      acceptableAnswers: [exactPi],
+      explanationPrompt: explanation,
       hint,
     };
   }
@@ -869,7 +927,7 @@ const generateVolumeSurfaceAreaProblem = (): Problem => {
     problemText,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Explain how to find the ${measurement} of a ${shape}.`,
+    explanationPrompt: explanation,
     hint,
   };
 };
@@ -899,7 +957,7 @@ const generateComplexNumbersProblem = (): Problem => {
     problemText: `$(${z1}) ${operation} (${z2})$\nWhat is the imaginary coefficient?`,
     answerType: 'numeric',
     correctAnswer: imagPart,
-    explanationPrompt: `Explain how to ${operation === '+' ? 'add' : 'subtract'} complex numbers.`,
+    explanationPrompt: `Real parts: $${a1} ${operation} (${a2}) = ${realPart}$. Imaginary parts: $${b1} ${operation} (${b2}) = ${imagPart}$. Result: $${realPart} ${latexTerm(imagPart)}i$, so the imaginary coefficient is $${imagPart}$.`,
     hint: 'Combine real parts and imaginary parts separately.',
   };
 };
@@ -919,7 +977,7 @@ const generateRadicalsProblem = (): Problem => {
     problemText: `Simplify $\\sqrt{${radicand}}$. What number is outside the radical?`,
     answerType: 'numeric',
     correctAnswer: simplified,
-    explanationPrompt: `Explain how to simplify √${radicand}.`,
+    explanationPrompt: `$\\sqrt{${radicand}} = \\sqrt{${perfect} \\times ${multiplier}} = \\sqrt{${perfect}}\\sqrt{${multiplier}} = ${simplified}\\sqrt{${multiplier}}$`,
     hint: `Look for perfect square factors. ${radicand} = ${multiplier} × ${perfect}`,
   };
 };
@@ -935,7 +993,7 @@ const generateLogarithmsProblem = (): Problem => {
     problemText: `$\\log_{${base}}(${value}) = \\;?$`,
     answerType: 'numeric',
     correctAnswer: exponent,
-    explanationPrompt: `Explain how to evaluate log₍${base}₎(${value}).`,
+    explanationPrompt: `$${base}^{${exponent}} = ${value}$, so $\\log_{${base}}(${value}) = ${exponent}$.`,
     hint: `Ask yourself: ${base} to what power equals ${value}?`,
   };
 };
@@ -955,7 +1013,7 @@ const generateSequencesSeriesProblem = (): Problem => {
       problemText: `An arithmetic sequence starts at $${a1}$ with common difference $d = ${d}$. Find the $${n}$th term.`,
       answerType: 'numeric',
       correctAnswer: an,
-      explanationPrompt: `Explain how to find the ${n}th term of an arithmetic sequence.`,
+      explanationPrompt: `$a_n = a_1 + (n-1)d = ${a1} + (${n}-1)(${d}) = ${a1} + ${(n - 1) * d} = ${an}$`,
       hint: `Use the formula: $a_n = a_1 + (n-1)d$`,
     };
   } else {
@@ -970,7 +1028,7 @@ const generateSequencesSeriesProblem = (): Problem => {
       problemText: `A geometric sequence starts at $${a1}$ with common ratio $r = ${r}$. Find the $${n}$th term.`,
       answerType: 'numeric',
       correctAnswer: an,
-      explanationPrompt: `Explain how to find the ${n}th term of a geometric sequence.`,
+      explanationPrompt: `$a_n = a_1 \\cdot r^{n-1} = ${a1} \\cdot ${r}^{${n - 1}} = ${a1} \\cdot ${Math.pow(r, n - 1)} = ${an}$`,
       hint: `Use the formula: $a_n = a_1 \\cdot r^{n-1}$`,
     };
   }
@@ -985,85 +1043,44 @@ const generateTrigRatiosProblem = (): Problem => {
   const triple = randChoice(PYTHAGOREAN_TRIPLES);
   const [a, b, c] = triple;
 
-  const ratio = randChoice(['sin', 'cos', 'tan']);
-  const anglePosition = randChoice(['opposite-a', 'opposite-b']);
+  const ratio = randChoice(['sin', 'cos', 'tan'] as const);
+  const anglePosition = randChoice(['opposite-a', 'opposite-b'] as const);
 
-  let problemText: string;
-  let answer: number;
-
-  if (anglePosition === 'opposite-a') {
-    // Angle opposite to side a
-    switch (ratio) {
-      case 'sin':
-        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\sin(\\theta)$ where $\\theta$ is opposite to side $${a}$.`;
-        answer = Math.round((a / c) * 1000) / 1000;
-        break;
-      case 'cos':
-        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\cos(\\theta)$ where $\\theta$ is opposite to side $${a}$.`;
-        answer = Math.round((b / c) * 1000) / 1000;
-        break;
-      case 'tan':
-        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\tan(\\theta)$ where $\\theta$ is opposite to side $${a}$.`;
-        answer = Math.round((a / b) * 1000) / 1000;
-        break;
-      default:
-        problemText = '';
-        answer = 0;
-    }
-  } else {
-    // Angle opposite to side b
-    switch (ratio) {
-      case 'sin':
-        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\sin(\\theta)$ where $\\theta$ is opposite to side $${b}$.`;
-        answer = Math.round((b / c) * 1000) / 1000;
-        break;
-      case 'cos':
-        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\cos(\\theta)$ where $\\theta$ is opposite to side $${b}$.`;
-        answer = Math.round((a / c) * 1000) / 1000;
-        break;
-      case 'tan':
-        problemText = `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\tan(\\theta)$ where $\\theta$ is opposite to side $${b}$.`;
-        answer = Math.round((b / a) * 1000) / 1000;
-        break;
-      default:
-        problemText = '';
-        answer = 0;
-    }
-  }
+  // Angle opposite side a: opposite = a, adjacent = b. Opposite side b: opposite = b, adjacent = a.
+  const opposite = anglePosition === 'opposite-a' ? a : b;
+  const adjacent = anglePosition === 'opposite-a' ? b : a;
+  const [num, den] = ratio === 'sin' ? [opposite, c] : ratio === 'cos' ? [adjacent, c] : [opposite, adjacent];
+  const exact = num / den;
+  const reduced = simplifyFraction(num, den);
+  const ratioWords = ratio === 'sin' ? 'opposite/hypotenuse' : ratio === 'cos' ? 'adjacent/hypotenuse' : 'opposite/adjacent';
 
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-ratios',
-    problemText,
+    problemText: `In a right triangle with sides $${a}$, $${b}$, $${c}$ (hypotenuse), find $\\${ratio}(\\theta)$ where $\\theta$ is opposite to side $${opposite}$.\n(Enter a fraction, or a decimal rounded to 3 places.)`,
     answerType: 'decimal-tolerance',
-    correctAnswer: answer,
-    tolerance: 0.01,
-    explanationPrompt: `Explain how to find ${ratio}(θ) in a right triangle.`,
+    correctAnswer: exact,
+    roundTo: 3,
+    displayAnswer: `$${latexFrac(reduced.numerator, reduced.denominator)} \\approx ${exact.toFixed(3)}$`,
+    explanationPrompt: `$\\${ratio}(\\theta) = \\frac{\\text{${ratioWords.split('/')[0]}}}{\\text{${ratioWords.split('/')[1]}}} = \\frac{${num}}{${den}}${reduced.denominator !== den ? ` = ${latexFrac(reduced.numerator, reduced.denominator)}` : ''} \\approx ${exact.toFixed(3)}$`,
     hint: 'SOH-CAH-TOA: sin = opposite/hypotenuse, cos = adjacent/hypotenuse, tan = opposite/adjacent',
   };
 };
 
 const generateTrigSpecialAnglesProblem = (): Problem => {
-  const angles = [30, 45, 60];
-  const angle = randChoice(angles);
-  const ratio = randChoice(['sin', 'cos', 'tan']);
-
-  const values: { [key: string]: { [key: string]: number } } = {
-    '30': { sin: 0.5, cos: 0.866, tan: 0.577 },
-    '45': { sin: 0.707, cos: 0.707, tan: 1 },
-    '60': { sin: 0.866, cos: 0.5, tan: 1.732 },
-  };
-
-  const answer = values[angle.toString()][ratio];
+  const angle = randChoice([30, 45, 60] as const);
+  const ratio = randChoice(['sin', 'cos', 'tan'] as const);
+  const exact = SPECIAL_TRIG[angle][ratio];
 
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-special-angles',
     problemText: `Evaluate $\\${ratio}(${angle}°)$. Round to 3 decimal places.`,
     answerType: 'decimal-tolerance',
-    correctAnswer: answer,
-    tolerance: 0.01,
-    explanationPrompt: `Explain the exact value of ${ratio}(${angle}°).`,
+    correctAnswer: exact.value,
+    roundTo: 3,
+    displayAnswer: `$${exact.latex} \\approx ${exact.value.toFixed(3)}$`,
+    explanationPrompt: `From the ${angle === 45 ? '45-45-90' : '30-60-90'} triangle, $\\${ratio}(${angle}°) = ${exact.latex} \\approx ${exact.value.toFixed(3)}$.`,
     hint: angle === 30 ? '30-60-90 triangle!' : angle === 45 ? '45-45-90 triangle!' : '30-60-90 triangle!',
   };
 };
@@ -1085,7 +1102,7 @@ const generateLimitsProblem = (): Problem => {
     problemText: `Evaluate: $\\displaystyle\\lim_{x \\to ${x}} \\left[${a}x ${latexTerm(b)}\\right]$`,
     answerType: 'numeric',
     correctAnswer: answer,
-    explanationPrompt: `Explain how to evaluate the limit as x approaches ${x} of ${a}x ${formatTerm(b)}.`,
+    explanationPrompt: `Polynomials are continuous, so substitute $x = ${x}$: $${a}(${x}) ${latexTerm(b)} = ${a * x} ${latexTerm(b)} = ${answer}$.`,
     hint: 'For polynomial functions, just substitute the value!',
   };
 };
@@ -1103,7 +1120,7 @@ const generateDerivativesBasicProblem = (): Problem => {
     problemText: `Find the derivative of $${coefficient}x^{${exponent}}$. What is the coefficient?`,
     answerType: 'numeric',
     correctAnswer: derivativeCoeff,
-    explanationPrompt: `Explain how to find this derivative using the power rule.`,
+    explanationPrompt: `Power rule: $\\frac{d}{dx}[${coefficient}x^{${exponent}}] = ${coefficient} \\cdot ${exponent} x^{${exponent} - 1} = ${derivativeCoeff}x^{${derivativeExp}}$. The coefficient is $${derivativeCoeff}$.`,
     hint: `Power rule: $\\frac{d}{dx}[x^n] = nx^{n-1}$`,
   };
 };
@@ -1132,7 +1149,7 @@ const generateDerivativesProductQuotientProblem = (): Problem => {
       problemText: `Find $\\frac{d}{dx}\\left[x^{${a}} \\cdot x^{${b}}\\right]$. What is the new exponent?`,
       answerType: 'numeric',
       correctAnswer: a + b - 1,
-      explanationPrompt: `Explain how to find this derivative.`,
+      explanationPrompt: `$x^{${a}} \\cdot x^{${b}} = x^{${a + b}}$, and $\\frac{d}{dx}[x^{${a + b}}] = ${derivativeCoeff}x^{${a + b - 1}}$. The new exponent is $${a + b - 1}$.`,
       hint: `Simplify first: $x^a \\cdot x^b = x^{a+b}$, then use power rule.`,
     };
   } else {
@@ -1143,7 +1160,7 @@ const generateDerivativesProductQuotientProblem = (): Problem => {
       problemText: `Simplify then find $\\frac{d}{dx}\\left[\\frac{x^{${a}}}{x^{${b}}}\\right]$. What is the new exponent?`,
       answerType: 'numeric',
       correctAnswer: a - b - 1,
-      explanationPrompt: `Explain how to find this derivative.`,
+      explanationPrompt: `$\\frac{x^{${a}}}{x^{${b}}} = x^{${a - b}}$, and $\\frac{d}{dx}[x^{${a - b}}] = ${a - b}x^{${a - b - 1}}$. The new exponent is $${a - b - 1}$.`,
       hint: `Simplify first: $\\frac{x^a}{x^b} = x^{a-b}$, then use power rule.`,
     };
   }
@@ -1160,10 +1177,10 @@ const generateChainRuleProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'chain-rule',
-    problemText: `Find $\\frac{d}{dx}\\left[(${inner_coeff}x + ${inner_const})^{${outer}}\\right]$. What is the coefficient?`,
+    problemText: `Find $\\frac{d}{dx}\\left[(${inner_coeff}x + ${inner_const})^{${outer}}\\right]$.\nThe derivative has the form $K(${inner_coeff}x + ${inner_const})^{${outer - 1}}$. What is $K$?`,
     answerType: 'numeric',
     correctAnswer: derivativeCoeff,
-    explanationPrompt: `Explain how to use the chain rule for this problem.`,
+    explanationPrompt: `Chain rule: $${outer}(${inner_coeff}x + ${inner_const})^{${outer - 1}} \\cdot ${inner_coeff} = ${derivativeCoeff}(${inner_coeff}x + ${inner_const})^{${outer - 1}}$, so $K = ${derivativeCoeff}$.`,
     hint: `Chain rule: $\\frac{d}{dx}[f(g(x))] = f'(g(x)) \\cdot g'(x)$`,
   };
 };
@@ -1181,7 +1198,7 @@ const generateIntegralsBasicProblem = (): Problem => {
     problemText: `$\\displaystyle\\int ${coefficient}x^{${exponent}}\\,dx$. What is the new exponent?`,
     answerType: 'numeric',
     correctAnswer: integralExp,
-    explanationPrompt: `Explain how to integrate this expression.`,
+    explanationPrompt: `Power rule: $\\int ${coefficient}x^{${exponent}}\\,dx = \\frac{${coefficient}}{${exponent + 1}}x^{${integralExp}} + C$. The new exponent is $${integralExp}$.`,
     hint: `Power rule: $\\int x^n\\,dx = \\frac{x^{n+1}}{n+1} + C$`,
   };
 };
@@ -1197,8 +1214,8 @@ const generateIntegrationSubstitutionProblem = (): Problem => {
     problemText: `$\\displaystyle\\int 2x(x^2 + ${c})^{${n}}\\,dx$\nWhat substitution $u$ should you use?`,
     answerType: 'expression',
     correctAnswer: `x^2+${c}`,
-    acceptableAnswers: [`x²+${c}`, `x^2 + ${c}`, `x² + ${c}`],
-    explanationPrompt: `Explain how to use u-substitution for this integral.`,
+    displayAnswer: `$u = x^2 + ${c}$`,
+    explanationPrompt: `Let $u = x^2 + ${c}$. Then $du = 2x\\,dx$, which is exactly the remaining factor, so the integral becomes $\\int u^{${n}}\\,du$.`,
     hint: 'Look for a function whose derivative is also in the integrand.',
   };
 };
@@ -1208,12 +1225,18 @@ const generateIntegrationSubstitutionProblem = (): Problem => {
 // ===========================
 
 const generateTrigIdentitiesProblem = (): Problem => {
-  const identities: { question: string; display: string; answer: string; name: string; alts?: string[] }[] = [
-    { question: 'sin²θ + cos²θ = ?', display: '$\\sin^2\\theta + \\cos^2\\theta = \\;?$', answer: '1', name: 'Pythagorean identity' },
-    { question: 'tan θ = ?', display: '$\\tan\\theta = \\;?$', answer: 'sinθ/cosθ', name: 'tangent identity', alts: ['sin(θ)/cos(θ)', 'sin θ/cos θ'] },
-    { question: '1 + tan²θ = ?', display: '$1 + \\tan^2\\theta = \\;?$', answer: 'sec^2θ', name: 'Pythagorean identity', alts: ['sec²θ', 'sec^2(θ)'] },
-    { question: 'sin(90° - θ) = ?', display: '$\\sin(90° - \\theta) = \\;?$', answer: 'cosθ', name: 'cofunction identity', alts: ['cos θ', 'cos(θ)'] },
-    { question: 'cos(90° - θ) = ?', display: '$\\cos(90° - \\theta) = \\;?$', answer: 'sinθ', name: 'cofunction identity', alts: ['sin θ', 'sin(θ)'] },
+  // `answer` is the canonical (parser-ready) form; `display` is what the student sees.
+  const identities: { display: string; answer: string; displayAnswer: string; name: string; explanation: string }[] = [
+    { display: '$\\sin^2\\theta + \\cos^2\\theta = \\;?$', answer: '1', displayAnswer: '$1$', name: 'Pythagorean identity',
+      explanation: 'On the unit circle a point is $(\\cos\\theta, \\sin\\theta)$ and its distance from the origin is 1, so $\\sin^2\\theta + \\cos^2\\theta = 1$.' },
+    { display: '$\\tan\\theta = \\;?$', answer: 'sin(theta)/cos(theta)', displayAnswer: '$\\frac{\\sin\\theta}{\\cos\\theta}$', name: 'tangent identity',
+      explanation: 'Tangent is opposite over adjacent, and dividing by the hypotenuse top and bottom gives $\\tan\\theta = \\frac{\\sin\\theta}{\\cos\\theta}$ (where $\\cos\\theta \\neq 0$).' },
+    { display: '$1 + \\tan^2\\theta = \\;?$', answer: 'sec(theta)^2', displayAnswer: '$\\sec^2\\theta$', name: 'Pythagorean identity',
+      explanation: 'Divide $\\sin^2\\theta + \\cos^2\\theta = 1$ by $\\cos^2\\theta$: $\\tan^2\\theta + 1 = \\sec^2\\theta$.' },
+    { display: '$\\sin(90° - \\theta) = \\;?$', answer: 'cos(theta)', displayAnswer: '$\\cos\\theta$', name: 'cofunction identity',
+      explanation: 'The two acute angles of a right triangle are complementary, so the side opposite one is adjacent to the other: $\\sin(90° - \\theta) = \\cos\\theta$.' },
+    { display: '$\\cos(90° - \\theta) = \\;?$', answer: 'sin(theta)', displayAnswer: '$\\sin\\theta$', name: 'cofunction identity',
+      explanation: 'The two acute angles of a right triangle are complementary, so the side adjacent to one is opposite the other: $\\cos(90° - \\theta) = \\sin\\theta$.' },
   ];
 
   const chosen = randChoice(identities);
@@ -1221,59 +1244,55 @@ const generateTrigIdentitiesProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-identities',
-    problemText: `Complete the identity: ${chosen.display}`,
+    problemText: `Complete the identity: ${chosen.display}\n(Use θ or "theta".)`,
     answerType: 'expression',
     correctAnswer: chosen.answer,
-    acceptableAnswers: chosen.alts,
-    explanationPrompt: `Explain the ${chosen.name}: ${chosen.question}`,
+    displayAnswer: chosen.displayAnswer,
+    explanationPrompt: chosen.explanation,
     hint: `This is a ${chosen.name}.`,
   };
 };
 
 const generateTrigEquationsProblem = (): Problem => {
-  const angle = randChoice([30, 45, 60]);
-  const ratio = randChoice(['sin', 'cos', 'tan']);
-
-  const values: { [key: string]: { [key: string]: number } } = {
-    '30': { sin: 0.5, cos: 0.866, tan: 0.577 },
-    '45': { sin: 0.707, cos: 0.707, tan: 1 },
-    '60': { sin: 0.866, cos: 0.5, tan: 1.732 },
-  };
-
-  const value = values[angle.toString()][ratio];
+  const angle = randChoice([30, 45, 60] as const);
+  const ratio = randChoice(['sin', 'cos', 'tan'] as const);
+  const exact = SPECIAL_TRIG[angle][ratio];
 
   return {
     id: crypto.randomUUID(),
     topicId: 'trig-equations',
-    problemText: `Solve for $\\theta$ ($0° \\leq \\theta \\leq 90°$): $\\${ratio}(\\theta) = ${value.toFixed(3)}$`,
+    problemText: `Solve for $\\theta$ in degrees ($0° \\leq \\theta \\leq 90°$): $\\${ratio}(\\theta) = ${exact.latex}$`,
     answerType: 'numeric',
     correctAnswer: angle,
-    explanationPrompt: `Solve the equation ${ratio}(θ) = ${value.toFixed(3)}.`,
+    displayAnswer: `$${angle}°$`,
+    explanationPrompt: `$\\${ratio}(${angle}°) = ${exact.latex}$, and $\\${ratio}$ takes each value only once on $[0°, 90°]$, so $\\theta = ${angle}°$.`,
     hint: 'Think about special angles: 30°, 45°, 60°.',
   };
 };
 
 const generateInverseTrigProblem = (): Problem => {
-  const values = [
-    { value: 0.5, func: 'sin', angle: 30 },
-    { value: 0.707, func: 'sin', angle: 45 },
-    { value: 0.866, func: 'sin', angle: 60 },
-    { value: 0.5, func: 'cos', angle: 60 },
-    { value: 0.707, func: 'cos', angle: 45 },
-    { value: 0.866, func: 'cos', angle: 30 },
-    { value: 1, func: 'tan', angle: 45 },
+  const values: { func: 'sin' | 'cos' | 'tan'; angle: 30 | 45 | 60; range: string }[] = [
+    { func: 'sin', angle: 30, range: '[-90°, 90°]' },
+    { func: 'sin', angle: 45, range: '[-90°, 90°]' },
+    { func: 'sin', angle: 60, range: '[-90°, 90°]' },
+    { func: 'cos', angle: 60, range: '[0°, 180°]' },
+    { func: 'cos', angle: 45, range: '[0°, 180°]' },
+    { func: 'cos', angle: 30, range: '[0°, 180°]' },
+    { func: 'tan', angle: 45, range: '(-90°, 90°)' },
   ];
 
   const chosen = randChoice(values);
+  const exact = SPECIAL_TRIG[chosen.angle][chosen.func];
 
   return {
     id: crypto.randomUUID(),
     topicId: 'inverse-trig',
-    problemText: `Evaluate: $\\${chosen.func}^{-1}(${chosen.value.toFixed(3)})$ in degrees`,
+    problemText: `Evaluate in degrees: $\\${chosen.func}^{-1}\\left(${exact.latex}\\right)$`,
     answerType: 'numeric',
     correctAnswer: chosen.angle,
-    explanationPrompt: `Explain how to find ${chosen.func}⁻¹(${chosen.value.toFixed(3)}).`,
-    hint: `Which angle has ${chosen.func} = ${chosen.value.toFixed(3)}?`,
+    displayAnswer: `$${chosen.angle}°$`,
+    explanationPrompt: `$\\${chosen.func}(${chosen.angle}°) = ${exact.latex}$ and $${chosen.angle}°$ lies in the principal range $${chosen.range}$ of $\\${chosen.func}^{-1}$, so $\\${chosen.func}^{-1}\\left(${exact.latex}\\right) = ${chosen.angle}°$.`,
+    hint: `Which special angle has ${chosen.func} = ${exact.text}?`,
   };
 };
 
@@ -1294,7 +1313,7 @@ const generateRationalExpressionsProblem = (): Problem => {
     problemText: `Simplify: $\\frac{${a}x}{${b}x}$. What is the simplified numerator?`,
     answerType: 'numeric',
     correctAnswer: simplified.numerator,
-    explanationPrompt: `Explain how to simplify (${a}x)/(${b}x).`,
+    explanationPrompt: `Cancel the common factor $x$ (for $x \\neq 0$): $\\frac{${a}x}{${b}x} = \\frac{${a}}{${b}}${gcdVal > 1 ? ` = ${latexFrac(simplified.numerator, simplified.denominator)}` : ''}$. The simplified numerator is $${simplified.numerator}$.`,
     hint: 'Cancel common factors in the numerator and denominator.',
   };
 };
@@ -1315,7 +1334,7 @@ const generateFunctionsProblem = (): Problem => {
     problemText: `If $f(x) = ${a}x + ${b}$, find $f(${x})$`,
     answerType: 'numeric',
     correctAnswer: result,
-    explanationPrompt: `Explain how to evaluate f(${x}) when f(x) = ${a}x + ${b}.`,
+    explanationPrompt: `$f(${x}) = ${a}(${x}) + ${b} = ${a * x} + ${b} = ${result}$`,
     hint: `Substitute ${x} for x in the function.`,
   };
 };
@@ -1334,7 +1353,7 @@ const generatePolynomialFunctionsProblem = (): Problem => {
     answerType: 'numeric',
     correctAnswer: a,
     acceptableAnswers: a !== b ? [b] : undefined,
-    explanationPrompt: `Find the roots of x² ${sum >= 0 ? '+' : ''}${sum}x ${product >= 0 ? '+' : ''}${product} = 0.`,
+    explanationPrompt: `Factor: $x^2 ${latexTerm(sum)}x ${latexTerm(product)} = (x ${latexTerm(-a)})(x ${latexTerm(-b)})$, so the roots are $x = ${a}$${a !== b ? ` and $x = ${b}$` : ' (a double root)'}.`,
     hint: 'Factor the polynomial or use the quadratic formula.',
   };
 };
@@ -1349,7 +1368,7 @@ const generateRationalFunctionsProblem = (): Problem => {
     problemText: `Find the vertical asymptote of $f(x) = \\frac{1}{x ${a >= 0 ? '-' : '+'}${Math.abs(a)}}$`,
     answerType: 'numeric',
     correctAnswer: a,
-    explanationPrompt: `Explain how to find vertical asymptotes of rational functions.`,
+    explanationPrompt: `The numerator is never zero, so the vertical asymptote is where the denominator vanishes: $x ${a >= 0 ? '-' : '+'} ${Math.abs(a)} = 0 \\Rightarrow x = ${a}$.`,
     hint: 'Set the denominator equal to zero.',
   };
 };
@@ -1366,7 +1385,7 @@ const generateExponentialFunctionsProblem = (): Problem => {
     problemText: `A population starts at $${initialValue}$ and doubles every period. What is the population after $${time}$ period(s)?`,
     answerType: 'numeric',
     correctAnswer: finalValue,
-    explanationPrompt: `Explain exponential growth for this problem.`,
+    explanationPrompt: `$P(${time}) = ${initialValue} \\cdot 2^{${time}} = ${initialValue} \\cdot ${Math.pow(2, time)} = ${finalValue}$`,
     hint: `Use the formula $P(t) = P_0 \\cdot 2^t$`,
   };
 };
@@ -1398,7 +1417,7 @@ const generateConicSectionsProblem = (): Problem => {
     problemText: chosen.text,
     answerType: 'numeric',
     correctAnswer: chosen.answer,
-    explanationPrompt: `Explain the standard form of a circle equation.`,
+    explanationPrompt: `Compare with $(x-h)^2 + (y-k)^2 = r^2$: $h = ${h}$, $k = ${k}$, $r^2 = ${r * r}$ so $r = ${r}$.`,
     hint: `Standard form: $(x-h)^2 + (y-k)^2 = r^2$, center $(h,k)$, radius $r$`,
   };
 };
@@ -1407,104 +1426,98 @@ const generateConicSectionsProblem = (): Problem => {
 // CALCULUS 2
 // ===========================
 
+// Indefinite-integral banks. `answer` is a canonical, parser-ready antiderivative
+// used ONLY as the grading reference (any antiderivative differing by a constant
+// is accepted); `display` is the LaTeX shown to the student.
+interface AntiderivativeItem { text: string; answer: string; display: string; hint: string; explanation: string }
+
+const antiderivativeProblem = (topicId: TopicId, chosen: AntiderivativeItem): Problem => ({
+  id: crypto.randomUUID(),
+  topicId,
+  problemText: chosen.text,
+  answerType: 'expression',
+  correctAnswer: chosen.answer,
+  equivalence: 'up-to-constant',
+  displayAnswer: chosen.display,
+  explanationPrompt: chosen.explanation,
+  hint: chosen.hint,
+});
+
 const generateIntegrationByPartsProblem = (): Problem => {
-  // Problems of the form ∫ x·e^x dx, ∫ x·cos(x) dx, ∫ x·sin(x) dx, ∫ x·ln(x) dx
-  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+  const problems: AntiderivativeItem[] = [
     {
       text: '$\\displaystyle\\int x \\cdot e^x\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: 'xe^x-e^x',
-      alts: ['xe^x - e^x', 'x*e^x - e^x', '(x-1)e^x', '(x-1)*e^x', 'e^x(x-1)'],
+      answer: 'x*e^x-e^x',
+      display: '$xe^x - e^x + C$',
       hint: 'Let $u = x$, $dv = e^x\\,dx$. Then $du = dx$, $v = e^x$.',
-      explanation: 'Using IBP: u=x, dv=eˣdx → uv - ∫v du = xeˣ - ∫eˣdx = xeˣ - eˣ + C',
+      explanation: 'With $u = x$, $dv = e^x\\,dx$: $uv - \\int v\\,du = xe^x - \\int e^x\\,dx = xe^x - e^x + C$.',
     },
     {
       text: '$\\displaystyle\\int x \\cdot \\cos(x)\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: 'xsin(x)+cos(x)',
-      alts: ['x*sin(x) + cos(x)', 'xsin(x) + cos(x)', 'x·sin(x)+cos(x)'],
+      answer: 'x*sin(x)+cos(x)',
+      display: '$x\\sin(x) + \\cos(x) + C$',
       hint: 'Let $u = x$, $dv = \\cos(x)\\,dx$.',
-      explanation: 'Using IBP: u=x, dv=cos(x)dx → xsin(x) - ∫sin(x)dx = xsin(x) + cos(x) + C',
+      explanation: 'With $u = x$, $dv = \\cos(x)\\,dx$: $x\\sin(x) - \\int \\sin(x)\\,dx = x\\sin(x) + \\cos(x) + C$.',
     },
     {
       text: '$\\displaystyle\\int x \\cdot \\sin(x)\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: '-xcos(x)+sin(x)',
-      alts: ['sin(x) - xcos(x)', '-x*cos(x) + sin(x)', 'sin(x)-xcos(x)'],
+      answer: '-x*cos(x)+sin(x)',
+      display: '$-x\\cos(x) + \\sin(x) + C$',
       hint: 'Let $u = x$, $dv = \\sin(x)\\,dx$.',
-      explanation: 'Using IBP: u=x, dv=sin(x)dx → -xcos(x) + ∫cos(x)dx = -xcos(x) + sin(x) + C',
+      explanation: 'With $u = x$, $dv = \\sin(x)\\,dx$: $-x\\cos(x) + \\int \\cos(x)\\,dx = -x\\cos(x) + \\sin(x) + C$.',
     },
     {
       text: '$\\displaystyle\\int \\ln(x)\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: 'xln(x)-x',
-      alts: ['x*ln(x) - x', 'x·ln(x)-x', 'x(ln(x)-1)', 'x·ln(x) - x'],
+      answer: 'x*log(x)-x',
+      display: '$x\\ln(x) - x + C$',
       hint: 'Let $u = \\ln(x)$, $dv = dx$.',
-      explanation: 'Using IBP: u=ln(x), dv=dx → xln(x) - ∫x·(1/x)dx = xln(x) - x + C',
+      explanation: 'With $u = \\ln(x)$, $dv = dx$: $x\\ln(x) - \\int x \\cdot \\frac{1}{x}\\,dx = x\\ln(x) - x + C$.',
     },
   ];
 
-  const chosen = randChoice(problems);
-
-  return {
-    id: crypto.randomUUID(),
-    topicId: 'integration-by-parts',
-    problemText: chosen.text,
-    answerType: 'expression',
-    correctAnswer: chosen.answer,
-    acceptableAnswers: chosen.alts,
-    explanationPrompt: chosen.explanation,
-    hint: chosen.hint,
-  };
+  return antiderivativeProblem('integration-by-parts', randChoice(problems));
 };
 
 const generateTrigIntegralsProblem = (): Problem => {
-  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+  const problems: AntiderivativeItem[] = [
     {
       text: '$\\displaystyle\\int \\sin^2(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'x/2-sin(2x)/4',
-      alts: ['x/2 - sin(2x)/4', '(x - sin(2x)/2)/2', '(2x-sin(2x))/4'],
+      display: '$\\frac{x}{2} - \\frac{\\sin(2x)}{4} + C$',
       hint: 'Use the identity $\\sin^2(x) = \\frac{1 - \\cos(2x)}{2}$',
-      explanation: 'sin²(x) = (1-cos(2x))/2, so ∫ = x/2 - sin(2x)/4 + C',
+      explanation: '$\\sin^2(x) = \\frac{1 - \\cos(2x)}{2}$, so $\\int \\sin^2(x)\\,dx = \\frac{x}{2} - \\frac{\\sin(2x)}{4} + C$.',
     },
     {
       text: '$\\displaystyle\\int \\cos^2(x)\\,dx$\nWhat is the result? (omit $+C$)',
       answer: 'x/2+sin(2x)/4',
-      alts: ['x/2 + sin(2x)/4', '(x + sin(2x)/2)/2', '(2x+sin(2x))/4'],
+      display: '$\\frac{x}{2} + \\frac{\\sin(2x)}{4} + C$',
       hint: 'Use the identity $\\cos^2(x) = \\frac{1 + \\cos(2x)}{2}$',
-      explanation: 'cos²(x) = (1+cos(2x))/2, so ∫ = x/2 + sin(2x)/4 + C',
+      explanation: '$\\cos^2(x) = \\frac{1 + \\cos(2x)}{2}$, so $\\int \\cos^2(x)\\,dx = \\frac{x}{2} + \\frac{\\sin(2x)}{4} + C$.',
     },
     {
       text: '$\\displaystyle\\int \\sin(x)\\cos(x)\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: 'sin^2(x)/2',
-      alts: ['sin²(x)/2', 'sin(x)^2/2', '-cos^2(x)/2', '-cos²(x)/2', '-cos(2x)/4'],
+      answer: 'sin(x)^2/2',
+      display: '$\\frac{\\sin^2(x)}{2} + C$ (equivalently $-\\frac{\\cos^2(x)}{2} + C$ or $-\\frac{\\cos(2x)}{4} + C$)',
       hint: 'Use $u$-substitution with $u = \\sin(x)$, or the identity $\\sin(2x) = 2\\sin(x)\\cos(x)$',
-      explanation: 'Let u=sin(x), du=cos(x)dx → ∫u du = u²/2 = sin²(x)/2 + C',
+      explanation: 'Let $u = \\sin(x)$, $du = \\cos(x)\\,dx$: $\\int u\\,du = \\frac{u^2}{2} = \\frac{\\sin^2(x)}{2} + C$. The forms $-\\frac{\\cos^2(x)}{2}$ and $-\\frac{\\cos(2x)}{4}$ differ from this only by a constant.',
     },
     {
-      text: '$\\displaystyle\\int \\tan(x)\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: '-ln|cos(x)|',
-      alts: ['ln|sec(x)|', 'ln|secx|', '-ln|cosx|', 'ln(sec(x))', '-ln(cos(x))'],
+      text: '$\\displaystyle\\int \\tan(x)\\,dx$\nWhat is the result? (omit $+C$; use absolute values where needed)',
+      answer: '-log(abs(cos(x)))',
+      display: '$-\\ln|\\cos(x)| + C = \\ln|\\sec(x)| + C$',
       hint: 'Rewrite $\\tan(x) = \\frac{\\sin(x)}{\\cos(x)}$ and use substitution.',
-      explanation: '∫ sin(x)/cos(x) dx, let u=cos(x) → -∫du/u = -ln|cos(x)| = ln|sec(x)| + C',
+      explanation: '$\\int \\frac{\\sin(x)}{\\cos(x)}\\,dx$ with $u = \\cos(x)$, $du = -\\sin(x)\\,dx$ gives $-\\int \\frac{du}{u} = -\\ln|u| = -\\ln|\\cos(x)| + C$. The absolute value is required: $\\cos(x)$ is negative on part of the domain of $\\tan$, where $\\ln(\\cos x)$ is undefined.',
     },
     {
       text: '$\\displaystyle\\int \\sec^2(x)\\tan(x)\\,dx$\nWhat is the result? (omit $+C$)',
-      answer: 'tan^2(x)/2',
-      alts: ['tan²(x)/2', 'tan(x)^2/2', 'sec^2(x)/2', 'sec²(x)/2'],
+      answer: 'tan(x)^2/2',
+      display: '$\\frac{\\tan^2(x)}{2} + C$ (equivalently $\\frac{\\sec^2(x)}{2} + C$)',
       hint: 'Let $u = \\tan(x)$, then $du = \\sec^2(x)\\,dx$',
-      explanation: 'Let u=tan(x), du=sec²(x)dx → ∫u du = u²/2 = tan²(x)/2 + C',
+      explanation: 'Let $u = \\tan(x)$, $du = \\sec^2(x)\\,dx$: $\\int u\\,du = \\frac{u^2}{2} = \\frac{\\tan^2(x)}{2} + C$. Since $\\sec^2 = 1 + \\tan^2$, $\\frac{\\sec^2(x)}{2}$ differs by the constant $\\frac{1}{2}$.',
     },
   ];
 
-  const chosen = randChoice(problems);
-
-  return {
-    id: crypto.randomUUID(),
-    topicId: 'trig-integrals',
-    problemText: chosen.text,
-    answerType: 'expression',
-    correctAnswer: chosen.answer,
-    acceptableAnswers: chosen.alts,
-    explanationPrompt: chosen.explanation,
-    hint: chosen.hint,
-  };
+  return antiderivativeProblem('trig-integrals', randChoice(problems));
 };
 
 const generatePartialFractionsProblem = (): Problem => {
@@ -1520,22 +1533,22 @@ const generatePartialFractionsProblem = (): Problem => {
       return {
         id: crypto.randomUUID(),
         topicId: 'partial-fractions',
-        problemText: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $A$? (as a fraction like $\\frac{1}{${diff}}$)`,
-        answerType: 'expression',
-        correctAnswer: `1/${diff}`,
-        acceptableAnswers: [`1/${diff}`],
-        explanationPrompt: `Set x = ${a}: 1/(${a} − (${b})) = A → A = 1/${diff}`,
+        problemText: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $A$? (enter a fraction)`,
+        answerType: 'numeric',
+        correctAnswer: 1 / diff,
+        displayAnswer: `$${latexFrac(1, diff)}$`,
+        explanationPrompt: `Multiply through by $(x - ${a})(x + ${Math.abs(b)})$: $1 = A(x + ${Math.abs(b)}) + B(x - ${a})$. Set $x = ${a}$: $1 = A(${a} + ${Math.abs(b)}) = ${diff}A$, so $A = ${latexFrac(1, diff)}$.`,
         hint: `Multiply both sides by $(x - ${a})$ and set $x = ${a}$.`,
       };
     } else {
       return {
         id: crypto.randomUUID(),
         topicId: 'partial-fractions',
-        problemText: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $B$?`,
-        answerType: 'expression',
-        correctAnswer: `-1/${diff}`,
-        acceptableAnswers: [`-1/${diff}`],
-        explanationPrompt: `Set x = ${b}: 1/(${b} − ${a}) = B → B = -1/${diff}`,
+        problemText: `Decompose into partial fractions:\n$\\frac{1}{(x - ${a})(x + ${Math.abs(b)})} = \\frac{A}{x - ${a}} + \\frac{B}{x + ${Math.abs(b)}}$\nWhat is $B$? (enter a fraction)`,
+        answerType: 'numeric',
+        correctAnswer: -1 / diff,
+        displayAnswer: `$-${latexFrac(1, diff)}$`,
+        explanationPrompt: `Multiply through by $(x - ${a})(x + ${Math.abs(b)})$: $1 = A(x + ${Math.abs(b)}) + B(x - ${a})$. Set $x = ${b}$: $1 = B(${b} - ${a}) = -${diff}B$, so $B = -${latexFrac(1, diff)}$.`,
         hint: `Multiply both sides by $(x + ${Math.abs(b)})$ and set $x = ${b}$.`,
       };
     }
@@ -1550,7 +1563,7 @@ const generatePartialFractionsProblem = (): Problem => {
       problemText: `Decompose: $\\frac{${n}}{(x - ${a})^2} = \\frac{A}{x - ${a}} + \\frac{B}{(x - ${a})^2}$\nWhat is $B$?`,
       answerType: 'numeric',
       correctAnswer: n,
-      explanationPrompt: `Multiply both sides by (x-${a})²: ${n} = A(x-${a}) + B. Set x=${a}: B = ${n}.`,
+      explanationPrompt: `Multiply both sides by $(x-${a})^2$: $${n} = A(x-${a}) + B$. Set $x = ${a}$: $B = ${n}$. (Comparing $x$ coefficients gives $A = 0$.)`,
       hint: `Multiply both sides by $(x - ${a})^2$ and set $x = ${a}$.`,
     };
   } else {
@@ -1563,11 +1576,11 @@ const generatePartialFractionsProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'partial-fractions',
-      problemText: `Decompose: $\\frac{1}{(x - ${a})(x^2 + 1)} = \\frac{A}{x - ${a}} + \\frac{Bx + C}{x^2 + 1}$\nWhat is $A$? (as a fraction)`,
-      answerType: 'expression',
-      correctAnswer: `1/${answerDen}`,
-      acceptableAnswers: [`1/${answerDen}`],
-      explanationPrompt: `Multiply by (x-${a}), set x=${a}: 1/(${a}²+1) = A → A = 1/${answerDen}`,
+      problemText: `Decompose: $\\frac{1}{(x - ${a})(x^2 + 1)} = \\frac{A}{x - ${a}} + \\frac{Bx + C}{x^2 + 1}$\nWhat is $A$? (enter a fraction)`,
+      answerType: 'numeric',
+      correctAnswer: answerNum / answerDen,
+      displayAnswer: `$${latexFrac(answerNum, answerDen)}$`,
+      explanationPrompt: `Multiply by $(x-${a})$ and set $x = ${a}$: $A = \\frac{1}{${a}^2 + 1} = ${latexFrac(1, answerDen)}$.`,
       hint: `Multiply both sides by $(x - ${a})$ and set $x = ${a}$.`,
     };
   }
@@ -1580,7 +1593,7 @@ const generateImproperIntegralsProblem = (): Problem => {
       answer: 1,
       type: 'numeric',
       hint: '$\\int x^{-2}\\,dx = -x^{-1}$. Evaluate the limit as $b \\to \\infty$.',
-      explanation: '∫₁^b x⁻² dx = [-1/x]₁^b = -1/b + 1 → 1 as b→∞',
+      explanation: '$\\int_1^b x^{-2}\\,dx = \\left[-\\frac{1}{x}\\right]_1^b = 1 - \\frac{1}{b} \\to 1$ as $b \\to \\infty$.',
     },
     {
       text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x}\\,dx$\nDoes this converge or diverge?',
@@ -1588,22 +1601,21 @@ const generateImproperIntegralsProblem = (): Problem => {
       type: 'expression',
       alts: ['diverge', 'divergent', 'infinity', 'inf'],
       hint: '$\\int \\frac{1}{x}\\,dx = \\ln|x|$. What happens as $x \\to \\infty$?',
-      explanation: '∫₁^b 1/x dx = ln(b) → ∞ as b→∞, so it diverges.',
+      explanation: '$\\int_1^b \\frac{1}{x}\\,dx = \\ln(b) \\to \\infty$ as $b \\to \\infty$, so the integral diverges.',
     },
     {
-      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x^3}\\,dx$\nEvaluate (enter a number)',
+      text: '$\\displaystyle\\int_1^{\\infty} \\frac{1}{x^3}\\,dx$\nEvaluate (enter an exact number or fraction)',
       answer: 0.5,
       type: 'numeric',
       hint: '$\\int x^{-3}\\,dx = \\frac{x^{-2}}{-2}$. Evaluate the limit.',
-      explanation: '∫₁^b x⁻³ dx = [-1/(2x²)]₁^b = -1/(2b²) + 1/2 → 1/2 as b→∞',
-      tolerance: 0.01,
+      explanation: '$\\int_1^b x^{-3}\\,dx = \\left[-\\frac{1}{2x^2}\\right]_1^b = -\\frac{1}{2b^2} + \\frac{1}{2} \\to \\frac{1}{2}$ as $b \\to \\infty$.',
     },
     {
       text: '$\\displaystyle\\int_0^{\\infty} e^{-x}\\,dx$\nEvaluate (enter a number)',
       answer: 1,
       type: 'numeric',
       hint: '$\\int e^{-x}\\,dx = -e^{-x}$. What is $e^{-x}$ as $x \\to \\infty$?',
-      explanation: '∫₀^b e⁻ˣ dx = [-e⁻ˣ]₀^b = -e⁻ᵇ + 1 → 1 as b→∞',
+      explanation: '$\\int_0^b e^{-x}\\,dx = \\left[-e^{-x}\\right]_0^b = 1 - e^{-b} \\to 1$ as $b \\to \\infty$.',
     },
     {
       text: 'For the $p$-series test: $\\displaystyle\\int_1^{\\infty} \\frac{1}{x^p}\\,dx$ converges when $p$ is ___?\n(Enter an inequality like $p > 1$)',
@@ -1622,9 +1634,8 @@ const generateImproperIntegralsProblem = (): Problem => {
       id: crypto.randomUUID(),
       topicId: 'improper-integrals',
       problemText: chosen.text,
-      answerType: chosen.tolerance ? 'decimal-tolerance' : 'numeric',
+      answerType: 'numeric',
       correctAnswer: chosen.answer as number,
-      tolerance: chosen.tolerance,
       explanationPrompt: chosen.explanation,
       hint: chosen.hint,
     };
@@ -1698,7 +1709,7 @@ const generateSequencesProblem = (): Problem => {
         answer: 'no',
         alts: ['not monotonic', 'no it is not', 'neither'],
         hint: 'Check: does $a_{n+1} \\geq a_n$ always, or $a_{n+1} \\leq a_n$ always?',
-        explanation: 'The terms alternate sign: 1, -1/2, 1/3, -1/4, ... This is not monotonically increasing or decreasing, so the MCT does not apply directly.',
+        explanation: 'Starting at $n = 1$ the terms are $-1, \\frac{1}{2}, -\\frac{1}{3}, \\frac{1}{4}, \\ldots$ — they alternate in sign, so the sequence is neither increasing nor decreasing and the MCT does not apply directly (it still converges to 0).',
       },
     ];
 
@@ -1772,12 +1783,11 @@ const generateSeriesConvergenceProblem = (): Problem => {
       explanation: 'Σ(1/2)ⁿ = 1/(1 - 1/2) = 1/(1/2) = 2',
     },
     {
-      text: 'Geometric series: $\\displaystyle\\sum_{n=0}^{\\infty} \\left(\\frac{1}{3}\\right)^n$\nWhat is the sum?',
+      text: 'Geometric series: $\\displaystyle\\sum_{n=0}^{\\infty} \\left(\\frac{1}{3}\\right)^n$\nWhat is the sum? (exact: a fraction or decimal)',
       answer: 1.5,
       type: 'numeric',
       hint: 'Geometric series $\\sum r^n = \\frac{1}{1-r}$ when $|r| < 1$.',
-      explanation: 'Σ(1/3)ⁿ = 1/(1 - 1/3) = 1/(2/3) = 3/2 = 1.5',
-      tolerance: 0.01,
+      explanation: '$\\sum (1/3)^n = \\frac{1}{1 - 1/3} = \\frac{1}{2/3} = \\frac{3}{2} = 1.5$',
     },
     {
       text: 'Does $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{1}{n}$ converge or diverge?\n(This is the harmonic series)',
@@ -1844,9 +1854,8 @@ const generateSeriesConvergenceProblem = (): Problem => {
       id: crypto.randomUUID(),
       topicId: 'series-convergence',
       problemText: chosen.text,
-      answerType: chosen.tolerance ? 'decimal-tolerance' : 'numeric',
+      answerType: 'numeric',
       correctAnswer: chosen.answer as number,
-      tolerance: chosen.tolerance,
       explanationPrompt: chosen.explanation,
       hint: chosen.hint,
     };
@@ -1931,59 +1940,85 @@ const generatePowerSeriesProblem = (): Problem => {
 };
 
 const generateTaylorMaclaurinProblem = (): Problem => {
-  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+  type Item =
+    | { kind: 'expression'; text: string; answer: string; display: string; hint: string; explanation: string }
+    | { kind: 'numeric'; text: string; answer: number; display: string; roundTo?: number; hint: string; explanation: string };
+  const problems: Item[] = [
     {
-      text: 'What is the Maclaurin series for $e^x$?\n(Write first 4 terms)',
+      kind: 'expression',
+      text: 'What is the Maclaurin series for $e^x$?\n(Write the first 4 terms)',
       answer: '1+x+x^2/2+x^3/6',
-      alts: ['1 + x + x^2/2 + x^3/6', '1+x+x²/2+x³/6', '1 + x + x²/2 + x³/6', '1+x+x^2/2!+x^3/3!'],
+      display: '$1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!}$',
       hint: 'All derivatives of $e^x$ equal $e^x$, and $f(0) = 1$.',
-      explanation: 'eˣ = Σ xⁿ/n! = 1 + x + x²/2! + x³/3! + ...',
+      explanation: '$e^x = \\sum_{n=0}^{\\infty} \\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\cdots$',
     },
     {
-      text: 'What is the Maclaurin series for $\\sin(x)$?\n(Write first 3 non-zero terms)',
+      kind: 'expression',
+      text: 'What is the Maclaurin series for $\\sin(x)$?\n(Write the first 3 non-zero terms)',
       answer: 'x-x^3/6+x^5/120',
-      alts: ['x - x^3/6 + x^5/120', 'x-x³/6+x⁵/120', 'x - x^3/3! + x^5/5!'],
+      display: '$x - \\frac{x^3}{3!} + \\frac{x^5}{5!}$',
       hint: '$\\sin(x)$ has only odd powers of $x$ in its series.',
-      explanation: 'sin(x) = x - x³/3! + x⁵/5! - ... = x - x³/6 + x⁵/120 - ...',
+      explanation: '$\\sin(x) = x - \\frac{x^3}{3!} + \\frac{x^5}{5!} - \\cdots = x - \\frac{x^3}{6} + \\frac{x^5}{120} - \\cdots$',
     },
     {
-      text: 'What is the Maclaurin series for $\\cos(x)$?\n(Write first 3 non-zero terms)',
+      kind: 'expression',
+      text: 'What is the Maclaurin series for $\\cos(x)$?\n(Write the first 3 non-zero terms)',
       answer: '1-x^2/2+x^4/24',
-      alts: ['1 - x^2/2 + x^4/24', '1-x²/2+x⁴/24', '1 - x^2/2! + x^4/4!'],
+      display: '$1 - \\frac{x^2}{2!} + \\frac{x^4}{4!}$',
       hint: '$\\cos(x)$ has only even powers of $x$ in its series.',
-      explanation: 'cos(x) = 1 - x²/2! + x⁴/4! - ... = 1 - x²/2 + x⁴/24 - ...',
+      explanation: '$\\cos(x) = 1 - \\frac{x^2}{2!} + \\frac{x^4}{4!} - \\cdots = 1 - \\frac{x^2}{2} + \\frac{x^4}{24} - \\cdots$',
     },
     {
-      text: 'What is the Maclaurin series for $\\frac{1}{1-x}$?\n(Write first 4 terms)',
+      kind: 'expression',
+      text: 'What is the Maclaurin series for $\\frac{1}{1-x}$?\n(Write the first 4 terms)',
       answer: '1+x+x^2+x^3',
-      alts: ['1 + x + x^2 + x^3', '1+x+x²+x³'],
+      display: '$1 + x + x^2 + x^3$',
       hint: 'This is a geometric series!',
-      explanation: '1/(1-x) = Σ xⁿ = 1 + x + x² + x³ + ... for |x| < 1',
+      explanation: '$\\frac{1}{1-x} = \\sum_{n=0}^{\\infty} x^n = 1 + x + x^2 + x^3 + \\cdots$ for $|x| < 1$.',
     },
     {
-      text: 'What is the coefficient of $x^2$ in the Maclaurin series for $e^x$?',
-      answer: '1/2',
-      alts: ['0.5', '1/2!'],
+      kind: 'numeric',
+      text: 'What is the coefficient of $x^2$ in the Maclaurin series for $e^x$?\n(Enter an exact value: a fraction or decimal)',
+      answer: 0.5,
+      display: '$\\frac{1}{2}$',
       hint: 'The coefficient of $x^n$ in $e^x$ is $\\frac{1}{n!}$',
-      explanation: 'eˣ = Σ xⁿ/n!, so coefficient of x² is 1/2! = 1/2.',
+      explanation: '$e^x = \\sum \\frac{x^n}{n!}$, so the coefficient of $x^2$ is $\\frac{1}{2!} = \\frac{1}{2}$.',
     },
     {
-      text: 'Using the Lagrange error bound, estimate the max error when approximating $e^x$ by its 3rd-degree Maclaurin polynomial at $x = 0.5$.\n(Round to 4 decimal places)',
-      answer: '0.0026',
-      alts: ['0.003', '1/384'],
+      kind: 'numeric',
+      // |R_3(0.5)| <= M (0.5)^4 / 4! with M = max e^c on [0, 0.5] = e^{0.5}
+      text: 'Using the Lagrange error bound, find the maximum error when approximating $e^x$ by its 3rd-degree Maclaurin polynomial at $x = 0.5$.\n(Round to 4 decimal places)',
+      answer: Math.exp(0.5) * Math.pow(0.5, 4) / 24,
+      display: '$\\frac{e^{0.5}(0.5)^4}{4!} \\approx 0.0043$',
+      roundTo: 4,
       hint: 'The Lagrange remainder: $|R_n(x)| \\leq \\frac{M|x|^{n+1}}{(n+1)!}$ where $M = \\max|f^{(n+1)}(c)|$ on $[0, x]$.',
-      explanation: 'For eˣ, all derivatives are eˣ. M = e^0.5 ≈ 1.649. |R₃(0.5)| ≤ 1.649·(0.5)⁴/4! = 1.649·0.0625/24 ≈ 0.0043. (Using M=e^0.5). With M=1 (crude bound): 0.0625/24 ≈ 0.0026.',
+      explanation: 'All derivatives of $e^x$ are $e^x$, which is increasing, so on $[0, 0.5]$ the maximum is $M = e^{0.5} \\approx 1.6487$ (using $M = 1$ would NOT be a valid bound, since $e^c > 1$ for $c > 0$). Then $|R_3(0.5)| \\leq \\frac{e^{0.5}(0.5)^4}{4!} = \\frac{1.6487 \\cdot 0.0625}{24} \\approx 0.0043$. The actual error $e^{0.5} - P_3(0.5) \\approx 0.0029$ is indeed below this bound.',
     },
     {
-      text: 'The alternating series $\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{n}$ is approximated by its first 4 terms.\nWhat is the maximum error?',
-      answer: '0.2',
-      alts: ['1/5', '0.2'],
+      kind: 'numeric',
+      text: 'The alternating series $\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{n}$ is approximated by its first 4 terms.\nWhat is the bound on the error given by the Alternating Series Remainder? (exact value)',
+      answer: 0.2,
+      display: '$\\frac{1}{5} = 0.2$',
       hint: 'For an alternating series, the error is bounded by the absolute value of the first omitted term.',
-      explanation: 'First 4 terms sum: 1 - 1/2 + 1/3 - 1/4. The first omitted term is 1/5 = 0.2. By the Alternating Series Remainder, |error| ≤ 1/5 = 0.2.',
+      explanation: 'The first 4 terms are $1 - \\frac{1}{2} + \\frac{1}{3} - \\frac{1}{4}$. The first omitted term is $\\frac{1}{5}$, so by the Alternating Series Remainder $|\\text{error}| \\leq \\frac{1}{5} = 0.2$.',
     },
   ];
 
   const chosen = randChoice(problems);
+
+  if (chosen.kind === 'numeric') {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'taylor-maclaurin',
+      problemText: chosen.text,
+      answerType: chosen.roundTo !== undefined ? 'decimal-tolerance' : 'numeric',
+      correctAnswer: chosen.answer,
+      roundTo: chosen.roundTo,
+      displayAnswer: chosen.display,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
+    };
+  }
 
   return {
     id: crypto.randomUUID(),
@@ -1991,7 +2026,7 @@ const generateTaylorMaclaurinProblem = (): Problem => {
     problemText: chosen.text,
     answerType: 'expression',
     correctAnswer: chosen.answer,
-    acceptableAnswers: chosen.alts,
+    displayAnswer: chosen.display,
     explanationPrompt: chosen.explanation,
     hint: chosen.hint,
   };
@@ -2011,12 +2046,8 @@ const generateParametricEquationsProblem = (): Problem => {
       problemText: `Given $x = t + ${a}$, $y = t^2${b >= 0 ? ' + ' + b : ' - ' + Math.abs(b)}$\nEliminate the parameter. What is $y$ in terms of $x$?`,
       answerType: 'expression',
       correctAnswer: `(x-${a})^2${b >= 0 ? '+' + b : '-' + Math.abs(b)}`,
-      acceptableAnswers: [
-        `(x-${a})^2 ${b >= 0 ? '+ ' + b : '- ' + Math.abs(b)}`,
-        `(x - ${a})^2 ${b >= 0 ? '+ ' + b : '- ' + Math.abs(b)}`,
-        b === 0 ? `(x-${a})^2` : undefined,
-      ].filter(Boolean) as string[],
-      explanationPrompt: `From x = t + ${a}, t = x − ${a}. Substitute: y = (x−${a})² ${b >= 0 ? '+' + b : '−' + Math.abs(b)}.`,
+      displayAnswer: `$y = (x - ${a})^2 ${b >= 0 ? '+ ' + b : '- ' + Math.abs(b)}$`,
+      explanationPrompt: `From $x = t + ${a}$, $t = x - ${a}$. Substitute: $y = (x - ${a})^2 ${b >= 0 ? '+ ' + b : '- ' + Math.abs(b)}$.`,
       hint: 'Solve the x equation for t, then substitute into the y equation.',
     };
   } else if (problemType === 'dydx') {
@@ -2028,11 +2059,11 @@ const generateParametricEquationsProblem = (): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'parametric-equations',
-      problemText: `Given $x = t^2$, $y = t^3$\nFind $\\frac{dy}{dx}$ at $t = ${t}$.`,
-      answerType: 'decimal-tolerance',
+      problemText: `Given $x = t^2$, $y = t^3$\nFind $\\frac{dy}{dx}$ at $t = ${t}$. (exact: a fraction or decimal)`,
+      answerType: 'numeric',
       correctAnswer: answer,
-      tolerance: 0.01,
-      explanationPrompt: `dy/dx = (dy/dt)/(dx/dt) = 3t²/(2t) = 3t/2. At t=${t}: dy/dx = ${answer}.`,
+      displayAnswer: `$${latexFrac(3 * t, 2)} = ${answer}$`,
+      explanationPrompt: `$\\frac{dy}{dx} = \\frac{dy/dt}{dx/dt} = \\frac{3t^2}{2t} = \\frac{3t}{2}$ (for $t \\neq 0$). At $t = ${t}$: $\\frac{dy}{dx} = ${latexFrac(3 * t, 2)} = ${answer}$.`,
       hint: 'dy/dx = (dy/dt) / (dx/dt). Find each derivative separately.',
     };
   } else {
@@ -2048,7 +2079,7 @@ const generateParametricEquationsProblem = (): Problem => {
       problemText: `Given $x = ${a}t$, $y = t^2$\nWhat is the $y$-coordinate when $t = ${t}$?`,
       answerType: 'numeric',
       correctAnswer: y,
-      explanationPrompt: `Substitute t = ${t}: y = ${t}² = ${y}.`,
+      explanationPrompt: `Substitute $t = ${t}$: $y = ${t}^2 = ${y}$.`,
       hint: 'Just substitute the value of t into the y equation.',
     };
   }
@@ -2060,7 +2091,7 @@ const generatePolarCoordinatesProblem = (): Problem => {
   if (problemType === 'cartesian-to-polar-r') {
     const x = randInt(3, 8);
     const y = randInt(3, 8);
-    const r = Math.round(Math.sqrt(x * x + y * y) * 100) / 100;
+    const r = Math.sqrt(x * x + y * y);
 
     return {
       id: crypto.randomUUID(),
@@ -2068,35 +2099,38 @@ const generatePolarCoordinatesProblem = (): Problem => {
       problemText: `Convert $(${x}, ${y})$ from Cartesian to polar.\nWhat is $r$? (round to 2 decimal places)`,
       answerType: 'decimal-tolerance',
       correctAnswer: r,
-      tolerance: 0.02,
-      explanationPrompt: `$r = \\sqrt{x^2 + y^2} = \\sqrt{${x}^2 + ${y}^2} = \\sqrt{${x * x + y * y}} \\approx ${r}$`,
+      roundTo: 2,
+      displayAnswer: `$\\sqrt{${x * x + y * y}} \\approx ${r.toFixed(2)}$`,
+      explanationPrompt: `$r = \\sqrt{x^2 + y^2} = \\sqrt{${x}^2 + ${y}^2} = \\sqrt{${x * x + y * y}} \\approx ${r.toFixed(2)}$`,
       hint: '$r = \\sqrt{x^2 + y^2}$',
     };
   } else if (problemType === 'cartesian-to-polar-theta') {
-    // Use simple angles: (1,1) → 45°, (0,r) → 90°, (r,0) → 0°
+    // Use simple angles: (1,1) → 45°, (0,r) → 90°, (r,0) → 0°. The angle is
+    // only unique once an interval is fixed, so the text states [0°, 360°).
     const cases = [
-      { x: 1, y: 1, theta: 45 },
-      { x: 0, y: 5, theta: 90 },
-      { x: 3, y: 0, theta: 0 },
+      { x: 1, y: 1, theta: 45, explanation: '$x > 0$, so $\\theta = \\arctan\\left(\\frac{y}{x}\\right) = \\arctan(1) = 45°$ (first quadrant, no adjustment needed).' },
+      { x: 0, y: 5, theta: 90, explanation: '$x = 0$ and $y > 0$: the point lies on the positive $y$-axis, so $\\theta = 90°$. ($\\arctan(y/x)$ is undefined here — the formula does not apply when $x = 0$.)' },
+      { x: 3, y: 0, theta: 0, explanation: '$y = 0$ and $x > 0$: the point lies on the positive $x$-axis, so $\\theta = 0°$.' },
     ];
     const chosen = randChoice(cases);
 
     return {
       id: crypto.randomUUID(),
       topicId: 'polar-coordinates',
-      problemText: `Convert $(${chosen.x}, ${chosen.y})$ from Cartesian to polar.\nWhat is $\\theta$ in degrees?`,
+      problemText: `Convert $(${chosen.x}, ${chosen.y})$ from Cartesian to polar.\nWhat is $\\theta$ in degrees, with $0° \\leq \\theta < 360°$?`,
       answerType: 'numeric',
       correctAnswer: chosen.theta,
-      explanationPrompt: `$\\theta = \\arctan\\left(\\frac{y}{x}\\right) = \\arctan\\left(\\frac{${chosen.y}}{${chosen.x}}\\right) = ${chosen.theta}°$`,
-      hint: '$\\theta = \\arctan\\left(\\frac{y}{x}\\right)$. Watch for special cases where $x$ or $y$ is $0$.',
+      displayAnswer: `$${chosen.theta}°$`,
+      explanationPrompt: chosen.explanation,
+      hint: 'Use the signs of $x$ and $y$ to find the quadrant. $\\arctan(y/x)$ alone is only correct when $x > 0$, and is undefined when $x = 0$.',
     };
   } else if (problemType === 'polar-to-cartesian-x') {
     // r=R, θ=angle → x = R·cos(θ)
     const cases = [
-      { r: 4, theta: 60, x: 2, desc: '60°' },
-      { r: 6, theta: 0, x: 6, desc: '0°' },
-      { r: 2, theta: 90, x: 0, desc: '90°' },
-      { r: 4, theta: 45, x: 2.83, desc: '45°' },
+      { r: 4, theta: 60, x: 2, cosLatex: '\\frac{1}{2}', desc: '60°' },
+      { r: 6, theta: 0, x: 6, cosLatex: '1', desc: '0°' },
+      { r: 2, theta: 90, x: 0, cosLatex: '0', desc: '90°' },
+      { r: 4, theta: 45, x: 2 * Math.SQRT2, cosLatex: '\\frac{\\sqrt{2}}{2}', desc: '45°' },
     ];
     const chosen = randChoice(cases);
 
@@ -2106,8 +2140,9 @@ const generatePolarCoordinatesProblem = (): Problem => {
       problemText: `Convert polar $(r=${chosen.r},\\; \\theta=${chosen.desc})$ to Cartesian.\nWhat is $x$? (round to 2 decimal places)`,
       answerType: 'decimal-tolerance',
       correctAnswer: chosen.x,
-      tolerance: 0.02,
-      explanationPrompt: `$x = r\\cos(\\theta) = ${chosen.r}\\cos(${chosen.desc}) = ${chosen.x}$`,
+      roundTo: 2,
+      displayAnswer: `$${Number.isInteger(chosen.x) ? chosen.x : `2\\sqrt{2} \\approx ${chosen.x.toFixed(2)}`}$`,
+      explanationPrompt: `$x = r\\cos(\\theta) = ${chosen.r}\\cos(${chosen.desc}) = ${chosen.r} \\cdot ${chosen.cosLatex} = ${Number.isInteger(chosen.x) ? chosen.x : `2\\sqrt{2} \\approx ${chosen.x.toFixed(2)}`}$`,
       hint: '$x = r\\cos(\\theta)$',
     };
   } else if (problemType === 'polar-to-cartesian-y') {
@@ -2124,7 +2159,7 @@ const generatePolarCoordinatesProblem = (): Problem => {
       problemText: `Convert polar $(r=${chosen.r},\\; \\theta=${chosen.desc})$ to Cartesian.\nWhat is $y$?`,
       answerType: 'numeric',
       correctAnswer: chosen.y,
-      explanationPrompt: `$y = r\\sin(\\theta) = ${chosen.r}\\sin(${chosen.desc}) = ${chosen.y}$`,
+      explanationPrompt: `$y = r\\sin(\\theta) = ${chosen.r}\\sin(${chosen.desc}) = ${chosen.r} \\cdot ${chosen.theta === 30 ? '\\frac{1}{2}' : chosen.theta === 90 ? '1' : '0'} = ${chosen.y}$`,
       hint: '$y = r\\sin(\\theta)$',
     };
   } else {
@@ -2153,106 +2188,139 @@ const generatePolarCoordinatesProblem = (): Problem => {
 const generateIntegrationApplicationsProblem = (): Problem => {
   const problemType = randChoice(['disk', 'washer', 'shell', 'arc-length', 'surface-area']);
 
+  // correctAnswer holds the exact value; grading accepts anything within half a
+  // unit of the last requested decimal place (see roundTo).
   if (problemType === 'disk') {
     const a = randInt(2, 5);
-    const vol = Math.round((Math.PI * Math.pow(a, 3) / 3) * 100) / 100;
+    const vol = Math.PI * Math.pow(a, 3) / 3;
     return {
       id: crypto.randomUUID(),
       topicId: 'integration-applications',
       problemText: `Find the volume of the solid formed by revolving $y = x$ around the x-axis from $x = 0$ to $x = ${a}$.\n(Use the disk method. Round to 2 decimal places.)`,
       answerType: 'decimal-tolerance',
       correctAnswer: vol,
-      tolerance: 0.1,
-      explanationPrompt: `V = π∫₀^${a} x² dx = π[x³/3]₀^${a} = ${a * a * a}π/3 ≈ ${vol}`,
+      roundTo: 2,
+      displayAnswer: `$\\frac{${a * a * a}\\pi}{3} \\approx ${vol.toFixed(2)}$`,
+      explanationPrompt: `$V = \\pi\\int_0^{${a}} x^2\\,dx = \\pi\\left[\\frac{x^3}{3}\\right]_0^{${a}} = \\frac{${a * a * a}\\pi}{3} \\approx ${vol.toFixed(2)}$`,
       hint: 'Disk method: $V = \\pi \\int_a^b [f(x)]^2\\,dx$. Here $f(x) = x$.',
     };
   } else if (problemType === 'washer') {
-    const vol = Math.round((2 * Math.PI / 15) * 1000) / 1000;
+    const vol = 2 * Math.PI / 15;
     return {
       id: crypto.randomUUID(),
       topicId: 'integration-applications',
       problemText: `Find the volume of the solid formed by revolving the region between $y = x$ and $y = x^2$ (from $x=0$ to $x=1$) around the x-axis.\n(Round to 3 decimal places.)`,
       answerType: 'decimal-tolerance',
       correctAnswer: vol,
-      tolerance: 0.01,
-      explanationPrompt: `Washer: V = π∫₀¹ (x² − x⁴)dx = π[x³/3 − x⁵/5]₀¹ = π(1/3 − 1/5) = 2π/15 ≈ ${vol}`,
+      roundTo: 3,
+      displayAnswer: `$\\frac{2\\pi}{15} \\approx ${vol.toFixed(3)}$`,
+      explanationPrompt: `On $[0,1]$, $x \\geq x^2$, so the outer radius is $x$. $V = \\pi\\int_0^1 (x^2 - x^4)\\,dx = \\pi\\left[\\frac{x^3}{3} - \\frac{x^5}{5}\\right]_0^1 = \\pi\\left(\\frac{1}{3} - \\frac{1}{5}\\right) = \\frac{2\\pi}{15} \\approx ${vol.toFixed(3)}$`,
       hint: 'Washer method: $V = \\pi \\int [R(x)]^2 - [r(x)]^2\\,dx$. Which function is farther from the x-axis on $[0,1]$?',
     };
   } else if (problemType === 'shell') {
     const a = randInt(1, 3);
-    const vol = Math.round((Math.PI * Math.pow(a, 4) / 2) * 100) / 100;
+    const vol = Math.PI * Math.pow(a, 4) / 2;
     return {
       id: crypto.randomUUID(),
       topicId: 'integration-applications',
       problemText: `Use the shell method to find the volume when $y = x^2$ (from $x=0$ to $x=${a}$) is revolved around the y-axis.\n(Round to 2 decimal places.)`,
       answerType: 'decimal-tolerance',
       correctAnswer: vol,
-      tolerance: 0.1,
-      explanationPrompt: `Shell: V = 2π∫₀^${a} x·x² dx = 2π[x⁴/4]₀^${a} = π·${Math.pow(a, 4)}/2 ≈ ${vol}`,
+      roundTo: 2,
+      displayAnswer: `$\\frac{${Math.pow(a, 4)}\\pi}{2} \\approx ${vol.toFixed(2)}$`,
+      explanationPrompt: `$V = 2\\pi\\int_0^{${a}} x \\cdot x^2\\,dx = 2\\pi\\left[\\frac{x^4}{4}\\right]_0^{${a}} = \\frac{${Math.pow(a, 4)}\\pi}{2} \\approx ${vol.toFixed(2)}$`,
       hint: 'Shell method: $V = 2\\pi \\int_a^b x \\cdot f(x)\\,dx$. Here $f(x) = x^2$.',
     };
   } else if (problemType === 'arc-length') {
     const a = randInt(2, 6);
-    const answer = Math.round(a * Math.sqrt(2) * 100) / 100;
+    const answer = a * Math.SQRT2;
     return {
       id: crypto.randomUUID(),
       topicId: 'integration-applications',
       problemText: `Find the arc length of $y = x$ from $x = 0$ to $x = ${a}$.\n(Round to 2 decimal places.)`,
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
-      tolerance: 0.05,
-      explanationPrompt: `L = ∫₀^${a} √(1 + [f'(x)]²) dx = ∫₀^${a} √(1+1) dx = ${a}√2 ≈ ${answer}`,
+      roundTo: 2,
+      displayAnswer: `$${a}\\sqrt{2} \\approx ${answer.toFixed(2)}$`,
+      explanationPrompt: `$L = \\int_0^{${a}} \\sqrt{1 + [f'(x)]^2}\\,dx = \\int_0^{${a}} \\sqrt{1 + 1}\\,dx = ${a}\\sqrt{2} \\approx ${answer.toFixed(2)}$`,
       hint: 'Arc length: $L = \\int_a^b \\sqrt{1 + [f\'(x)]^2}\\,dx$. Find $f\'(x)$ first.',
     };
   } else {
     const a = randInt(2, 4);
-    const answer = Math.round(Math.PI * Math.sqrt(2) * a * a * 100) / 100;
+    const answer = Math.PI * Math.SQRT2 * a * a;
     return {
       id: crypto.randomUUID(),
       topicId: 'integration-applications',
       problemText: `Find the surface area when $y = x$ from $x = 0$ to $x = ${a}$ is revolved around the x-axis.\n(Round to 2 decimal places.)`,
       answerType: 'decimal-tolerance',
       correctAnswer: answer,
-      tolerance: 0.05,
-      explanationPrompt: `S = 2π∫₀^${a} x√(1+1) dx = 2π√2·[x²/2]₀^${a} = π√2·${a * a} ≈ ${answer}`,
-      hint: 'Surface area: $S = 2\\pi \\int f(x)\\sqrt{1 + [f\'(x)]^2}\\,dx$.',
+      roundTo: 2,
+      displayAnswer: `$${a * a}\\sqrt{2}\\pi \\approx ${answer.toFixed(2)}$`,
+      explanationPrompt: `Here $f(x) = x \\geq 0$ on $[0, ${a}]$. $S = 2\\pi\\int_0^{${a}} x\\sqrt{1 + 1}\\,dx = 2\\sqrt{2}\\pi\\left[\\frac{x^2}{2}\\right]_0^{${a}} = ${a * a}\\sqrt{2}\\pi \\approx ${answer.toFixed(2)}$`,
+      hint: 'Surface area: $S = 2\\pi \\int f(x)\\sqrt{1 + [f\'(x)]^2}\\,dx$ (for $f(x) \\geq 0$).',
     };
   }
 };
 
 const generateTrigSubstitutionProblem = (): Problem => {
-  const problems: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+  type Item =
+    | { kind: 'expression'; text: string; answer: string; alts: string[]; display: string; hint: string; explanation: string }
+    | { kind: 'numeric'; text: string; answer: number; display: string; hint: string; explanation: string };
+  // Substitution answers are equations "x = a·f(θ)". Any parameter name is
+  // accepted (θ, t, u, ...), and the co-function substitution is listed as a
+  // valid alternative since it works with a suitable parameter interval.
+  const problems: Item[] = [
     {
-      text: 'For $\\displaystyle\\int \\sqrt{4 - x^2}\\,dx$, what substitution should you use?',
+      kind: 'expression',
+      text: 'For $\\displaystyle\\int \\sqrt{4 - x^2}\\,dx$, what trigonometric substitution should you use?\n(Answer as an equation, e.g. "x = ...")',
       answer: 'x=2sin(theta)',
-      alts: ['x = 2sin(θ)', 'x=2sin(θ)', 'x = 2sinθ', 'x=2sinθ', 'x = 2 sin(theta)', 'x = 2*sin(theta)'],
+      alts: ['x=2cos(theta)'],
+      display: '$x = 2\\sin\\theta$ (or $x = 2\\cos\\theta$)',
       hint: 'The integrand has the form $\\sqrt{a^2 - x^2}$ with $a = 2$.',
-      explanation: 'For √(a²−x²), use x = a sin(θ). Here a = 2, so x = 2sin(θ).',
+      explanation: 'For $\\sqrt{a^2 - x^2}$ use $x = a\\sin\\theta$ with $-\\frac{\\pi}{2} \\leq \\theta \\leq \\frac{\\pi}{2}$, so $\\sqrt{4 - 4\\sin^2\\theta} = 2\\cos\\theta$. Here $a = 2$: $x = 2\\sin\\theta$. ($x = 2\\cos\\theta$ with $0 \\leq \\theta \\leq \\pi$ also works.)',
     },
     {
-      text: 'For $\\displaystyle\\int \\frac{dx}{\\sqrt{x^2 + 9}}$, what substitution should you use?',
+      kind: 'expression',
+      text: 'For $\\displaystyle\\int \\frac{dx}{\\sqrt{x^2 + 9}}$, what trigonometric substitution should you use?\n(Answer as an equation, e.g. "x = ...")',
       answer: 'x=3tan(theta)',
-      alts: ['x = 3tan(θ)', 'x=3tan(θ)', 'x = 3tanθ', 'x=3tanθ', 'x = 3 tan(theta)', 'x = 3*tan(theta)'],
+      alts: ['x=3cot(theta)'],
+      display: '$x = 3\\tan\\theta$',
       hint: 'The integrand has the form $\\sqrt{x^2 + a^2}$ with $a = 3$.',
-      explanation: 'For √(x²+a²), use x = a tan(θ). Here a = 3, so x = 3tan(θ).',
+      explanation: 'For $\\sqrt{x^2 + a^2}$ use $x = a\\tan\\theta$ with $-\\frac{\\pi}{2} < \\theta < \\frac{\\pi}{2}$, so $\\sqrt{9\\tan^2\\theta + 9} = 3\\sec\\theta$. Here $a = 3$: $x = 3\\tan\\theta$.',
     },
     {
-      text: 'For $\\displaystyle\\int \\frac{dx}{x^2\\sqrt{x^2 - 16}}$, what substitution should you use?',
+      kind: 'expression',
+      text: 'For $\\displaystyle\\int \\frac{dx}{x^2\\sqrt{x^2 - 16}}$, what trigonometric substitution should you use?\n(Answer as an equation, e.g. "x = ...")',
       answer: 'x=4sec(theta)',
-      alts: ['x = 4sec(θ)', 'x=4sec(θ)', 'x = 4secθ', 'x=4secθ', 'x = 4 sec(theta)', 'x = 4*sec(theta)'],
+      alts: ['x=4csc(theta)'],
+      display: '$x = 4\\sec\\theta$',
       hint: 'The integrand has the form $\\sqrt{x^2 - a^2}$ with $a = 4$.',
-      explanation: 'For √(x²−a²), use x = a sec(θ). Here a = 4, so x = 4sec(θ).',
+      explanation: 'For $\\sqrt{x^2 - a^2}$ use $x = a\\sec\\theta$ with $0 \\leq \\theta < \\frac{\\pi}{2}$ (for $x \\geq a$), so $\\sqrt{16\\sec^2\\theta - 16} = 4\\tan\\theta$. Here $a = 4$: $x = 4\\sec\\theta$.',
     },
     {
-      text: 'Evaluate: $\\displaystyle\\int_0^1 \\sqrt{1 - x^2}\\,dx$\n(This is a quarter-circle area)',
-      answer: 'pi/4',
-      alts: ['π/4', 'pi/4', '0.785', '0.7854'],
+      kind: 'numeric',
+      text: 'Evaluate exactly: $\\displaystyle\\int_0^1 \\sqrt{1 - x^2}\\,dx$\n(This is a quarter-circle area. You may type "pi/4".)',
+      answer: Math.PI / 4,
+      display: '$\\frac{\\pi}{4} \\approx 0.7854$',
       hint: 'Substitute $x = \\sin(\\theta)$, or recognize this as the area of a quarter unit circle.',
-      explanation: '∫₀¹ √(1−x²) dx = area of quarter circle of radius 1 = π/4 ≈ 0.7854.',
+      explanation: '$\\int_0^1 \\sqrt{1 - x^2}\\,dx$ is the area under the upper unit semicircle for $0 \\leq x \\leq 1$: a quarter circle of radius 1, so it equals $\\frac{\\pi}{4} \\approx 0.7854$.',
     },
   ];
 
   const chosen = randChoice(problems);
+
+  if (chosen.kind === 'numeric') {
+    return {
+      id: crypto.randomUUID(),
+      topicId: 'trig-substitution',
+      problemText: chosen.text,
+      answerType: 'numeric',
+      correctAnswer: chosen.answer,
+      displayAnswer: chosen.display,
+      explanationPrompt: chosen.explanation,
+      hint: chosen.hint,
+    };
+  }
 
   return {
     id: crypto.randomUUID(),
@@ -2261,6 +2329,7 @@ const generateTrigSubstitutionProblem = (): Problem => {
     answerType: 'expression',
     correctAnswer: chosen.answer,
     acceptableAnswers: chosen.alts,
+    displayAnswer: chosen.display,
     explanationPrompt: chosen.explanation,
     hint: chosen.hint,
   };
@@ -2269,11 +2338,6 @@ const generateTrigSubstitutionProblem = (): Problem => {
 // ===========================
 // MAIN GENERATOR FUNCTION
 // ===========================
-
-interface NumberRangeOptions {
-  numberRange?: { min: number; max: number };
-  allowNegatives?: boolean;
-}
 
 export const generateProblem = (topicId: TopicId, numberRange?: { min: number; max: number }, allowNegatives?: boolean): Problem => {
   const opts: NumberRangeOptions = { numberRange, allowNegatives };
@@ -2415,104 +2479,78 @@ export const generateProblem = (topicId: TopicId, numberRange?: { min: number; m
 // ANSWER VALIDATION
 // ===========================
 
+// Numeric alternates listed in acceptableAnswers (ignores non-numeric entries).
+const numericCandidates = (problem: Problem): number[] => {
+  const out: number[] = [];
+  if (typeof problem.correctAnswer === 'number') out.push(problem.correctAnswer);
+  for (const alt of problem.acceptableAnswers ?? []) {
+    if (typeof alt === 'number') out.push(alt);
+  }
+  return out;
+};
+
+/**
+ * Grading contract:
+ *  - numeric: exact value (floating-point margin only). Fractions and constant
+ *    expressions ("3/5", "sqrt(3)/2", "pi/4") are accepted as input.
+ *  - decimal-tolerance: |input - value| <= tolerance, where tolerance is the
+ *    explicit `tolerance`, else half a unit in the last place requested by
+ *    `roundTo`, else 0.01. correctAnswer / numeric acceptableAnswers are the
+ *    reference values.
+ *  - fraction: equivalent fraction (any representation), or an integer when the
+ *    reduced denominator is 1.
+ *  - expression: equivalence decided by the expression grader (see
+ *    expressionGrader.ts); `equivalence: 'up-to-constant'` for antiderivatives.
+ *    acceptableAnswers are graded with the same engine, not by spelling.
+ */
 export const validateAnswer = (problem: Problem, userAnswer: string): boolean => {
   switch (problem.answerType) {
-    case 'numeric':
-      const userNum = parseFloat(userAnswer);
-      if (isNaN(userNum)) return false;
-      if (userNum === (problem.correctAnswer as number)) return true;
-      // Check additional acceptable answers
-      if (problem.acceptableAnswers) {
-        return problem.acceptableAnswers.some(alt => userNum === (alt as number));
-      }
-      return false;
+    case 'numeric': {
+      const user = parseNumericInput(userAnswer);
+      if (user === null) return false;
+      return numericCandidates(problem).some(c => numbersEqual(user, c));
+    }
 
-    case 'decimal-tolerance':
-      const userDec = parseFloat(userAnswer);
-      if (isNaN(userDec)) return false;
-      const correctNum = problem.correctAnswer as number;
-      const tolerance = problem.tolerance || 0.01;
-      return Math.abs(userDec - correctNum) <= tolerance;
+    case 'decimal-tolerance': {
+      const user = parseNumericInput(userAnswer);
+      if (user === null) return false;
+      const tolerance = problem.tolerance !== undefined
+        ? problem.tolerance
+        : problem.roundTo !== undefined
+          ? roundingTolerance(problem.roundTo)
+          : 0.01;
+      return numericCandidates(problem).some(c => Math.abs(user - c) <= tolerance);
+    }
 
-    case 'fraction':
-      // Parse user input like "3/4" or separate fields
-      const fractionMatch = userAnswer.match(/^(-?\d+)\/(-?\d+)$/);
-      if (!fractionMatch) return false;
-
-      const userNumerator = parseInt(fractionMatch[1]);
-      const userDenominator = parseInt(fractionMatch[2]);
-      const userSimplified = simplifyFraction(userNumerator, userDenominator);
-
+    case 'fraction': {
       const correctFraction = problem.correctAnswer as FractionAnswer;
+      const trimmed = userAnswer.trim();
+      const fractionMatch = trimmed.match(/^(-?\d+)\s*\/\s*(-?\d+)$/);
+      if (!fractionMatch) {
+        // A whole number is fine when the reduced answer is an integer.
+        const whole = trimmed.match(/^(-?\d+)$/);
+        return !!whole && correctFraction.denominator === 1 && parseInt(whole[1], 10) === correctFraction.numerator;
+      }
+      const userNumerator = parseInt(fractionMatch[1], 10);
+      const userDenominator = parseInt(fractionMatch[2], 10);
+      if (userDenominator === 0) return false;
+      const userSimplified = simplifyFraction(userNumerator, userDenominator);
       return (
         userSimplified.numerator === correctFraction.numerator &&
         userSimplified.denominator === correctFraction.denominator
       );
+    }
 
     case 'expression': {
-      const normalizeExpr = (s: string) =>
-        s.replace(/\s/g, '').toLowerCase()
-         .replace(/<=/g, '≤')         // map ASCII two-char operators to Unicode
-         .replace(/>=/g, '≥')         // (before any single-char handling)
-         .replace(/\.0(?!\d)/g, '')   // strip trailing .0
-         .replace(/[θ]/g, 'theta');   // normalize theta symbol
-
-      // For inequalities, also check equivalent forms (e.g., "x < 2" === "2 > x")
-      const flipOperator = (op: string): string => {
-        const flips: Record<string, string> = { '<': '>', '>': '<', '≤': '≥', '≥': '≤', '<=': '>=', '>=': '<=' };
-        return flips[op] || op;
-      };
-      const parseInequality = (s: string): { lhs: string; op: string; rhs: string } | null => {
-        const match = s.match(/^(.+?)(<=|>=|≤|≥|<|>)(.+)$/);
-        if (!match) return null;
-        return { lhs: match[1], op: match[2], rhs: match[3] };
-      };
-
-      const cleanUser = normalizeExpr(userAnswer);
-      const cleanCorrect = normalizeExpr(problem.correctAnswer as string);
-      if (cleanUser === cleanCorrect) return true;
-
-      // Check flipped inequality: "x < 2" should match "2 > x"
-      const parsedCorrect = parseInequality(cleanCorrect);
-      const parsedUser = parseInequality(cleanUser);
-      if (parsedCorrect && parsedUser) {
-        // Direct match already checked above; check flipped form
-        if (parsedUser.lhs === parsedCorrect.rhs &&
-            parsedUser.rhs === parsedCorrect.lhs &&
-            parsedUser.op === flipOperator(parsedCorrect.op)) {
-          return true;
-        }
-      }
-
-      // Check additional acceptable answers
-      if (problem.acceptableAnswers) {
-        const matched = problem.acceptableAnswers.some(alt => {
-          const cleanAlt = normalizeExpr(String(alt));
-          if (cleanAlt === cleanUser) return true;
-          const parsedAlt = parseInequality(cleanAlt);
-          if (parsedAlt && parsedUser) {
-            return (parsedUser.lhs === parsedAlt.rhs &&
-                    parsedUser.rhs === parsedAlt.lhs &&
-                    parsedUser.op === flipOperator(parsedAlt.op));
-          }
-          return false;
-        });
-        if (matched) return true;
-      }
-
-      // mathjs algebraic equivalence: try to simplify (user - correct) to 0,
-      // or evaluate both at several random points and compare
-      if (expressionsAlgebraicallyEqual(userAnswer, problem.correctAnswer as string)) {
-        return true;
-      }
-
-      return false;
+      const mode = problem.equivalence ?? 'exact';
+      if (expressionsEquivalent(userAnswer, String(problem.correctAnswer), mode)) return true;
+      return (problem.acceptableAnswers ?? []).some(alt => expressionsEquivalent(userAnswer, String(alt), mode));
     }
 
     case 'multiple-choice':
-      return userAnswer === problem.correctAnswer;
+      return userAnswer.trim() === problem.correctAnswer;
 
-    case 'coordinate':
+    case 'coordinate': {
       // Parse "(x, y)" format
       const coordMatch = userAnswer.match(/^\(?\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*\)?$/);
       if (!coordMatch) return false;
@@ -2521,7 +2559,8 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
       const userY = parseFloat(coordMatch[2]);
       const correctCoord = problem.correctAnswer as { x: number; y: number };
 
-      return userX === correctCoord.x && userY === correctCoord.y;
+      return numbersEqual(userX, correctCoord.x) && numbersEqual(userY, correctCoord.y);
+    }
 
     default:
       return false;

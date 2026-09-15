@@ -89,17 +89,19 @@ export default function PreCalculusFormulaSheet({ onComplete }: PreCalculusFormu
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Vertical Asymptotes</p>
-              <p className="text-sm text-slate-200 mt-1">Set denominator = 0 (after cancellation)</p>
+              <p className="text-sm text-slate-200 mt-1">Zeros of the denominator of the fully reduced fraction (after cancelling common factors)</p>
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Horizontal Asymptotes</p>
               <p className="text-sm text-slate-200 mt-1">deg(num) &lt; deg(den): <MathText text="$y = 0$" /></p>
-              <p className="text-sm text-slate-200">deg(num) = deg(den): <MathText text="$y = \frac{\text{leading coefficients}}{}$" /></p>
-              <p className="text-sm text-slate-200">deg(num) &gt; deg(den): no HA (oblique asymptote)</p>
+              <p className="text-sm text-slate-200">deg(num) = deg(den): <MathText text="$y = \frac{a_n}{b_n}$" /> (ratio of the leading coefficients)</p>
+              <p className="text-sm text-slate-200">deg(num) = deg(den) + 1: no HA; a slant (oblique) linear asymptote <MathText text="$y = mx + b$" />, the quotient from polynomial division</p>
+              <p className="text-sm text-slate-200">deg(num) ≥ deg(den) + 2: no HA and no slant line; the graph follows the polynomial quotient (a curved asymptote)</p>
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Holes</p>
-              <p className="text-sm text-slate-200 mt-1">Common factors that cancel from num. and den.</p>
+              <p className="text-sm text-slate-200 mt-1">A factor <MathText text="$(x - c)$" /> that cancels completely out of the denominator gives a hole at <MathText text="$x = c$" />.</p>
+              <p className="text-xs text-slate-400 mt-1">If <MathText text="$(x - c)$" /> still divides the reduced denominator, <MathText text="$x = c$" /> is a vertical asymptote, not a hole: <MathText text="$\frac{x-1}{(x-1)^2} = \frac{1}{x-1}$" /> has a VA at <MathText text="$x = 1$" />.</p>
             </div>
           </div>
         </div>
@@ -140,19 +142,19 @@ export default function PreCalculusFormulaSheet({ onComplete }: PreCalculusFormu
           </div>
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Ellipse</p>
-            <p className="text-sm text-slate-300"><MathText text="$\frac{(x-h)^2}{a^2} + \frac{(y-k)^2}{b^2} = 1$" /></p>
-            <p className="text-xs text-slate-400 mt-1"><MathText text="$c^2 = a^2 - b^2$" /> (foci distance)</p>
+            <p className="text-sm text-slate-300"><MathText text="$\frac{(x-h)^2}{a^2} + \frac{(y-k)^2}{b^2} = 1$" />, <MathText text="$a \geq b > 0$" /></p>
+            <p className="text-xs text-slate-400 mt-1">Horizontal major axis of length <MathText text="$2a$" />; foci at <MathText text="$(h \pm c, k)$" /> with <MathText text="$c^2 = a^2 - b^2$" />. If the larger denominator is under <MathText text="$(y-k)^2$" />, the major axis is vertical and the foci are <MathText text="$(h, k \pm c)$" />.</p>
           </div>
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Hyperbola</p>
-            <p className="text-sm text-slate-300"><MathText text="$\frac{(x-h)^2}{a^2} - \frac{(y-k)^2}{b^2} = 1$" /></p>
-            <p className="text-xs text-slate-400 mt-1"><MathText text="$c^2 = a^2 + b^2$" />, asymptotes <MathText text="$y - k = \pm\frac{b}{a}(x - h)$" /></p>
+            <p className="text-sm text-slate-300"><MathText text="$\frac{(x-h)^2}{a^2} - \frac{(y-k)^2}{b^2} = 1$" /> (opens left/right)</p>
+            <p className="text-xs text-slate-400 mt-1">Foci <MathText text="$(h \pm c, k)$" /> with <MathText text="$c^2 = a^2 + b^2$" />; asymptotes <MathText text="$y - k = \pm\frac{b}{a}(x - h)$" />. For <MathText text="$\frac{(y-k)^2}{a^2} - \frac{(x-h)^2}{b^2} = 1$" /> it opens up/down with asymptotes <MathText text="$y - k = \pm\frac{a}{b}(x - h)$" />.</p>
           </div>
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Parabola</p>
-            <p className="text-sm text-slate-300"><MathText text="$(x-h)^2 = 4p(y-k)$" /> (vertical)</p>
-            <p className="text-sm text-slate-300"><MathText text="$(y-k)^2 = 4p(x-h)$" /> (horizontal)</p>
-            <p className="text-xs text-slate-400 mt-1">Focus at distance <MathText text="$p$" /> from vertex</p>
+            <p className="text-sm text-slate-300"><MathText text="$(x-h)^2 = 4p(y-k)$" /> (vertical axis): focus <MathText text="$(h, k+p)$" />, directrix <MathText text="$y = k - p$" /></p>
+            <p className="text-sm text-slate-300"><MathText text="$(y-k)^2 = 4p(x-h)$" /> (horizontal axis): focus <MathText text="$(h+p, k)$" />, directrix <MathText text="$x = h - p$" /></p>
+            <p className="text-xs text-slate-400 mt-1">Vertex <MathText text="$(h,k)$" />; the focus is <MathText text="$|p|$" /> from the vertex and the sign of <MathText text="$p$" /> gives the opening direction (<MathText text="$p > 0$" />: up / right)</p>
           </div>
         </div>
       </div>

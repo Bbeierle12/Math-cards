@@ -54,22 +54,27 @@ export default function Algebra2FormulaSheet({ onComplete }: Algebra2FormulaShee
         {/* Radical Rules */}
         <div className="bg-slate-900/50 rounded-lg p-5">
           <h3 className="text-xl font-bold text-amber-300 mb-4">Radical Rules</h3>
+          <p className="text-xs text-slate-400 mb-2">These are rules for real square roots: they need non-negative radicands. They fail for negatives even though <MathText text="$i = \sqrt{-1}$" /> exists: <MathText text="$\sqrt{(-1)(-1)} = 1$" /> but <MathText text="$\sqrt{-1}\cdot\sqrt{-1} = i^2 = -1$" />.</p>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Product</span>
+              <span className="text-slate-300">Product (<MathText text="$a, b \geq 0$" />)</span>
               <span className="font-mono text-green-300"><MathText text="$\sqrt{ab} = \sqrt{a}\cdot\sqrt{b}$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Quotient</span>
+              <span className="text-slate-300">Quotient (<MathText text="$a \geq 0,\ b > 0$" />)</span>
               <span className="font-mono text-green-300"><MathText text="$\sqrt{\frac{a}{b}} = \frac{\sqrt{a}}{\sqrt{b}}$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Rational exponent</span>
-              <span className="font-mono text-green-300"><MathText text="$a^{m/n} = \sqrt[n]{a^m}$" /></span>
+              <span className="text-slate-300">Rational exponent (<MathText text="$a > 0$" />)</span>
+              <span className="font-mono text-green-300"><MathText text="$a^{m/n} = \sqrt[n]{a^m} = (\sqrt[n]{a})^m$" /></span>
             </div>
             <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
-              <span className="text-slate-300">Rationalizing</span>
+              <span className="text-slate-300">Rationalizing (<MathText text="$a > 0$" />)</span>
               <span className="font-mono text-green-300"><MathText text="$\frac{1}{\sqrt{a}} = \frac{\sqrt{a}}{a}$" /></span>
+            </div>
+            <div className="flex justify-between items-center bg-slate-800/50 p-2 rounded">
+              <span className="text-slate-300">Square of a root</span>
+              <span className="font-mono text-green-300"><MathText text="$\sqrt{a^2} = |a|$" /></span>
             </div>
           </div>
         </div>
@@ -77,10 +82,11 @@ export default function Algebra2FormulaSheet({ onComplete }: Algebra2FormulaShee
         {/* Logarithm Rules */}
         <div className="bg-slate-900/50 rounded-lg p-5">
           <h3 className="text-xl font-bold text-amber-300 mb-4">Logarithm Rules</h3>
+          <p className="text-xs text-slate-400 mb-2">Throughout: base <MathText text="$b > 0$" />, <MathText text="$b \neq 1$" />, and arguments <MathText text="$x, y > 0$" />. Logarithms of zero or negative numbers are undefined in the reals.</p>
           <div className="space-y-3">
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Definition</p>
-              <p className="text-sm text-slate-200 mt-1"><MathText text="$\log_b x = y \iff b^y = x$" /></p>
+              <p className="text-sm text-slate-200 mt-1"><MathText text="$\log_b x = y \iff b^y = x$" /> (<MathText text="$x > 0$" />)</p>
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Product Rule</p>
@@ -92,7 +98,7 @@ export default function Algebra2FormulaSheet({ onComplete }: Algebra2FormulaShee
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Power Rule</p>
-              <p className="text-sm text-slate-200 mt-1"><MathText text="$\log_b(x^n) = n\log_b x$" /></p>
+              <p className="text-sm text-slate-200 mt-1"><MathText text="$\log_b(x^n) = n\log_b x$" /> (<MathText text="$x > 0$" />; for even <MathText text="$n$" /> and <MathText text="$x < 0$" /> use <MathText text="$n\log_b|x|$" />)</p>
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Change of Base</p>
@@ -119,11 +125,11 @@ export default function Algebra2FormulaSheet({ onComplete }: Algebra2FormulaShee
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Geometric Sum (finite)</p>
-              <p className="text-sm text-slate-200 mt-1"><MathText text="$S_n = a_1 \cdot \frac{1 - r^n}{1 - r}$" /></p>
+              <p className="text-sm text-slate-200 mt-1"><MathText text="$S_n = a_1 \cdot \frac{1 - r^n}{1 - r}$" />, <MathText text="$r \neq 1$" /> (if <MathText text="$r = 1$" />, <MathText text="$S_n = n a_1$" />)</p>
             </div>
             <div className="bg-slate-800/50 p-3 rounded">
               <p className="font-semibold text-cyan-300">Geometric Sum (infinite, |r| &lt; 1)</p>
-              <p className="text-sm text-slate-200 mt-1"><MathText text="$S = \frac{a_1}{1 - r}$" /></p>
+              <p className="text-sm text-slate-200 mt-1"><MathText text="$S = \frac{a_1}{1 - r}$" /> (diverges when <MathText text="$|r| \geq 1$" />)</p>
             </div>
           </div>
         </div>
@@ -139,7 +145,7 @@ export default function Algebra2FormulaSheet({ onComplete }: Algebra2FormulaShee
           </div>
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Dividing</p>
-            <p className="text-sm text-slate-300"><MathText text="$\frac{a}{b} \div \frac{c}{d} = \frac{a}{b} \cdot \frac{d}{c}$" /></p>
+            <p className="text-sm text-slate-300"><MathText text="$\frac{a}{b} \div \frac{c}{d} = \frac{a}{b} \cdot \frac{d}{c}$" /> (<MathText text="$b, c, d \neq 0$" />)</p>
           </div>
           <div className="bg-slate-800/50 p-4 rounded">
             <p className="font-semibold text-amber-300 mb-2">Adding (LCD)</p>

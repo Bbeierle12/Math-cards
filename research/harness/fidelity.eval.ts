@@ -9,7 +9,16 @@
  *   GFS = 100 * (0.7 * acceptRate + 0.3 * rejectRate)
  *
  * The reject component exists so an experiment cannot raise GFS by making
- * the grader more permissive across the board.
+ * the grader more permissive across the board. Every problem gets at least
+ * one reject probe (a zero-probe topic used to score a perfect 100% reject
+ * rate), and the run fails if any topic ends up without accept AND reject
+ * probes.
+ *
+ * Caveat that the score cannot remove: most accept probes are derived from
+ * the generator's own answer key, so GFS measures grading FIDELITY (does the
+ * grader accept what the generator meant?), not mathematical CORRECTNESS of
+ * the key. Correctness is covered by the independent recomputation tests in
+ * services/mathService.test.ts.
  *
  * Determinism: Math.random is replaced with a mulberry32 PRNG re-seeded per
  * (topic, index), so two runs against identical generator code produce an
@@ -94,6 +103,22 @@ function buildProbes(p: Problem): Probe[] {
     case 'decimal-tolerance': {
       const ans = p.correctAnswer as number;
       probes.push({ input: String(ans), kind: 'accept', label: 'dec-canonical' });
+      if (p.roundTo !== undefined) {
+        // The correctly rounded value must be accepted; the neighbouring
+        // rounded value (one unit in the last requested place away) must not.
+        probes.push({ input: ans.toFixed(p.roundTo), kind: 'accept', label: 'dec-correctly-rounded' });
+        const unit = Math.pow(10, -p.roundTo);
+        // pick a misrounded neighbour that is not itself a legitimate alternate
+        // (e.g. the true-π value next to the "use 3.14" value)
+        const alternates = (p.acceptableAnswers ?? []).filter((a): a is number => typeof a === 'number');
+        const rounded = Number(ans.toFixed(p.roundTo));
+        const neighbour = [2, -2, 3, -3]
+          .map(k => rounded + k * unit)
+          .find(v => alternates.every(a => Math.abs(v - a) > unit));
+        if (neighbour !== undefined) {
+          probes.push({ input: neighbour.toFixed(p.roundTo), kind: 'reject', label: 'dec-misrounded' });
+        }
+      }
       const usesPi = p.problemText.includes('\\pi');
       const delta = usesPi ? 2.0 : 0.4;
       probes.push({
@@ -135,6 +160,20 @@ function buildProbes(p: Problem): Probe[] {
         const bumped = stored.replace(/\d+/, (n) => String(Number(n) + 1));
         if (bumped !== stored) {
           probes.push({ input: bumped, kind: 'reject', label: 'expr-bumped-constant' });
+        }
+        if (/^[a-z]+$/i.test(stored)) {
+          // word answers: the opposite verdict / an unrelated word must fail
+          const wrongWord = /^diverge/i.test(stored) ? 'converges' : /^converge/i.test(stored) ? 'diverges' : 'diverges';
+          probes.push({ input: wrongWord, kind: 'reject', label: 'expr-wrong-word' });
+        } else if (stored.includes('=')) {
+          // equations (substitutions): a different coefficient is wrong
+          probes.push({ input: stored.replace(/=/, '=7*'), kind: 'reject', label: 'expr-wrong-coefficient' });
+        } else {
+          // algebraic answers: adding a non-constant term changes the function
+          // (and its derivative), so it is wrong under every equivalence mode
+          probes.push({ input: `(${stored})+x^7`, kind: 'reject', label: 'expr-plus-x7' });
+          // undefined mathematics must never earn credit
+          probes.push({ input: '0/0', kind: 'reject', label: 'expr-nan' });
         }
       }
       break;
@@ -238,6 +277,15 @@ describe('grading fidelity evaluation', () => {
       }
     } finally {
       Math.random = realRandom;
+    }
+
+    // Coverage guard: a topic with no reject (or no accept) probes would score
+    // a vacuous 100% on that component. Fail loudly instead.
+    const uncovered = Object.entries(perTopic)
+      .filter(([, t]) => t.accept.total === 0 || t.reject.total === 0)
+      .map(([topic]) => topic);
+    if (uncovered.length > 0) {
+      throw new Error(`topics without both accept and reject probes: ${uncovered.join(', ')}`);
     }
 
     const acceptRate = rate(totals.accept);

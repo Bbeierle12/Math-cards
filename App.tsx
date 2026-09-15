@@ -17,6 +17,8 @@ import PreCalculusFormulaSheet from './components/PreCalculusFormulaSheet';
 import SettingsPanel from './components/SettingsPanel';
 import { GearIcon } from './components/Icons';
 import { useSettings } from './contexts/SettingsContext';
+import { sanitizeProgress } from './services/storageValidation';
+import { isTopicMastered } from './services/mastery';
 
 const DEFAULT_PROGRESS: UserProgress = {
   topicProgress: {},
@@ -26,11 +28,13 @@ const DEFAULT_PROGRESS: UserProgress = {
   longestStreak: 0,
 };
 
+const sanitizeStoredProgress = (raw: unknown): UserProgress => sanitizeProgress(raw, DEFAULT_PROGRESS);
+
 export default function App() {
   const [selectedTopicId, setSelectedTopicId] = useState<TopicId | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { settings } = useSettings();
-  const [userProgress, setUserProgress] = useLocalStorage<UserProgress>('userProgress', DEFAULT_PROGRESS);
+  const [userProgress, setUserProgress] = useLocalStorage<UserProgress>('userProgress', DEFAULT_PROGRESS, sanitizeStoredProgress);
 
   const handleSelectTopic = (topicId: TopicId) => {
     setSelectedTopicId(topicId);
@@ -49,12 +53,10 @@ export default function App() {
     return undefined;
   }, [selectedTopicId]);
 
-  // Derive mastery from data using current threshold, not persisted boolean
-  const isMastered = useCallback((topicId: TopicId): boolean => {
-    const progress = userProgress.topicProgress[topicId];
-    if (!progress) return false;
-    return progress.correct >= settings.masteryThreshold;
-  }, [userProgress, settings.masteryThreshold]);
+  // Mastery has ONE definition (services/mastery.ts): correct >= current threshold.
+  const isMastered = useCallback((topicId: TopicId): boolean =>
+    isTopicMastered(userProgress.topicProgress[topicId], settings.masteryThreshold),
+  [userProgress, settings.masteryThreshold]);
 
   const unlockedTopics = useMemo(() => {
     const unlocked = new Set<TopicId>();

@@ -1,11 +1,31 @@
+import { useState, useEffect, useCallback, useRef, SetStateAction } from 'react';
 
-import { useState, useEffect, SetStateAction } from 'react';
+/**
+ * Persisted state. `sanitize` (optional) turns whatever JSON was stored into
+ * a well-formed T — valid JSON of the wrong shape must never reach render.
+ */
+function useLocalStorage<T,>(
+  key: string,
+  initialValue: T,
+  sanitize?: (raw: unknown) => T,
+): [T, (value: SetStateAction<T>) => void] {
+  const sanitizeRef = useRef(sanitize);
+  sanitizeRef.current = sanitize;
 
-function useLocalStorage<T,>(key: string, initialValue: T): [T, (value: SetStateAction<T>) => void] {
+  const read = useCallback((serialized: string | null): T => {
+    if (serialized === null || serialized === '') return initialValue;
+    try {
+      const parsed: unknown = JSON.parse(serialized);
+      return sanitizeRef.current ? sanitizeRef.current(parsed) : (parsed as T);
+    } catch (error) {
+      console.error(error);
+      return initialValue;
+    }
+  }, [initialValue]);
+
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      return read(window.localStorage.getItem(key));
     } catch (error) {
       console.error(error);
       return initialValue;
@@ -24,22 +44,17 @@ function useLocalStorage<T,>(key: string, initialValue: T): [T, (value: SetState
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-        if (e.key === key) {
-            try {
-                setStoredValue(e.newValue ? JSON.parse(e.newValue) : initialValue);
-            } catch (error) {
-                console.error(error);
-                setStoredValue(initialValue);
-            }
-        }
+      if (e.key === key) {
+        setStoredValue(read(e.newValue));
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
-        window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('storage', handleStorageChange);
     };
-  }, [key, initialValue]);
+  }, [key, read]);
 
   return [storedValue, setValue];
 }
