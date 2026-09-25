@@ -1,6 +1,6 @@
 # Math-Cards: Mathematical Architecture Plan
 
-Status: proposed · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
+Status: in progress (Phase 1 done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
 
 This plan turns the comparative design review (WeBWorK, STACK, Numbas, IMathAS, Alcumus,
 ALEKS, IXL, FSRS) into sequenced engineering work. It keeps the constraints already
@@ -26,7 +26,7 @@ shape that generators and the UI consume.
 
 | # | Change | Files | Acceptance |
 |---|---|---|---|
-| 1.1 | **Seed sample points from the problem, not the submission.** Seed = FNV(reference expression + checker version). Two spellings of one answer are tested at identical points. | `services/expressionGrader.ts` | Test: `x*sin(x)+cos(x)` and `cos(x)+xsin(x)` produce identical point sets; existing adversarial tests still pass. |
+| 1.1 | **Seed sample points from the problem, not the submission.** Primary seed = FNV(reference expression + checker version). Two spellings of one answer are tested at identical primary points. A short confirmation stream keyed by the submission may only *reject* (a genuine identity holds at every point), so a function built to vanish on the published primary points is still caught. | `services/grading/sampling.ts` | Test: primary points are a function of the problem only; equivalent spellings get identical verdicts; a vanishing polynomial added to `sin(x)` is rejected. |
 | 1.2 | **Declared parameters.** Replace "rename any variable other than x" with an explicit `parameters?: string[]` on the problem (e.g. `['theta']`). Only declared parameters may be alpha-renamed. | `types.ts`, `expressionGrader.ts`, trig-substitution generator | Test: `x = 2 sin t` accepted when `theta` is declared; `y = 2 sin theta` rejected (y is not a declared parameter). |
 | 1.3 | **Antiderivatives by differentiation.** Store the integrand; grade by `d/dx(submission) ≡ integrand` under the domain rule, with the stored antiderivative kept only for display. Keep the constant-difference check as a second vote. | `expressionGrader.ts`, `mathService.ts` integration banks | Test: every existing antiderivative case passes; `x*cos(x)` (the integrand itself) fails; `-ln(cos x)` still fails on domain. |
 | 1.4 | **Canonical polynomial comparison.** When both expressions `rationalize` to polynomials in one variable, compare coefficient vectors exactly (rational arithmetic) instead of sampling. Falls back to sampling otherwise. | `expressionGrader.ts` | Test: Taylor polynomial and eliminate-the-parameter answers graded by coefficients; `x + (x-0.37)(x-0.91)…` rejected by degree, not by luck. |
@@ -50,6 +50,11 @@ sin(x)^2+cos(x)^2   vs 1                      accept
 
 Exit criteria: `tsc` clean, all suites green, research harness GFS unchanged or higher,
 no generator text changes except the sequence questions' input instructions.
+
+**Done.** Also added in this phase: the symmetric same-partial-function rule (needed for
+the corpus row `log(x^2)` vs `2·log(x)`, which the old directional rule accepted), and a
+yes/no choice control for the monotonicity question. The unused `coordinate` answer
+type's tests were removed; Phase 2 replaces the answer-type union.
 
 ---
 

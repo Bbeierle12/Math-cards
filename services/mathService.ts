@@ -1,6 +1,6 @@
-import { TopicId, Problem, ProblemAnswer, FractionAnswer } from '../types';
+import { TopicId, Problem, ProblemAnswer, FractionAnswer, AnswerPart } from '../types';
 import { PYTHAGOREAN_TRIPLES } from '../constants';
-import { expressionsEquivalent, parseNumericInput, numbersEqual, roundingTolerance } from './expressionGrader';
+import { expressionsEquivalent, isAntiderivative, parseNumericInput, numbersEqual, roundingTolerance, normalizeWord } from './grading';
 
 // ===========================
 // UTILITY FUNCTIONS
@@ -114,6 +114,7 @@ const generateAdditionProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'addition',
+    requiredForm: 'evaluated',
     problemText: `$${a} + ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a + b,
@@ -131,6 +132,7 @@ const generateSubtractionProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'subtraction',
+    requiredForm: 'evaluated',
     problemText: `$${a} - ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a - b,
@@ -148,6 +150,7 @@ const generateMultiplicationProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'multiplication',
+    requiredForm: 'evaluated',
     problemText: `$${a} \\times ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: a * b,
@@ -164,6 +167,7 @@ const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
     return {
       id: crypto.randomUUID(),
       topicId: 'division',
+      requiredForm: 'evaluated',
       problemText: `$0 \\div 1 = \\;?$`,
       answerType: 'numeric',
       correctAnswer: 0,
@@ -181,6 +185,7 @@ const generateDivisionProblem = (opts?: NumberRangeOptions): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'division',
+    requiredForm: 'evaluated',
     problemText: `$${a} \\div ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: result,
@@ -295,6 +300,7 @@ const generateDecimalsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'decimals',
+    requiredForm: 'evaluated',
     problemText: `$${a} ${op === '×' ? '\\times' : op} ${b} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: exact,
@@ -344,6 +350,7 @@ const generateOrderOfOperationsProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'order-of-operations',
+    requiredForm: 'evaluated',
     problemText: `${problemText} $= \\;?$`,
     answerType: 'numeric',
     correctAnswer: answer,
@@ -377,6 +384,7 @@ const generateIntegersProblem = (): Problem => {
   return {
     id: crypto.randomUUID(),
     topicId: 'integers',
+    requiredForm: 'evaluated',
     problemText: `$${latexNum(a)} ${op === '×' ? '\\times' : op} ${latexNum(b)} = \\;?$`,
     answerType: 'numeric',
     correctAnswer: answer,
@@ -1425,10 +1433,11 @@ const generateConicSectionsProblem = (): Problem => {
 // CALCULUS 2
 // ===========================
 
-// Indefinite-integral banks. `answer` is a canonical, parser-ready antiderivative
-// used ONLY as the grading reference (any antiderivative differing by a constant
-// is accepted); `display` is the LaTeX shown to the student.
-interface AntiderivativeItem { text: string; answer: string; display: string; hint: string; explanation: string }
+// Indefinite-integral banks. A submission is graded by differentiating it and
+// comparing with `integrand` on the integrand's domain; `answer` (a canonical,
+// parser-ready antiderivative) is an independent second vote, and `display` is
+// the LaTeX shown to the student.
+interface AntiderivativeItem { text: string; integrand: string; answer: string; display: string; hint: string; explanation: string }
 
 const antiderivativeProblem = (topicId: TopicId, chosen: AntiderivativeItem): Problem => ({
   id: crypto.randomUUID(),
@@ -1436,7 +1445,8 @@ const antiderivativeProblem = (topicId: TopicId, chosen: AntiderivativeItem): Pr
   problemText: chosen.text,
   answerType: 'expression',
   correctAnswer: chosen.answer,
-  equivalence: 'up-to-constant',
+  equivalence: 'antiderivative',
+  integrand: chosen.integrand,
   displayAnswer: chosen.display,
   explanationPrompt: chosen.explanation,
   hint: chosen.hint,
@@ -1446,6 +1456,7 @@ const generateIntegrationByPartsProblem = (): Problem => {
   const problems: AntiderivativeItem[] = [
     {
       text: '$\\displaystyle\\int x \\cdot e^x\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'x*e^x',
       answer: 'x*e^x-e^x',
       display: '$xe^x - e^x + C$',
       hint: 'Let $u = x$, $dv = e^x\\,dx$. Then $du = dx$, $v = e^x$.',
@@ -1453,6 +1464,7 @@ const generateIntegrationByPartsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int x \\cdot \\cos(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'x*cos(x)',
       answer: 'x*sin(x)+cos(x)',
       display: '$x\\sin(x) + \\cos(x) + C$',
       hint: 'Let $u = x$, $dv = \\cos(x)\\,dx$.',
@@ -1460,6 +1472,7 @@ const generateIntegrationByPartsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int x \\cdot \\sin(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'x*sin(x)',
       answer: '-x*cos(x)+sin(x)',
       display: '$-x\\cos(x) + \\sin(x) + C$',
       hint: 'Let $u = x$, $dv = \\sin(x)\\,dx$.',
@@ -1467,6 +1480,7 @@ const generateIntegrationByPartsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int \\ln(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'log(x)',
       answer: 'x*log(x)-x',
       display: '$x\\ln(x) - x + C$',
       hint: 'Let $u = \\ln(x)$, $dv = dx$.',
@@ -1481,6 +1495,7 @@ const generateTrigIntegralsProblem = (): Problem => {
   const problems: AntiderivativeItem[] = [
     {
       text: '$\\displaystyle\\int \\sin^2(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'sin(x)^2',
       answer: 'x/2-sin(2x)/4',
       display: '$\\frac{x}{2} - \\frac{\\sin(2x)}{4} + C$',
       hint: 'Use the identity $\\sin^2(x) = \\frac{1 - \\cos(2x)}{2}$',
@@ -1488,6 +1503,7 @@ const generateTrigIntegralsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int \\cos^2(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'cos(x)^2',
       answer: 'x/2+sin(2x)/4',
       display: '$\\frac{x}{2} + \\frac{\\sin(2x)}{4} + C$',
       hint: 'Use the identity $\\cos^2(x) = \\frac{1 + \\cos(2x)}{2}$',
@@ -1495,6 +1511,7 @@ const generateTrigIntegralsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int \\sin(x)\\cos(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'sin(x)*cos(x)',
       answer: 'sin(x)^2/2',
       display: '$\\frac{\\sin^2(x)}{2} + C$ (equivalently $-\\frac{\\cos^2(x)}{2} + C$ or $-\\frac{\\cos(2x)}{4} + C$)',
       hint: 'Use $u$-substitution with $u = \\sin(x)$, or the identity $\\sin(2x) = 2\\sin(x)\\cos(x)$',
@@ -1502,6 +1519,7 @@ const generateTrigIntegralsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int \\tan(x)\\,dx$\nWhat is the result? (omit $+C$; use absolute values where needed)',
+      integrand: 'tan(x)',
       answer: '-log(abs(cos(x)))',
       display: '$-\\ln|\\cos(x)| + C = \\ln|\\sec(x)| + C$',
       hint: 'Rewrite $\\tan(x) = \\frac{\\sin(x)}{\\cos(x)}$ and use substitution.',
@@ -1509,6 +1527,7 @@ const generateTrigIntegralsProblem = (): Problem => {
     },
     {
       text: '$\\displaystyle\\int \\sec^2(x)\\tan(x)\\,dx$\nWhat is the result? (omit $+C$)',
+      integrand: 'sec(x)^2*tan(x)',
       answer: 'tan(x)^2/2',
       display: '$\\frac{\\tan^2(x)}{2} + C$ (equivalently $\\frac{\\sec^2(x)}{2} + C$)',
       hint: 'Let $u = \\tan(x)$, then $du = \\sec^2(x)\\,dx$',
@@ -1688,88 +1707,104 @@ const generateSequencesProblem = (): Problem => {
       hint: `Formula: $a_n = a_1 \\cdot r^{n-1}$`,
     };
   } else if (problemType === 'bounded-monotone') {
-    const seqs: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+    const seqs: { text: string; limit: number | null; hint: string; explanation: string; displayAnswer: string }[] = [
       {
-        text: 'The sequence $a_n = \\frac{n}{n+1}$ is increasing and bounded above by $1$.\nBy the Monotone Convergence Theorem, does it converge? If so, to what?',
-        answer: '1',
-        alts: ['converges to 1', 'yes, to 1', 'yes, 1'],
+        text: 'The sequence $a_n = \\frac{n}{n+1}$ is increasing and bounded above by $1$.\nBy the Monotone Convergence Theorem, does it converge? If it converges, give its limit.',
+        limit: 1,
+        displayAnswer: 'Converges, to $1$',
         hint: 'A bounded, monotonically increasing sequence must converge. Find the limit.',
-        explanation: 'lim(n→∞) n/(n+1) = 1. The sequence is increasing and bounded above by 1, so by the MCT it converges to 1.',
+        explanation: '$\\lim_{n\\to\\infty} \\frac{n}{n+1} = 1$. The sequence is increasing and bounded above by $1$, so by the MCT it converges, and its limit is $1$.',
       },
       {
-        text: 'The sequence $a_n = \\frac{1}{n!}$ is decreasing and bounded below by $0$.\nBy the Monotone Convergence Theorem, does it converge? If so, to what?',
-        answer: '0',
-        alts: ['converges to 0', 'yes, to 0', 'yes, 0'],
+        text: 'The sequence $a_n = \\frac{1}{n!}$ is decreasing and bounded below by $0$.\nBy the Monotone Convergence Theorem, does it converge? If it converges, give its limit.',
+        limit: 0,
+        displayAnswer: 'Converges, to $0$',
         hint: 'A bounded, monotonically decreasing sequence must converge.',
-        explanation: 'The sequence is decreasing (n! grows) and bounded below by 0. By MCT it converges. lim 1/n! = 0.',
+        explanation: 'The sequence is decreasing ($n!$ grows) and bounded below by $0$, so by the MCT it converges; $\\lim \\frac{1}{n!} = 0$.',
       },
-      {
-        text: 'Is the sequence $a_n = (-1)^n \\cdot \\frac{1}{n}$ monotonic?',
-        answer: 'no',
-        alts: ['not monotonic', 'no it is not', 'neither'],
+    ];
+
+    // The monotonicity question is a yes/no choice.
+    if (randChoice([true, false, false])) {
+      return {
+        id: crypto.randomUUID(),
+        topicId: 'sequences',
+        problemText: 'Is the sequence $a_n = (-1)^n \\cdot \\frac{1}{n}$ monotonic?',
+        answerType: 'multiple-choice',
+        multipleChoiceOptions: ['yes', 'no'],
+        correctAnswer: 'no',
+        displayAnswer: 'No',
+        explanationPrompt: 'Starting at $n = 1$ the terms are $-1, \\frac{1}{2}, -\\frac{1}{3}, \\frac{1}{4}, \\ldots$ — they alternate in sign, so the sequence is neither increasing nor decreasing and the MCT does not apply directly (it still converges to 0).',
         hint: 'Check: does $a_{n+1} \\geq a_n$ always, or $a_{n+1} \\leq a_n$ always?',
-        explanation: 'Starting at $n = 1$ the terms are $-1, \\frac{1}{2}, -\\frac{1}{3}, \\frac{1}{4}, \\ldots$ — they alternate in sign, so the sequence is neither increasing nor decreasing and the MCT does not apply directly (it still converges to 0).',
-      },
-    ];
+      };
+    }
 
     const chosen = randChoice(seqs);
-
-    return {
-      id: crypto.randomUUID(),
-      topicId: 'sequences',
-      problemText: chosen.text,
-      answerType: 'expression',
-      correctAnswer: chosen.answer,
-      acceptableAnswers: chosen.alts,
-      explanationPrompt: chosen.explanation,
-      hint: chosen.hint,
-    };
+    return convergenceQuestion(chosen.text, chosen.limit, chosen.displayAnswer, chosen.explanation, chosen.hint);
   } else {
-    // Convergence of sequences
-    const seqs: { text: string; answer: string; alts: string[]; hint: string; explanation: string }[] = [
+    // Convergence of sequences. Every item asks the same two-part question, so
+    // the shape of the answer never reveals whether the sequence converges.
+    const seqs: { formula: string; limit: number | null; hint: string; explanation: string }[] = [
       {
-        text: 'Does the sequence $a_n = \\frac{1}{n}$ converge or diverge?\nIf converges, what is the limit?',
-        answer: '0',
-        alts: ['converges to 0'],
+        formula: '\\frac{1}{n}',
+        limit: 0,
         hint: 'As $n \\to \\infty$, what happens to $\\frac{1}{n}$?',
-        explanation: 'lim(n→∞) 1/n = 0, so the sequence converges to 0.',
+        explanation: '$\\lim_{n\\to\\infty} \\frac{1}{n} = 0$, so the sequence converges to $0$.',
       },
       {
-        text: 'Does the sequence $a_n = \\frac{n+1}{n}$ converge or diverge?\nIf converges, what is the limit?',
-        answer: '1',
-        alts: ['converges to 1'],
+        formula: '\\frac{n+1}{n}',
+        limit: 1,
         hint: 'Divide numerator and denominator by $n$.',
-        explanation: 'lim(n→∞) (n+1)/n = lim(n→∞) (1 + 1/n) = 1.',
+        explanation: '$\\lim_{n\\to\\infty} \\frac{n+1}{n} = \\lim_{n\\to\\infty} \\left(1 + \\frac{1}{n}\\right) = 1$.',
       },
       {
-        text: 'Does the sequence $a_n = (-1)^n$ converge or diverge?',
-        answer: 'diverges',
-        alts: ['diverge', 'divergent'],
+        formula: '(-1)^n',
+        limit: null,
         hint: 'The terms alternate between $-1$ and $1$.',
-        explanation: 'The sequence oscillates between -1 and 1, so it diverges.',
+        explanation: 'The terms alternate between $-1$ and $1$ and approach no single value, so the sequence diverges.',
       },
       {
-        text: 'Does the sequence $a_n = n^2$ converge or diverge?',
-        answer: 'diverges',
-        alts: ['diverge', 'divergent', 'infinity'],
+        formula: 'n^2',
+        limit: null,
         hint: 'As $n$ gets larger, does $n^2$ approach a finite value?',
-        explanation: 'lim(n→∞) n² = ∞, so the sequence diverges.',
+        explanation: '$n^2 \\to \\infty$, so the sequence has no finite limit: it diverges.',
       },
     ];
 
     const chosen = randChoice(seqs);
-
-    return {
-      id: crypto.randomUUID(),
-      topicId: 'sequences',
-      problemText: chosen.text,
-      answerType: 'expression',
-      correctAnswer: chosen.answer,
-      acceptableAnswers: chosen.alts,
-      explanationPrompt: chosen.explanation,
-      hint: chosen.hint,
-    };
+    return convergenceQuestion(
+      `Does the sequence $a_n = ${chosen.formula}$ converge or diverge? If it converges, give its limit.`,
+      chosen.limit,
+      chosen.limit === null ? 'Diverges' : `Converges, to $${chosen.limit}$`,
+      chosen.explanation,
+      chosen.hint,
+    );
   }
+};
+
+/**
+ * "Does it converge? If so, to what?" as a two-part answer: a verdict choice
+ * and a limit that is asked for (and graded) only when "converges" is chosen.
+ * `limit: null` means the sequence diverges.
+ */
+const convergenceQuestion = (
+  text: string, limit: number | null, displayAnswer: string, explanation: string, hint: string,
+): Problem => {
+  const parts: AnswerPart[] = [
+    { label: 'Verdict', kind: 'choice', options: ['converges', 'diverges'], answer: limit === null ? 'diverges' : 'converges' },
+    { label: 'Limit', kind: 'number', answer: limit, when: { part: 0, equals: 'converges' } },
+  ];
+  return {
+    id: crypto.randomUUID(),
+    topicId: 'sequences',
+    problemText: text,
+    answerType: 'multipart',
+    parts,
+    correctAnswer: limit === null ? 'diverges' : `converges to ${limit}`,
+    displayAnswer,
+    explanationPrompt: explanation,
+    hint,
+  };
 };
 
 const generateSeriesConvergenceProblem = (): Problem => {
@@ -2328,6 +2363,7 @@ const generateTrigSubstitutionProblem = (): Problem => {
     answerType: 'expression',
     correctAnswer: chosen.answer,
     acceptableAnswers: chosen.alts,
+    parameters: ['theta'],
     displayAnswer: chosen.display,
     explanationPrompt: chosen.explanation,
     hint: chosen.hint,
@@ -2491,27 +2527,37 @@ const numericCandidates = (problem: Problem): number[] => {
 /**
  * Grading contract:
  *  - numeric: exact value (floating-point margin only). Fractions and constant
- *    expressions ("3/5", "sqrt(3)/2", "pi/4") are accepted as input.
+ *    expressions ("3/5", "sqrt(3)/2", "pi/4") are accepted as input, unless
+ *    `requiredForm: 'evaluated'` asks for the arithmetic to be carried out.
  *  - decimal-tolerance: |input - value| <= tolerance, where tolerance is the
  *    explicit `tolerance`, else half a unit in the last place requested by
  *    `roundTo`, else 0.01. correctAnswer / numeric acceptableAnswers are the
  *    reference values.
  *  - fraction: equivalent fraction (any representation), or an integer when the
  *    reduced denominator is 1.
- *  - expression: equivalence decided by the expression grader (see
- *    expressionGrader.ts); `equivalence: 'up-to-constant'` for antiderivatives.
- *    acceptableAnswers are graded with the same engine, not by spelling.
+ *  - expression: same partial function as the reference (services/grading);
+ *    `equivalence: 'antiderivative'` differentiates the submission and compares
+ *    with `integrand`. acceptableAnswers are graded with the same engine.
+ *  - multiple-choice: one of `multipleChoiceOptions` (normalized word match).
+ *  - multipart: every applicable part correct (all-or-nothing); input is one
+ *    string per part.
  */
-export const validateAnswer = (problem: Problem, userAnswer: string): boolean => {
+export const validateAnswer = (problem: Problem, userAnswer: string | string[]): boolean => {
+  if (problem.answerType === 'multipart') {
+    return Array.isArray(userAnswer) && validateParts(problem, userAnswer);
+  }
+  if (Array.isArray(userAnswer)) return false;
+  const form = problem.requiredForm ?? 'any';
+
   switch (problem.answerType) {
     case 'numeric': {
-      const user = parseNumericInput(userAnswer);
+      const user = parseNumericInput(userAnswer, form);
       if (user === null) return false;
       return numericCandidates(problem).some(c => numbersEqual(user, c));
     }
 
     case 'decimal-tolerance': {
-      const user = parseNumericInput(userAnswer);
+      const user = parseNumericInput(userAnswer, form);
       if (user === null) return false;
       const tolerance = problem.tolerance !== undefined
         ? problem.tolerance
@@ -2541,27 +2587,48 @@ export const validateAnswer = (problem: Problem, userAnswer: string): boolean =>
     }
 
     case 'expression': {
-      const mode = problem.equivalence ?? 'exact';
-      if (expressionsEquivalent(userAnswer, String(problem.correctAnswer), mode)) return true;
-      return (problem.acceptableAnswers ?? []).some(alt => expressionsEquivalent(userAnswer, String(alt), mode));
+      if (problem.equivalence === 'antiderivative') {
+        if (!problem.integrand) return false;
+        return isAntiderivative(userAnswer, problem.integrand, { reference: String(problem.correctAnswer) });
+      }
+      const opts = { parameters: problem.parameters };
+      if (expressionsEquivalent(userAnswer, String(problem.correctAnswer), opts)) return true;
+      return (problem.acceptableAnswers ?? []).some(alt => expressionsEquivalent(userAnswer, String(alt), opts));
     }
 
-    case 'multiple-choice':
-      return userAnswer.trim() === problem.correctAnswer;
-
-    case 'coordinate': {
-      // Parse "(x, y)" format
-      const coordMatch = userAnswer.match(/^\(?\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*\)?$/);
-      if (!coordMatch) return false;
-
-      const userX = parseFloat(coordMatch[1]);
-      const userY = parseFloat(coordMatch[2]);
-      const correctCoord = problem.correctAnswer as { x: number; y: number };
-
-      return numbersEqual(userX, correctCoord.x) && numbersEqual(userY, correctCoord.y);
+    case 'multiple-choice': {
+      const chosen = normalizeWord(userAnswer);
+      const options = (problem.multipleChoiceOptions ?? []).map(normalizeWord);
+      return options.includes(chosen) && chosen === normalizeWord(String(problem.correctAnswer));
     }
 
     default:
       return false;
   }
+};
+
+/** Whether part `i` applies, given the reference answers (for grading) or the inputs (for display). */
+export const partIsActive = (parts: AnswerPart[], i: number, values: (string | number | null)[]): boolean => {
+  const cond = parts[i].when;
+  if (!cond) return true;
+  const v = values[cond.part];
+  return v !== null && v !== undefined && normalizeWord(String(v)) === normalizeWord(cond.equals);
+};
+
+const validateParts = (problem: Problem, inputs: string[]): boolean => {
+  const parts = problem.parts ?? [];
+  if (parts.length === 0) return false;
+  const reference = parts.map(p => p.answer);
+  return parts.every((part, i) => {
+    const referenceActive = partIsActive(parts, i, reference);
+    if (!referenceActive) return true;              // not asked of the correct answer
+    if (!partIsActive(parts, i, inputs)) return false; // student's own choices skipped it
+    const input = inputs[i] ?? '';
+    if (part.kind === 'choice') {
+      const chosen = normalizeWord(input);
+      return (part.options ?? []).map(normalizeWord).includes(chosen) && chosen === normalizeWord(String(part.answer));
+    }
+    const value = parseNumericInput(input, problem.requiredForm ?? 'any');
+    return value !== null && typeof part.answer === 'number' && numbersEqual(value, part.answer);
+  });
 };

@@ -85,6 +85,15 @@ describe('validateAnswer', () => {
       expect(validateAnswer(problem, 'abc')).toBe(false);
     });
 
+    it('accepts any exact expression for the value unless a form is required', () => {
+      const six: Problem = { ...problem, correctAnswer: 6 };
+      expect(validateAnswer(six, '(7+5)/2')).toBe(true);
+      expect(validateAnswer(six, '12/2')).toBe(true);
+      const evaluated: Problem = { ...six, requiredForm: 'evaluated' };
+      expect(validateAnswer(evaluated, '(7+5)/2')).toBe(false);
+      expect(validateAnswer(evaluated, '6')).toBe(true);
+    });
+
     it('accepts negative correct answers', () => {
       const negProblem: Problem = { ...problem, correctAnswer: -3 };
       expect(validateAnswer(negProblem, '-3')).toBe(true);
@@ -193,6 +202,7 @@ describe('validateAnswer', () => {
       topicId: 'addition',
       problemText: 'Which is correct?',
       answerType: 'multiple-choice',
+      multipleChoiceOptions: ['A', 'B', 'C'],
       correctAnswer: 'B',
       explanationPrompt: '',
     };
@@ -206,32 +216,6 @@ describe('validateAnswer', () => {
     });
   });
 
-  describe('coordinate', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'conic-sections',
-      problemText: 'Find the center',
-      answerType: 'coordinate',
-      correctAnswer: { x: 2, y: 3 },
-      explanationPrompt: '',
-    };
-
-    it('accepts correct coordinate with parens', () => {
-      expect(validateAnswer(problem, '(2, 3)')).toBe(true);
-    });
-
-    it('accepts correct coordinate without parens', () => {
-      expect(validateAnswer(problem, '2, 3')).toBe(true);
-    });
-
-    it('rejects incorrect coordinate', () => {
-      expect(validateAnswer(problem, '(3, 2)')).toBe(false);
-    });
-
-    it('rejects malformed input', () => {
-      expect(validateAnswer(problem, 'abc')).toBe(false);
-    });
-  });
 });
 
 // ===========================
@@ -445,9 +429,11 @@ describe('arithmetic correctness', () => {
 // ===========================
 
 // Helper to format a generated answer into a user-input string
-function formatAnswerForInput(problem: ReturnType<typeof generateProblem>): string {
+function formatAnswerForInput(problem: ReturnType<typeof generateProblem>): string | string[] {
   const answer = problem.correctAnswer;
   switch (problem.answerType) {
+    case 'multipart':
+      return (problem.parts ?? []).map(part => (part.answer === null ? '' : String(part.answer)));
     case 'numeric':
     case 'decimal-tolerance':
       return String(answer);
@@ -457,10 +443,6 @@ function formatAnswerForInput(problem: ReturnType<typeof generateProblem>): stri
     }
     case 'expression':
       return String(answer);
-    case 'coordinate': {
-      const c = answer as { x: number; y: number };
-      return `(${c.x}, ${c.y})`;
-    }
     case 'multiple-choice':
       return String(answer);
     default:

@@ -81,7 +81,24 @@ export type AnswerType =
   | 'multiple-choice'   // Choose from options
   | 'decimal-tolerance' // Number with tolerance
   | 'coordinate'        // Point (x, y)
-  | 'interval';         // Interval notation
+  | 'interval'          // Interval notation
+  | 'multipart';        // Several typed parts, graded all-or-nothing (see `parts`)
+
+/**
+ * One component of a multipart answer.
+ *  - 'choice': one of `options` (normalized word match), e.g. converges / diverges.
+ *  - 'number': a numeric value (same input rules as a 'numeric' answer).
+ * `answer: null` means the part does not apply to the correct answer (e.g. the
+ * limit of a divergent sequence). `when` makes a part conditional on an
+ * earlier choice: it is shown and graded only when that choice is selected.
+ */
+export interface AnswerPart {
+  label: string;
+  kind: 'choice' | 'number';
+  options?: string[];
+  answer: string | number | null;
+  when?: { part: number; equals: string };
+}
 
 export interface FractionAnswer {
   numerator: number;
@@ -120,11 +137,28 @@ export interface Problem {
   roundTo?: number;
   /**
    * For expression answers: 'exact' (default) requires the submitted
-   * expression to equal the stored one; 'up-to-constant' accepts any
-   * expression differing from the stored one by an additive constant
-   * (indefinite integrals).
+   * expression to be the same partial function as the stored one;
+   * 'antiderivative' requires the submission to be an antiderivative of
+   * `integrand` on the integrand's domain (checked by differentiation, with
+   * correctAnswer as an independent second vote).
    */
-  equivalence?: 'exact' | 'up-to-constant';
+  equivalence?: 'exact' | 'antiderivative';
+  /** For 'antiderivative' answers: the integrand f(x), in parser syntax. */
+  integrand?: string;
+  /**
+   * Declared arbitrary parameters that a student may rename (e.g. ['theta']
+   * in x = 2 sin θ, so x = 2 sin t is the same substitution). Variables not
+   * listed here keep their identity.
+   */
+  parameters?: string[];
+  /**
+   * Required written form of numeric answers. 'evaluated' (arithmetic-fluency
+   * topics) rejects answers that restate the arithmetic, such as 7+5.
+   * Default 'any': any exact expression for the value is accepted.
+   */
+  requiredForm?: 'any' | 'evaluated';
+  /** For 'multipart' answers: the typed components, graded all-or-nothing. */
+  parts?: AnswerPart[];
   /**
    * Human-readable (MathText/LaTeX) rendering of the correct answer for
    * feedback. When absent the UI formats correctAnswer directly.

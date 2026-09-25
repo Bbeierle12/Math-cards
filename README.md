@@ -20,30 +20,54 @@ View your app in AI Studio: https://ai.studio/apps/drive/1jBXtFdC_GnUA1lrbxnWUN2
 
 ## Grading contract
 
-Answer checking lives in `services/mathService.ts` (`validateAnswer`) and
-`services/expressionGrader.ts`. The rules:
+Answer checking lives in `services/mathService.ts` (`validateAnswer`) and the
+grading engine in `services/grading/`. The rules:
 
 - **numeric** answers are exact (floating-point margin only). Students may type
-  decimals, fractions (`3/5`) or exact constants (`sqrt(3)/2`, `pi/4`).
+  decimals, fractions (`3/5`) or any exact expression for the value
+  (`sqrt(3)/2`, `pi/4`, `(7+5)/2`). Arithmetic-fluency topics set
+  `requiredForm: 'evaluated'`: there, `+ − × ^` applied to two plain numbers
+  restates the problem (`7+5` for 7 + 5) and is not an answer.
 - **decimal-tolerance** answers store the *exact* value plus `roundTo`, the
   number of decimal places the problem text asks for. Any input within half a
   unit of that last place is accepted, so the correctly rounded value passes
   and the neighbouring rounded values fail. Problems that say "use π ≈ 3.14"
   accept only the 3.14-based value: the true-π value answers a different
   instruction.
-- **expression** answers are compared by numeric sampling after normalising
-  student notation (`xsin(x)`, `sin²θ`, `ln|cos x|`, `e^x`). Sample points
-  include the critical values 0, ±1, ±2 plus points drawn from a PRNG seeded
-  by the two expressions, so `x/x` is not `1` (undefined at 0) and a
-  polynomial engineered to vanish on a fixed list of points cannot be smuggled
-  in. A submission must be a finite real number wherever the reference is
-  defined; `0/0`, `NaN` and complex-valued forms are always rejected.
-  Equations (`x = 2 sin θ`) match when the two sides' difference is a nonzero
-  constant multiple of the reference's, with any parameter name. Indefinite
-  integrals use `equivalence: 'up-to-constant'`, so any antiderivative passes
-  and the integrand fails.
-- Word answers must be complete: a question that asks for convergence *and*
-  the limit does not accept "yes" or "converges" alone.
+- **expression** answers are normalised from student notation (`xsin(x)`,
+  `sin²θ`, `ln|cos x|`, `e^x`) and compared as the *same partial function*:
+  at every point both sides are undefined, or both are finite reals and equal.
+  So `x/x` is not `1`, and `log(x^2)` is not `2 log x` whichever of the two is
+  the reference. `0/0`, `NaN` and complex-valued forms are always rejected.
+  - When both sides are polynomials (rational coefficients, π allowed), the
+    verdict is **exact**: coefficients are compared in BigInt rational
+    arithmetic, so a polynomial built to vanish on the sample points is
+    rejected by its degree.
+  - Otherwise the sides are sampled at **primary points** that depend only on
+    the problem (the critical values 0, ±½, ±1, ±2 plus points from a PRNG
+    seeded by the reference), so every spelling of an answer is tested at the
+    same points. A short **confirmation stream** keyed by the submission can
+    only reject: a genuine identity holds everywhere, so a correct answer is
+    never affected, but a function built to vanish on the published primary
+    points is caught.
+  - No symbolic `simplify(user − reference) = 0` shortcut: it would identify
+    `x/x` with `1`.
+- **equations** (`x = 2 sin θ`) match when the submission's residual
+  (lhs − rhs) is a nonzero constant multiple of the reference's, with the same
+  zero set and domain (`2x = 4 sin θ` passes; `x² = 4 sin² θ` does not). Only
+  parameters the problem declares (`parameters: ['theta']`) may be renamed:
+  `x = 2 sin t` passes, `y = 2 sin θ` does not.
+- **antiderivatives** (`equivalence: 'antiderivative'`) are graded against the
+  *integrand*: the submission is differentiated and must equal the integrand
+  wherever the integrand is defined, and the submission itself must be defined
+  there. `−ln(cos x)` fails for ∫tan x (undefined where cos x < 0);
+  `x ln|x| − x` passes for ∫ln x (only x > 0 is compared); `+ C` is allowed.
+  The stored antiderivative is an independent second vote.
+- **multipart** answers are graded all-or-nothing. "Does it converge? If so,
+  to what?" is a verdict choice plus a limit that is asked for only when
+  "converges" is chosen; every such question has this shape, so the shape
+  reveals nothing, and a verdict without its limit earns no credit.
+- **multiple-choice** answers are one of the listed options.
 
 `components/formulaSheets.test.tsx` renders every formula sheet and asserts the
 hypotheses and domain conditions each statement needs.

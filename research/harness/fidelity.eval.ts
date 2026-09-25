@@ -77,7 +77,7 @@ const hashStr = (s: string): number => {
 
 // --- probe construction -------------------------------------------------
 interface Probe {
-  input: string;
+  input: string | string[]; // string[] for multipart answers (one entry per part)
   kind: 'accept' | 'reject';
   label: string; // stable identifier for aggregation, e.g. "expr-ascii-ineq"
 }
@@ -192,7 +192,26 @@ function buildProbes(p: Problem): Probe[] {
     case 'multiple-choice': {
       const ans = String(p.correctAnswer);
       probes.push({ input: ans, kind: 'accept', label: 'mc-correct' });
-      probes.push({ input: ans === 'A' ? 'B' : 'A', kind: 'reject', label: 'mc-wrong' });
+      probes.push({ input: ans.toUpperCase(), kind: 'accept', label: 'mc-case-insensitive' });
+      const other = (p.multipleChoiceOptions ?? []).find(o => o !== ans);
+      if (other !== undefined) probes.push({ input: other, kind: 'reject', label: 'mc-wrong' });
+      break;
+    }
+    case 'multipart': {
+      const parts = p.parts ?? [];
+      const correct = parts.map(part => (part.answer === null ? '' : String(part.answer)));
+      probes.push({ input: correct, kind: 'accept', label: 'multi-correct' });
+      // every choice part flipped to a different option
+      probes.push({
+        input: correct.map((v, i) => (parts[i].kind === 'choice' ? (parts[i].options ?? []).find(o => o !== v) ?? v : v)),
+        kind: 'reject', label: 'multi-wrong-choice',
+      });
+      // an applicable numeric part omitted: incomplete answers earn nothing
+      const numericIdx = parts.findIndex(part => part.kind === 'number' && part.answer !== null);
+      if (numericIdx >= 0) {
+        probes.push({ input: correct.map((v, i) => (i === numericIdx ? '' : v)), kind: 'reject', label: 'multi-part-omitted' });
+        probes.push({ input: correct.map((v, i) => (i === numericIdx ? String(Number(v) + 1) : v)), kind: 'reject', label: 'multi-wrong-number' });
+      }
       break;
     }
     default:
@@ -226,7 +245,7 @@ describe('grading fidelity evaluation', () => {
       failByLabel: Record<string, number>;
     }> = {};
     const failures: Array<{
-      topic: string; kind: string; label: string; input: string;
+      topic: string; kind: string; label: string; input: string | string[];
       problemText: string; correctAnswer: unknown;
     }> = [];
     const totals = { accept: { pass: 0, total: 0 }, reject: { pass: 0, total: 0 } };

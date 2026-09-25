@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { derivative, evaluate } from 'mathjs';
 import { generateProblem, validateAnswer, simplifyFraction, resolveRange } from './mathService';
-import { normalizeMathExpr } from './expressionGrader';
+import { normalizeMathExpr } from './grading';
 import { Problem, TopicId, FractionAnswer } from '../types';
 
 const N = 40;
@@ -148,6 +148,10 @@ describe('audit reproductions', () => {
     expect(validateAnswer(p, 'x=2cos(θ)')).toBe(true);
     expect(validateAnswer(p, 'x=2tan(θ)')).toBe(false);
     expect(validateAnswer(p, 'x=3sin(θ)')).toBe(false);
+    // θ is a declared parameter; x is not, so renaming x changes the answer
+    expect(p.parameters).toEqual(['theta']);
+    expect(validateAnswer(p, 'y = 2sin(θ)')).toBe(false);
+    expect(validateAnswer(p, 'y = 2sin(t)')).toBe(false);
   });
 
   it('chain-rule question names the requested form K(ax+b)^(n-1)', () => {
@@ -197,6 +201,21 @@ describe('audit reproductions', () => {
     const m = p.problemText.match(/\$(\d+) \+ (\d+) =/)!;
     expect(validateAnswer(p, `${m[1]}+${m[2]}`)).toBe(false);
     expect(validateAnswer(p, String(Number(m[1]) + Number(m[2])))).toBe(true);
+  });
+
+  it("the 'evaluated' form is a per-problem requirement, set only on arithmetic-fluency topics", () => {
+    const fluency: TopicId[] = ['addition', 'subtraction', 'multiplication', 'division', 'integers', 'order-of-operations', 'decimals'];
+    for (const topic of fluency) {
+      for (const p of sample(topic, 5)) expect(p.requiredForm, topic).toBe('evaluated');
+    }
+    // elsewhere any exact expression for the value is an answer
+    for (const p of sample('limits', 10)) {
+      expect(p.requiredForm).toBeUndefined();
+      const m = must(p.problemText.match(/\\lim_\{x \\to (\d+)\} \\left\[(\d+)x ([+-]) (\d+)\\right\]/), p);
+      expect(validateAnswer(p, `${m[2]}*${m[1]} ${m[3]} ${m[4]}`)).toBe(true);
+    }
+    const [lagrange] = sampleWhere('taylor-maclaurin', q => /Lagrange/.test(q.problemText), 1);
+    expect(validateAnswer(lagrange, 'e^0.5*0.5^4/24')).toBe(true);
   });
 
   it('no-negatives setting applies to operands and answers', () => {
@@ -445,12 +464,27 @@ describe('independent recomputation: algebra 2', () => {
     }
   });
 
-  // A question that asks for convergence AND the limit is not answered by "yes".
-  const expectCompleteAnswer = (p: Problem, limit: string) => {
-    expect(validateAnswer(p, limit)).toBe(true);
-    expect(validateAnswer(p, `converges to ${limit}`)).toBe(true);
+  // "Does it converge? If so, to what?" is a two-part answer: the verdict and,
+  // when it converges, the limit. Omitting either part earns no credit, and
+  // every such question has the same shape, so the shape reveals nothing.
+  const expectConvergence = (p: Problem, limit: number | null) => {
+    expect(p.answerType).toBe('multipart');
+    expect(p.parts?.map(part => part.label)).toEqual(['Verdict', 'Limit']);
+    if (limit === null) {
+      expect(validateAnswer(p, ['diverges', ''])).toBe(true);
+      expect(validateAnswer(p, ['converges', '0'])).toBe(false);
+      expect(validateAnswer(p, ['converges', '1'])).toBe(false);
+    } else {
+      expect(validateAnswer(p, ['converges', String(limit)])).toBe(true);
+      expect(validateAnswer(p, ['converges', ''])).toBe(false);          // limit omitted
+      expect(validateAnswer(p, ['converges', String(limit + 1)])).toBe(false);
+      expect(validateAnswer(p, ['diverges', ''])).toBe(false);
+      expect(validateAnswer(p, ['diverges', String(limit)])).toBe(false);
+    }
+    // single free-text answers are not accepted for a two-part question
     expect(validateAnswer(p, 'yes')).toBe(false);
     expect(validateAnswer(p, 'converges')).toBe(false);
+    expect(validateAnswer(p, String(limit ?? 'diverges'))).toBe(false);
   };
 
   it('sequences-series and sequences (nth terms)', () => {
@@ -461,12 +495,17 @@ describe('independent recomputation: algebra 2', () => {
       else if ((m = t.match(/starts at \$(\d+)\$ with common ratio \$r = (\d+)\$. Find the \$(\d+)\$th term/))) expect(num(p)).toBe(int(m[1]) * int(m[2]) ** (int(m[3]) - 1));
       else if ((m = t.match(/Find the \$(\d+)\$th term of the arithmetic sequence:\n\$a_1 = (\d+)\$, \$d = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) + (int(m[1]) - 1) * int(m[3]));
       else if ((m = t.match(/Find the \$(\d+)\$th term of the geometric sequence:\n\$a_1 = (\d+)\$, \$r = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) * int(m[3]) ** (int(m[1]) - 1));
-      else if (/\\frac\{1\}\{n\}\$ converge/.test(t)) { expect(p.correctAnswer).toBe('0'); expectCompleteAnswer(p, '0'); }
-      else if (/\\frac\{n\+1\}\{n\}\$ converge/.test(t)) { expect(p.correctAnswer).toBe('1'); expectCompleteAnswer(p, '1'); }
-      else if (/\\frac\{n\}\{n\+1\}\$ is increasing/.test(t)) { expect(p.correctAnswer).toBe('1'); expectCompleteAnswer(p, '1'); }
-      else if (/\\frac\{1\}\{n!\}\$ is decreasing/.test(t)) { expect(p.correctAnswer).toBe('0'); expectCompleteAnswer(p, '0'); }
-      else if (/\(-1\)\^n\$ converge/.test(t) || /n\^2\$ converge/.test(t)) expect(p.correctAnswer).toBe('diverges');
-      else if (/monotonic\?/.test(t)) expect(p.correctAnswer).toBe('no');
+      else if (/\\frac\{1\}\{n\}\$ converge/.test(t)) expectConvergence(p, 0);          // 1/n → 0
+      else if (/\\frac\{n\+1\}\{n\}\$ converge/.test(t)) expectConvergence(p, 1);      // 1 + 1/n → 1
+      else if (/\\frac\{n\}\{n\+1\}\$ is increasing/.test(t)) expectConvergence(p, 1); // MCT, n/(n+1) → 1
+      else if (/\\frac\{1\}\{n!\}\$ is decreasing/.test(t)) expectConvergence(p, 0);  // MCT, 1/n! → 0
+      else if (/\(-1\)\^n\$ converge/.test(t) || /n\^2\$ converge/.test(t)) expectConvergence(p, null);
+      else if (/monotonic\?/.test(t)) {
+        // terms −1, 1/2, −1/3, … alternate in sign: not monotonic
+        expect(p.answerType).toBe('multiple-choice');
+        expect(validateAnswer(p, 'no')).toBe(true);
+        expect(validateAnswer(p, 'yes')).toBe(false);
+      }
       else throw new Error(`Unrecognised sequence problem: ${t}`);
     }
   });
@@ -650,7 +689,11 @@ describe('independent recomputation: calculus 2 — antiderivatives differentiat
     for (const p of [...sample('integration-by-parts', 20), ...sample('trig-integrals', 25)]) {
       const entry = INTEGRANDS.find(([re]) => re.test(p.problemText));
       if (!entry) throw new Error(`Unrecognised integral: ${p.problemText}`);
-      expect(p.equivalence).toBe('up-to-constant');
+      expect(p.equivalence).toBe('antiderivative');
+      // the stored integrand (what the grader differentiates against) is the displayed one
+      for (const x of [0.4, 0.9, 1.3, 2.2]) {
+        expect(evaluate(p.integrand!, { x })).toBeCloseTo(evaluate(entry[1], { x }), 10);
+      }
       const d = derivative(String(p.correctAnswer), 'x');
       for (const x of [0.4, 0.9, 1.3, 2.2]) {
         expect(d.evaluate({ x })).toBeCloseTo(evaluate(entry[1], { x }), 8);
@@ -861,7 +904,16 @@ describe('every family rejects a perturbed answer', () => {
   for (const topic of topics) {
     it(topic, () => {
       for (const p of sample(topic, 15)) {
-        if (typeof p.correctAnswer === 'number') {
+        if (p.answerType === 'multipart') {
+          const parts = p.parts!;
+          const correct = parts.map(part => (part.answer === null ? '' : String(part.answer)));
+          expect(validateAnswer(p, correct), p.problemText).toBe(true);
+          const flipped = correct.map((v, i) => (parts[i].kind === 'choice'
+            ? parts[i].options!.find(o => o !== v)!
+            : String(Number(v) + 1)));
+          expect(validateAnswer(p, flipped), `${p.problemText} accepted ${flipped}`).toBe(false);
+          expect(validateAnswer(p, correct.join(' '))).toBe(false);
+        } else if (typeof p.correctAnswer === 'number') {
           expect(validateAnswer(p, String(p.correctAnswer)), p.problemText).toBe(true);
           const alts = new Set([p.correctAnswer, ...((p.acceptableAnswers ?? []).filter((a): a is number => typeof a === 'number'))]);
           const wrong = [p.correctAnswer + 1, p.correctAnswer - 1, p.correctAnswer + 2].find(w => !alts.has(w))!;

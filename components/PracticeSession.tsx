@@ -8,6 +8,7 @@ import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon } from 
 import { useSettings } from '../contexts/SettingsContext';
 import MathText from './MathText';
 import { isTopicMastered } from '../services/mastery';
+import AnswerInput, { emptyValues, toSubmission } from './AnswerInput';
 
 interface PracticeSessionProps {
   topicId: TopicId;
@@ -32,15 +33,11 @@ function formatAnswer(problem: Problem): string {
   return String(answer);
 }
 
-const isNumericInput = (problem: Problem) =>
-  problem.answerType === 'numeric' || problem.answerType === 'decimal-tolerance';
-
 export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
   const { settings } = useSettings();
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
-  const [userAnswer, setUserAnswer] = useState('');
-  const [fractionNumerator, setFractionNumerator] = useState('');
-  const [fractionDenominator, setFractionDenominator] = useState('');
+  // One string per input slot of the current problem (see AnswerInput).
+  const [answerValues, setAnswerValues] = useState<string[]>(['']);
   const [answerStatus, setAnswerStatus] = useState<'idle' | 'correct' | 'incorrect'>('idle');
   const [showHint, setShowHint] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
@@ -100,10 +97,9 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       onComplete();
       return;
     }
-    setCurrentProblem(generateProblem(topicId, settings.numberRange, settings.allowNegatives));
-    setUserAnswer('');
-    setFractionNumerator('');
-    setFractionDenominator('');
+    const next = generateProblem(topicId, settings.numberRange, settings.allowNegatives);
+    setCurrentProblem(next);
+    setAnswerValues(emptyValues(next));
     setAnswerStatus('idle');
     setShowHint(false);
     setSessionCount(prev => prev + 1);
@@ -204,16 +200,10 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     e.preventDefault();
     if (!currentProblem) return;
 
-    let formattedAnswer = '';
-    if (currentProblem.answerType === 'fraction') {
-      if (!fractionNumerator.trim() || !fractionDenominator.trim()) return;
-      formattedAnswer = `${fractionNumerator}/${fractionDenominator}`;
-    } else {
-      if (!userAnswer.trim()) return;
-      formattedAnswer = userAnswer;
-    }
+    const submission = toSubmission(currentProblem, answerValues);
+    if (submission === null) return;
 
-    const isCorrect = validateAnswer(currentProblem, formattedAnswer);
+    const isCorrect = validateAnswer(currentProblem, submission);
     setAnswerStatus(isCorrect ? 'correct' : 'incorrect');
 
     playSoundEffect(isCorrect);
@@ -327,60 +317,21 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       </div>
 
       <form onSubmit={handleCheckAnswer}>
-        {currentProblem.answerType === 'fraction' ? (
-          <div className="flex flex-col items-center gap-2">
-            <input
-              type="number"
-              value={fractionNumerator}
-              onChange={(e) => setFractionNumerator(e.target.value)}
-              disabled={answerStatus !== 'idle'}
-              placeholder="Numerator"
-              autoFocus
-              className={`w-48 text-xl p-3 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
-                ${answerStatus === 'incorrect' ? 'border-red-500' : 'border-slate-600'}
-              `}
-            />
-            <div className="w-48 h-0.5 bg-slate-400"></div>
-            <input
-              type="number"
-              value={fractionDenominator}
-              onChange={(e) => setFractionDenominator(e.target.value)}
-              disabled={answerStatus !== 'idle'}
-              placeholder="Denominator"
-              className={`w-48 text-xl p-3 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
-                ${answerStatus === 'incorrect' ? `border-red-500 ${anim ? 'animate-shake' : ''}` : 'border-slate-600'}
-              `}
-            />
-          </div>
-        ) : (
-          <input
-            // A text input (not type="number") so fractions like "3/5" and exact
-            // forms like "sqrt(3)/2" or "pi/4" can be typed for numeric answers.
-            type="text"
-            inputMode={isNumericInput(currentProblem) ? 'decimal' : 'text'}
-            autoComplete="off"
-            spellCheck={false}
-            value={userAnswer}
-            onChange={(e) => setUserAnswer(e.target.value)}
-            disabled={answerStatus !== 'idle'}
-            placeholder={isNumericInput(currentProblem) ? 'Your answer (e.g. 12, -3, 3/5, 0.75)' : 'Your answer...'}
-            autoFocus
-            className={`w-full text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50
-              ${answerStatus === 'incorrect' ? `border-red-500 ${anim ? 'animate-shake' : ''}` : 'border-slate-600'}
-            `}
-          />
-        )}
+        <AnswerInput
+          problem={currentProblem}
+          values={answerValues}
+          onChange={setAnswerValues}
+          disabled={answerStatus !== 'idle'}
+          status={answerStatus}
+          animate={anim}
+        />
 
         <div className="flex gap-2 mt-4">
           {answerStatus === 'idle' ? (
             <>
               <button
                 type="submit"
-                disabled={
-                  currentProblem.answerType === 'fraction'
-                    ? !fractionNumerator.trim() || !fractionDenominator.trim()
-                    : !userAnswer.trim()
-                }
+                disabled={toSubmission(currentProblem, answerValues) === null}
                 className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 px-4 rounded-lg text-lg transition-transform transform hover:scale-105 disabled:bg-slate-600 disabled:cursor-not-allowed disabled:transform-none"
               >
                 Check Answer
