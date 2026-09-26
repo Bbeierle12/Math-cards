@@ -14,7 +14,8 @@ import { compile, evalReal } from './sampling';
  *    allowed, but +, −, × or ^ applied to two plain numbers restates the
  *    problem ("7+5", "7*5", "3^2") and is not an answer.
  */
-export type NumberForm = 'any' | 'evaluated';
+export type { NumberForm } from '../../types';
+import type { NumberForm } from '../../types';
 
 interface OperatorLike { op: string; fn: string; args: MathNode[] }
 
@@ -69,9 +70,14 @@ export const parseNumericInput = (raw: string, form: NumberForm = 'any'): number
   return c ? evalReal(c, {}) : null;
 };
 
-/** Exact numeric comparison with a floating-point margin only. */
-export const numbersEqual = (a: number, b: number): boolean =>
-  Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+/**
+ * Exact numeric comparison with a floating-point margin only. Infinities are
+ * equal only to themselves (a margin relative to |∞| would admit everything).
+ */
+export const numbersEqual = (a: number, b: number): boolean => {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return a === b;
+  return Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+};
 
 /** Tolerance implied by "round to N decimal places": half a unit in the last place. */
 export const roundingTolerance = (decimalPlaces: number): number =>

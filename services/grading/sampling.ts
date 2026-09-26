@@ -28,24 +28,8 @@ const CONFIRMATION_COUNT = 8;
 export const MIN_VALID_POINTS = 6;
 export const REL_TOL = 1e-8;
 
-export const fnv1a = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-};
-
-export const mulberry32 = (seed: number): (() => number) => {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-};
+export { fnv1a, mulberry32 } from '../random';
+import { fnv1a, mulberry32 } from '../random';
 
 const randomPoints = (seedText: string, count: number, radius: number): number[] => {
   const rng = mulberry32(fnv1a(seedText));
@@ -109,6 +93,12 @@ export interface ComparisonOptions {
   upToConstant?: boolean;
   /** Only compare at points where this predicate expression is defined (declared domain). */
   domainGuard?: Compiled | null;
+  /**
+   * The points are already inside a declared domain: points where the
+   * reference is undefined are skipped, and the submission must be defined
+   * wherever the reference is. (Implied by `domainGuard`.)
+   */
+  onDeclaredDomain?: boolean;
   /** Variables fixed to a value at every point (e.g. the constant of integration C = 0). */
   fixed?: Record<string, number>;
 }
@@ -127,7 +117,7 @@ export const comparePoints = (
     if (opts.domainGuard && evalReal(opts.domainGuard, scope) === null) continue;
     const rv = evalReal(reference, scope);
     const uv = evalReal(user, scope);
-    if (opts.domainGuard) {
+    if (opts.domainGuard || opts.onDeclaredDomain) {
       // On a declared domain the reference must be defined; the submission must be too.
       if (rv === null) continue;
       if (uv === null) return 'unequal';

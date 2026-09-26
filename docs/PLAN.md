@@ -1,6 +1,6 @@
 # Math-Cards: Mathematical Architecture Plan
 
-Status: in progress (Phase 1 done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
+Status: in progress (Phase 1 and Phase 2a done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
 
 This plan turns the comparative design review (WeBWorK, STACK, Numbas, IMathAS, Alcumus,
 ALEKS, IXL, FSRS) into sequenced engineering work. It keeps the constraints already
@@ -116,6 +116,26 @@ interface GeneratedProblem { generatorId: string; version: number; seed: string;
 Exit criteria: every generator emits an `AnswerSpec`; `Math.random` no longer referenced
 in `services/`; a seed printed in a bug report reproduces the exact problem, key, domain
 and sample points.
+
+**Phase 2a done** (spec + adapter, and the seeded registry it needed). Every generator
+emits an `AnswerSpec` (`types.ts`); `grade(spec, input)` is the only interpreter and the
+UI derives its controls from `answer.kind`. As built, the union differs from the sketch
+above: `solutionSet`/`intervalUnion` are `finiteSet`/`interval`; `fraction` (BigInt
+exact, optional `lowestTerms`), `choice` and `anyOf` are kinds of their own; `number`
+has `unit: 'degree'`; `expression` has `assignable` (the implicit "u = …" acceptance is
+gone) and chooses sampling vs exact polynomial comparison itself rather than via an
+`equivalence` field. Generators moved to `services/generators/` (one module per level)
+behind `generateProblem(topicId, settings, seed)`, with provenance on every problem,
+`ctx.require` invariants, derived-seed retry and loud failure; the research harness
+uses seeds instead of patching `Math.random`. Content changes: inequalities have
+interval answers and negative-coefficient templates; polynomial roots ask for all
+roots as a set; "simplify" fractions require lowest terms; convergence verdicts,
+yes/no and word answers are choices; textbook polynomial formatting (no `1x`, `+ -3`,
+`+ 0`); ordinal suffixes. Defects found by the new tests and fixed: `numbersEqual`
+treated ±∞ as equal to every finite number (so `(-∞, 0)` "equalled" `(1, ∞)`), and
+single-backslash `\;` in several prompts rendered as a stray `;`.
+Remaining for 2b: the invariant catalogue, the 2,000-seed sweep, removing the last
+`Math.random` fallback, and the SymPy oracle script.
 
 ---
 

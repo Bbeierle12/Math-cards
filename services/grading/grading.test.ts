@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeMathExpr, expressionsEquivalent, isAntiderivative, parseNumericInput, numbersEqual, roundingTolerance,
   freeVariables, toPolynomial, polynomialsEqual, polynomialDegree, primaryPoints, confirmationPoints,
-  referenceSeedKey, FIXED_SAMPLE_POINTS,
+  referenceSeedKey, FIXED_SAMPLE_POINTS, grade,
 } from './index';
 import * as Q from './rational';
 
@@ -88,10 +88,15 @@ describe('expressionsEquivalent — exact', () => {
     expect(expressionsEquivalent('', 'x')).toBe(false);
   });
 
-  it('handles "u = ..." for a bare stored expression', () => {
-    expect(expressionsEquivalent('u = x^2+5', 'x^2+5')).toBe(true);
-    expect(expressionsEquivalent('u = x^2+6', 'x^2+5')).toBe(false);
-    expect(expressionsEquivalent('x = x^2+5', 'x^2+5')).toBe(false); // lhs collides with the variable
+  it('an assignment "u = ..." is not an expression; only a declared name may be assigned (grade)', () => {
+    expect(expressionsEquivalent('u = x^2+5', 'x^2+5')).toBe(false);
+    const spec = { kind: 'expression' as const, reference: 'x^2+5', assignable: ['u'] };
+    expect(grade(spec, 'u = x^2+5')).toBe(true);
+    expect(grade(spec, 'U = 5 + x^2')).toBe(true);
+    expect(grade(spec, 'u = x^2+6')).toBe(false);
+    expect(grade(spec, 'x = x^2+5')).toBe(false); // lhs collides with the variable
+    expect(grade(spec, 'w = x^2+5')).toBe(false); // undeclared name
+    expect(grade({ kind: 'expression', reference: 'x^2+5' }, 'u = x^2+5')).toBe(false);
   });
 
   it('compares inequalities in either orientation with algebraic sides', () => {

@@ -12,11 +12,12 @@
  * absent: it would identify x/x with 1 and erase domain differences.
  */
 import { derivative, parse, MathNode } from 'mathjs';
+import type { DomainSpec, DomainPolicy, Interval } from '../../types';
 import { normalizeMathExpr, freeVariables, freeVariablesOf, isWordAnswer, renameVariables } from './normalize';
 import { toPolynomial, comparable, polynomialsEqual, polynomialsProportional } from './polynomial';
 import {
   compile, evalReal, comparePoints, proportionalOnPoints, primaryPoints, confirmationPoints,
-  referenceSeedKey, orderVariables, scopeAt, MIN_VALID_POINTS, REL_TOL, Compiled,
+  referenceSeedKey, orderVariables, scopeAt, MIN_VALID_POINTS, REL_TOL, Compiled, PointVerdict,
 } from './sampling';
 
 export interface EquivalenceOptions {
@@ -29,7 +30,68 @@ export interface EquivalenceOptions {
   parameters?: string[];
   /** Problem seed for the primary sample points (default: derived from the reference). */
   seedKey?: string;
+  /** Declared domain (critical points are always sampled). */
+  domain?: DomainSpec;
+  /** Notion of equality; default 'samePartialFunction'. */
+  domainPolicy?: DomainPolicy;
 }
+
+/** Map a base point into an interval (open ends excluded). */
+const intoInterval = (p: number, iv: Interval): number => {
+  const a = Math.abs(p);
+  const loF = Number.isFinite(iv.lo);
+  const hiF = Number.isFinite(iv.hi);
+  if (!loF && !hiF) return p;
+  if (loF && !hiF) return iv.lo + a + (iv.loClosed ? 0 : 1e-3);
+  if (!loF && hiF) return iv.hi - a - (iv.hiClosed ? 0 : 1e-3);
+  let t = (a * 0.6180339887498949) % 1;
+  if (t < 1e-3 || t > 1 - 1e-3) t = 0.5;
+  return iv.lo + (iv.hi - iv.lo) * t;
+};
+
+const inInterval = (x: number, iv: Interval): boolean =>
+  (x > iv.lo || (iv.loClosed && x === iv.lo)) && (x < iv.hi || (iv.hiClosed && x === iv.hi));
+
+/** Sample points honouring a declared domain: critical points first, then base points mapped into each interval. */
+const domainPoints = (base: number[], domain?: DomainSpec): number[] => {
+  const critical = domain?.criticalPoints ?? [];
+  const intervals = domain?.intervals;
+  if (!intervals || intervals.length === 0) return [...critical, ...base];
+  const mapped = intervals.flatMap(iv => [
+    ...(iv.loClosed && Number.isFinite(iv.lo) ? [iv.lo] : []),
+    ...(iv.hiClosed && Number.isFinite(iv.hi) ? [iv.hi] : []),
+    ...base.map(p => intoInterval(p, iv)),
+  ]);
+  return [...critical.filter(c => intervals.some(iv => inInterval(c, iv))), ...mapped];
+};
+
+/**
+ * One-variable comparison with a removable-singularity allowance: where exactly
+ * one side is undefined, the point is skipped provided both sides are defined
+ * and agree on either side of it.
+ */
+const compareIgnoringRemovable = (u: Compiled, r: Compiled, variable: string, pts: number[]): PointVerdict => {
+  const at = (c: Compiled, x: number) => evalReal(c, { [variable]: x });
+  const close = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
+  let valid = 0;
+  for (const x of pts) {
+    const uv = at(u, x);
+    const rv = at(r, x);
+    if (uv === null && rv === null) continue;
+    if (uv === null || rv === null) {
+      const h = 1e-6 * Math.max(1, Math.abs(x));
+      for (const y of [x - h, x + h]) {
+        const a = at(u, y);
+        const b = at(r, y);
+        if (a === null || b === null || !close(a, b, 1e-4)) return 'unequal';
+      }
+      continue;
+    }
+    if (!close(uv, rv, REL_TOL)) return 'unequal';
+    valid++;
+  }
+  return valid >= MIN_VALID_POINTS ? 'equal' : 'insufficient';
+};
 
 const tryParse = (s: string): MathNode | null => {
   try { return parse(s); } catch { return null; }
@@ -64,10 +126,31 @@ export const sameExpression = (user: string, reference: string, opts: Equivalenc
   const cr = compile(reference);
   if (!cu || !cr) return false;
   const vars = orderVariables(freeVariablesOf(rNode), freeVariablesOf(uNode));
-  const primary = comparePoints(cu, cr, vars, primaryPoints(opts.seedKey ?? referenceSeedKey(reference)));
+  const policy = opts.domainPolicy ?? 'samePartialFunction';
+  const base = primaryPoints(opts.seedKey ?? referenceSeedKey(reference));
+  const confirm = confirmationPoints(u);
+
+  if (policy === 'ignoreRemovableSingularities') {
+    if (vars.length !== 1) return false; // removable singularities are a one-variable notion here
+    const pts = domainPoints(base, opts.domain);
+    return compareIgnoringRemovable(cu, cr, vars[0], pts) === 'equal'
+      && compareIgnoringRemovable(cu, cr, vars[0], domainPoints(confirm, opts.domain)) !== 'unequal';
+  }
+
+  if (policy === 'onDeclaredDomain') {
+    const intervals = opts.domain?.intervals;
+    if (!intervals || intervals.length === 0 || vars.length !== 1) return false;
+    // Points outside the declared domain are never compared.
+    const check = (pts: number[]) => comparePoints(cu, cr, vars, pts.filter(x => intervals.some(iv => inInterval(x, iv))),
+      { onDeclaredDomain: true });
+    return check(domainPoints(base, opts.domain)) === 'equal'
+      && check(domainPoints(confirm, opts.domain)) !== 'unequal';
+  }
+
+  const primary = comparePoints(cu, cr, vars, domainPoints(base, opts.domain));
   if (primary !== 'equal') return false;
   if (vars.length === 0) return true;
-  return comparePoints(cu, cr, vars, confirmationPoints(u)) !== 'unequal';
+  return comparePoints(cu, cr, vars, confirm) !== 'unequal';
 };
 
 /** Residuals describe the same equation (nonzero scalar multiple, same zero set and domain). */
@@ -108,8 +191,7 @@ const parseEquation = (s: string): { lhs: string; rhs: string } | null => {
 /**
  * Decide whether a submitted answer is equivalent to a stored one.
  * Handles words, inequalities (either orientation), equations (up to a
- * nonzero factor, declared parameters renameable), "u = expr" for a bare
- * stored expression, and plain expressions.
+ * nonzero factor, declared parameters renameable) and plain expressions.
  */
 export const expressionsEquivalent = (userRaw: string, referenceRaw: string, opts: EquivalenceOptions = {}): boolean => {
   const user = normalizeMathExpr(userRaw);
@@ -133,13 +215,7 @@ export const expressionsEquivalent = (userRaw: string, referenceRaw: string, opt
     if (!uEq) return false;
     return sameEquation(`(${uEq.lhs})-(${uEq.rhs})`, `(${rEq.lhs})-(${rEq.rhs})`, opts);
   }
-  if (uEq) {
-    // "u = x^2 + 5" for a stored "x^2+5": the left side must be a fresh single symbol
-    let referenceVars: string[];
-    try { referenceVars = freeVariables(reference); } catch { return false; }
-    if (!/^[a-z]$/.test(uEq.lhs) || referenceVars.includes(uEq.lhs)) return false;
-    return sameExpression(uEq.rhs, reference, opts);
-  }
+  if (uEq) return false; // an equation is not an expression (see `assignable` in the answer spec)
 
   return sameExpression(user, reference, opts);
 };

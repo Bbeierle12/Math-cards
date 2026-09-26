@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { TopicId, Problem, UserProgress, FractionAnswer, CoordinateAnswer } from '../types';
-import { generateProblem, validateAnswer } from '../services/mathService';
+import { TopicId, Problem, UserProgress } from '../types';
+import { answerDisplay, generateProblem, validateAnswer } from '../services/mathService';
 import { CURRICULUM } from '../constants';
 import ProgressBar from './ProgressBar';
 import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon } from './Icons';
@@ -15,22 +15,6 @@ interface PracticeSessionProps {
   onComplete: () => void;
   userProgress: UserProgress;
   setUserProgress: (value: UserProgress | ((prev: UserProgress) => UserProgress)) => void;
-}
-
-// Feedback text for the correct answer. Prefers the problem's own display form;
-// otherwise formats the stored value at the precision the problem asked for.
-function formatAnswer(problem: Problem): string {
-  if (problem.displayAnswer) return problem.displayAnswer;
-  const answer = problem.correctAnswer;
-  if (typeof answer === 'number') {
-    if (problem.roundTo !== undefined) return answer.toFixed(problem.roundTo);
-    return Number.isInteger(answer) ? String(answer) : String(Number(answer.toPrecision(10)));
-  }
-  if (typeof answer === 'string') return answer;
-  if (Array.isArray(answer)) return answer.map((v, i) => `x${i + 1}=${v}`).join(', ');
-  if ('numerator' in answer && 'denominator' in answer) return `${(answer as FractionAnswer).numerator}/${(answer as FractionAnswer).denominator}`;
-  if ('x' in answer && 'y' in answer) return `(${(answer as CoordinateAnswer).x}, ${(answer as CoordinateAnswer).y})`;
-  return String(answer);
 }
 
 export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
@@ -97,7 +81,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       onComplete();
       return;
     }
-    const next = generateProblem(topicId, settings.numberRange, settings.allowNegatives);
+    const next = generateProblem(topicId, { numberRange: settings.numberRange, allowNegatives: settings.allowNegatives });
     setCurrentProblem(next);
     setAnswerValues(emptyValues(next));
     setAnswerStatus('idle');
@@ -375,10 +359,10 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
             {answerStatus === 'correct' ? 'Correct!' : timerRemaining === 0 && settings.timerEnabled ? "Time's up!" : 'Not quite.'}
           </p>
           {answerStatus === 'incorrect' && (
-            <p>The correct answer is: <span className="font-bold"><MathText text={formatAnswer(currentProblem)} /></span></p>
+            <p>The correct answer is: <span className="font-bold"><MathText text={answerDisplay(currentProblem)} /></span></p>
           )}
-          {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && currentProblem.explanationPrompt && (
-            <p className="mt-2 text-sm text-slate-300"><MathText text={currentProblem.explanationPrompt} /></p>
+          {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && currentProblem.explanation && (
+            <p className="mt-2 text-sm text-slate-300"><MathText text={currentProblem.explanation} /></p>
           )}
           {answerStatus === 'correct' && settings.autoAdvanceOnCorrect && (
             <p className="mt-1 text-sm text-green-400/60">Next question in a moment...</p>

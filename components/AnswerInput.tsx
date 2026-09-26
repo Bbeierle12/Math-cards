@@ -1,12 +1,12 @@
 import React from 'react';
-import { Problem } from '../types';
+import { AnswerSpec, Problem } from '../types';
 import { partIsActive } from '../services/mathService';
 
 /**
- * Answer controls for every answer kind. The parent keeps one string per
- * input slot in `values`:
+ * Answer controls, derived from the problem's answer contract. The parent
+ * keeps one string per input slot in `values`:
  *  - fraction: [numerator, denominator]
- *  - multiple-choice: [selected option]
+ *  - choice: [selected option]
  *  - multipart: one entry per part
  *  - everything else: [text]
  */
@@ -19,10 +19,13 @@ interface AnswerInputProps {
   animate: boolean;
 }
 
-export const slotCount = (problem: Problem): number =>
-  problem.answerType === 'fraction' ? 2
-    : problem.answerType === 'multipart' ? (problem.parts?.length ?? 0)
-      : 1;
+/** The spec that decides the controls: anyOf options share one kind, so the first one stands for all. */
+const controlSpec = (spec: AnswerSpec): AnswerSpec => (spec.kind === 'anyOf' ? controlSpec(spec.options[0]) : spec);
+
+export const slotCount = (problem: Problem): number => {
+  const spec = controlSpec(problem.answer);
+  return spec.kind === 'fraction' ? 2 : spec.kind === 'multipart' ? spec.parts.length : 1;
+};
 
 export const emptyValues = (problem: Problem): string[] => Array(slotCount(problem)).fill('');
 
@@ -32,11 +35,12 @@ export const emptyValues = (problem: Problem): string[] => Array(slotCount(probl
  */
 export const toSubmission = (problem: Problem, values: string[]): string | string[] | null => {
   const filled = (v: string | undefined) => !!v && v.trim().length > 0;
-  switch (problem.answerType) {
+  const spec = controlSpec(problem.answer);
+  switch (spec.kind) {
     case 'fraction':
       return filled(values[0]) && filled(values[1]) ? `${values[0].trim()}/${values[1].trim()}` : null;
     case 'multipart': {
-      const parts = problem.parts ?? [];
+      const { parts } = spec;
       const complete = parts.every((_, i) => !partIsActive(parts, i, values) || filled(values[i]));
       if (!complete) return null;
       return parts.map((_, i) => (partIsActive(parts, i, values) ? values[i].trim() : ''));
@@ -46,8 +50,25 @@ export const toSubmission = (problem: Problem, values: string[]): string | strin
   }
 };
 
-const isNumericInput = (problem: Problem) =>
-  problem.answerType === 'numeric' || problem.answerType === 'decimal-tolerance';
+/**
+ * Keyboard and placeholder for a typed answer. A part with no reference
+ * answer (`spec: null`, e.g. the limit of a divergent sequence) gets the same
+ * control as its numeric counterpart, so the input's shape never reveals the
+ * answer.
+ */
+const typedInput = (spec: AnswerSpec | null): { inputMode: 'decimal' | 'text'; placeholder: string } => {
+  const s = spec === null ? null : controlSpec(spec);
+  if (s === null || s.kind === 'number') {
+    return s?.kind === 'number' && s.unit === 'degree'
+      ? { inputMode: 'decimal', placeholder: 'Angle in degrees (e.g. 45)' }
+      : { inputMode: 'decimal', placeholder: 'Your answer (e.g. 12, -3, 3/5, 0.75)' };
+  }
+  switch (s.kind) {
+    case 'interval': return { inputMode: 'text', placeholder: 'e.g. x < 3, or (-inf, 3]' };
+    case 'finiteSet': return { inputMode: 'text', placeholder: 'e.g. 2, -3' };
+    default: return { inputMode: 'text', placeholder: 'Your answer...' };
+  }
+};
 
 const textInputClass = (status: AnswerInputProps['status'], animate: boolean, width = 'w-full') =>
   `${width} text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50 ${
@@ -87,8 +108,9 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
     next[i] = v;
     onChange(next);
   };
+  const spec = controlSpec(problem.answer);
 
-  if (problem.answerType === 'fraction') {
+  if (spec.kind === 'fraction') {
     return (
       <div className="flex flex-col items-center gap-2">
         <input
@@ -106,34 +128,36 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
     );
   }
 
-  if (problem.answerType === 'multiple-choice') {
+  if (spec.kind === 'choice') {
     return (
       <ChoiceButtons
-        options={problem.multipleChoiceOptions ?? []} value={values[0] ?? ''}
+        options={spec.options} value={values[0] ?? ''}
         onSelect={v => set(0, v)} disabled={disabled} label="Answer"
       />
     );
   }
 
-  if (problem.answerType === 'multipart') {
-    const parts = problem.parts ?? [];
+  if (spec.kind === 'multipart') {
+    const { parts } = spec;
     return (
       <div className="flex flex-col gap-4">
         {parts.map((part, i) => {
           if (!partIsActive(parts, i, values)) return null;
+          const partSpec = part.spec === null ? null : controlSpec(part.spec);
+          const typed = typedInput(partSpec);
           return (
             <div key={i} className="flex flex-col items-center gap-2">
               <span className="text-sm font-medium text-slate-300">{part.label}</span>
-              {part.kind === 'choice' ? (
+              {partSpec?.kind === 'choice' ? (
                 <ChoiceButtons
-                  options={part.options ?? []} value={values[i] ?? ''}
+                  options={partSpec.options} value={values[i] ?? ''}
                   onSelect={v => set(i, v)} disabled={disabled} label={part.label}
                 />
               ) : (
                 <input
-                  type="text" inputMode="decimal" autoComplete="off" spellCheck={false} aria-label={part.label}
+                  type="text" inputMode={typed.inputMode} autoComplete="off" spellCheck={false} aria-label={part.label}
                   value={values[i] ?? ''} onChange={e => set(i, e.target.value)} disabled={disabled}
-                  placeholder="e.g. 0, 1, 3/2" className={textInputClass(status, animate, 'w-64')}
+                  placeholder={typed.placeholder} className={textInputClass(status, animate, 'w-64')}
                 />
               )}
             </div>
@@ -143,19 +167,20 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
     );
   }
 
+  const typed = typedInput(spec);
   return (
     <input
       // A text input (not type="number") so fractions like "3/5" and exact
       // forms like "sqrt(3)/2" or "pi/4" can be typed for numeric answers.
       type="text"
-      inputMode={isNumericInput(problem) ? 'decimal' : 'text'}
+      inputMode={typed.inputMode}
       autoComplete="off"
       spellCheck={false}
       aria-label="Answer"
       value={values[0] ?? ''}
       onChange={e => set(0, e.target.value)}
       disabled={disabled}
-      placeholder={isNumericInput(problem) ? 'Your answer (e.g. 12, -3, 3/5, 0.75)' : 'Your answer...'}
+      placeholder={typed.placeholder}
       autoFocus
       className={textInputClass(status, animate)}
     />
