@@ -1,6 +1,6 @@
 /** Pre-calculus. */
 import type { GeneratorDef } from './context';
-import { exact, latexLinearFactor, latexNum, latexPolynomial } from './context';
+import { exact, latexFraction, latexLinearFactor, latexNum, latexPolynomial, simplifyFraction } from './context';
 
 export const functions: GeneratorDef = {
   topicId: 'functions',
@@ -45,18 +45,47 @@ export const polynomialFunctions: GeneratorDef = {
 
 export const rationalFunctions: GeneratorDef = {
   topicId: 'rational-functions',
-  version: 2,
-  templates: ['reciprocal-linear'],
+  version: 3,
+  templates: ['reciprocal-linear', 'vertical-asymptote', 'horizontal-asymptote'],
   generate: (ctx) => {
-    const a = ctx.int(-8, 8);
-    const denominator = latexPolynomial([[1, 'x'], [-a, '']]);
+    const template = ctx.pick(['reciprocal-linear', 'vertical-asymptote', 'horizontal-asymptote'] as const);
+    if (template === 'reciprocal-linear') {
+      const a = ctx.int(-8, 8);
+      const denominator = latexPolynomial([[1, 'x'], [-a, '']]);
+      return {
+        templateId: template,
+        problemText: `Find the vertical asymptote of $f(x) = \\frac{1}{${denominator}}$. Enter the value of $x$.`,
+        answer: exact(a),
+        displayAnswer: `$x = ${a}$`,
+        explanation: `The numerator is never zero, so the vertical asymptote is where the denominator vanishes: $${denominator} = 0 \\Rightarrow x = ${a}$.`,
+        hint: 'Set the denominator equal to zero.',
+      };
+    }
+    // f(x) = (ax + b)/(cx + d) with ad − bc ≠ 0 (otherwise it is constant apart from a hole)
+    const [a, b, c, d] = [ctx.int(1, 6), ctx.int(-6, 6), ctx.int(1, 4), ctx.int(-8, 8)];
+    ctx.require(a * d - b * c !== 0, 'nonDegenerate');
+    const f = `\\frac{${latexPolynomial([[a, 'x'], [b, '']])}}{${latexPolynomial([[c, 'x'], [d, '']])}}`;
+    if (template === 'vertical-asymptote') {
+      const x = simplifyFraction(-d, c);
+      const xTex = latexFraction(x.numerator, x.denominator);
+      return {
+        templateId: template,
+        problemText: `Find the vertical asymptote of $f(x) = ${f}$. Enter the value of $x$.`,
+        answer: exact(-d / c),
+        displayAnswer: `$x = ${xTex}$`,
+        explanation: `The denominator vanishes at $x = ${xTex}$, and the numerator does not (since $${a}\\cdot${d < 0 ? `(${d})` : d} - ${b < 0 ? `(${b})` : b}\\cdot${c} \\neq 0$, the factor does not cancel), so $x = ${xTex}$ is a vertical asymptote.`,
+        hint: 'Set the denominator equal to zero, and check that the numerator is not zero there.',
+      };
+    }
+    const y = simplifyFraction(a, c);
+    const yTex = latexFraction(y.numerator, y.denominator);
     return {
-      templateId: 'reciprocal-linear',
-      problemText: `Find the vertical asymptote of $f(x) = \\frac{1}{${denominator}}$. Enter the value of $x$.`,
-      answer: exact(a),
-      displayAnswer: `$x = ${a}$`,
-      explanation: `The numerator is never zero, so the vertical asymptote is where the denominator vanishes: $${denominator} = 0 \\Rightarrow x = ${a}$.`,
-      hint: 'Set the denominator equal to zero.',
+      templateId: template,
+      problemText: `Find the horizontal asymptote of $f(x) = ${f}$. Enter the value of $y$.`,
+      answer: exact(a / c),
+      displayAnswer: `$y = ${yTex}$`,
+      explanation: `Numerator and denominator have the same degree, so as $x \\to \\pm\\infty$, $f(x) \\to \\frac{${a}}{${c}}${yTex === `\\frac{${a}}{${c}}` ? '' : ` = ${yTex}`}$, the ratio of the leading coefficients.`,
+      hint: 'Compare the degrees of the numerator and denominator, then take the ratio of the leading coefficients.',
     };
   },
 };

@@ -19,9 +19,12 @@ import { INVARIANTS } from './context';
 import { checkDraft } from './checks';
 import katex from 'katex';
 import { canonicalInput, displayOf, grade, wrongInputs } from '../grading';
+import { instanceKey } from '../learning';
 import type { GeneratorSettings, Problem } from '../../types';
 
 const SEEDS = Number(process.env.SWEEP_SEEDS || 150);
+/** 1.5 × the default evidence threshold (10). */
+const MIN_DISTINCT = 15;
 
 /** Every $…$ / $$…$$ segment of a text, split the way components/MathText.tsx splits it. */
 const mathSegments = (text: string): string[] =>
@@ -55,10 +58,13 @@ describe(`seed sweep (${SEEDS} seeds per generator)`, () => {
       const { unique, templates } = sweep(topic);
       const declared = GENERATORS.get(topic)!.templates;
       for (const t of templates) expect(declared, `${topic} emitted undeclared template ${t}`).toContain(t);
-      // at full sweep size every declared template must actually occur
+      // at full sweep size every declared template must actually occur, and
+      // there are enough distinct problems that proficiency at the default
+      // threshold never has to rest on repeating one (exact repeats count ¼)
       if (SEEDS >= 1000) {
+        const distinct = new Set(unique.map(instanceKey)).size;
+        expect(distinct, `${topic}: only ${distinct} distinct problems`).toBeGreaterThanOrEqual(MIN_DISTINCT);
         for (const t of declared) {
-          if (topic === 'division' && t === 'zero-dividend') continue; // reachable only with a range of {0}
           expect([...templates], `${topic}: template ${t} never generated in ${SEEDS} seeds`).toContain(t);
         }
       }

@@ -9,7 +9,9 @@
 import type { AnswerSpec, NumericTolerance, AnswerPartSpec } from '../../types';
 import { expressionsEquivalent, isAntiderivative } from './equivalence';
 import { parseNumericInput, numbersEqual } from './numeric';
-import { normalizeWord } from './normalize';
+import { parse } from 'mathjs';
+import type { MathNode } from 'mathjs';
+import { normalizeMathExpr, normalizeWord } from './normalize';
 import { parseIntervalSet, intervalSetsEqual, parseFiniteSet, finiteSetsEqual } from './sets';
 
 export type AnswerInput = string | string[];
@@ -34,6 +36,24 @@ export const toleranceFor = (tol: NumericTolerance, value: number): number => {
     case 'absolute': return tol.tol;
     case 'relative': return tol.tol * Math.abs(value);
   }
+};
+
+/** Whether an expression uses a forbidden function, or applies a function to a compound argument. */
+const violatesForm = (input: string, forbid: { functions?: string[]; simpleArguments?: boolean }): boolean => {
+  let node: MathNode;
+  try {
+    node = parse(normalizeMathExpr(input));
+  } catch {
+    return false; // unparseable: the equivalence check rejects it
+  }
+  let bad = false;
+  node.traverse((n) => {
+    if (bad || n.type !== 'FunctionNode') return;
+    const f = n as unknown as { fn: { name: string }; args: MathNode[] };
+    if (forbid.functions?.includes(f.fn.name)) bad = true;
+    else if (forbid.simpleArguments && f.args.some(a => a.type !== 'SymbolNode')) bad = true;
+  });
+  return bad;
 };
 
 /** "∞", "inf", "infinity", "+∞" → Infinity; "-∞" … → -Infinity; anything else → null. */
@@ -107,6 +127,7 @@ export const grade = (spec: AnswerSpec, input: AnswerInput, ctx: GradeContext = 
     case 'fraction':
       return gradeFraction(spec, input);
     case 'expression': {
+      if (spec.forbid && violatesForm(input.replace(/^\s*[a-zA-Z]\s*=/, ''), spec.forbid)) return false;
       const opts = {
         parameters: spec.parameters, seedKey: ctx.seedKey, domain: spec.domain, domainPolicy: spec.domainPolicy,
       };

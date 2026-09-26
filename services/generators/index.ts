@@ -35,7 +35,9 @@ const MODULES = [arithmetic, prealgebra, algebra1, geometry, algebra2, trigonome
 const buildRegistry = (): Map<TopicId, GeneratorDef> => {
   const registry = new Map<TopicId, GeneratorDef>();
   for (const mod of MODULES) {
-    for (const def of Object.values(mod) as GeneratorDef[]) {
+    const defs = Object.values(mod).filter((v): v is GeneratorDef =>
+      typeof v === 'object' && v !== null && 'topicId' in v && typeof (v as GeneratorDef).generate === 'function');
+    for (const def of defs) {
       if (registry.has(def.topicId)) throw new Error(`two generators for topic ${def.topicId}`);
       registry.set(def.topicId, def);
     }

@@ -126,13 +126,13 @@ const ASK_RESULT = '\nWhat is the result? (omit $+C$)';
 
 export const integrationByParts: GeneratorDef = {
   topicId: 'integration-by-parts',
-  version: 3,
+  version: 4,
   templates: IBP_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(IBP_TEMPLATES);
     if (template === 'x-exp') {
       // ∫ x e^{ax} dx = (x/a − 1/a²) e^{ax}
-      const a = ctx.pick([-3, -2, -1, 1, 2, 3, 4]);
+      const a = ctx.pick([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]);
       const e = `e^{${linearArg(a)}}`;
       const v = `${coefTex(1, a)}${e}`;
       return {
@@ -145,7 +145,7 @@ export const integrationByParts: GeneratorDef = {
       };
     }
     if (template === 'x-trig') {
-      const b = ctx.int(1, 4);
+      const b = ctx.int(1, 6);
       const arg = linearArg(b);
       if (ctx.bool()) {
         // ∫ x sin(bx) dx = −(x/b) cos(bx) + sin(bx)/b²
@@ -170,7 +170,7 @@ export const integrationByParts: GeneratorDef = {
     }
     if (template === 'xn-ln') {
       // ∫ xⁿ ln x dx = x^{n+1} ln x/(n+1) − x^{n+1}/(n+1)²   (x > 0)
-      const n = ctx.int(0, 3);
+      const n = ctx.int(0, 4);
       const m = n + 1;
       const xn = n === 0 ? '' : latexPower('x', n);
       const integrand = n === 0 ? 'log(x)' : n === 1 ? 'x*log(x)' : `x^${n}*log(x)`;
@@ -186,7 +186,7 @@ export const integrationByParts: GeneratorDef = {
       };
     }
     // ∫ x² e^{ax} dx = e^{ax}(x²/a − 2x/a² + 2/a³): by parts twice
-    const a = ctx.pick([-1, 1, 2]);
+    const a = ctx.pick([-2, -1, 1, 2]);
     const e = `e^{${linearArg(a)}}`;
     const poly = latexRationalSum([[1, a, 'x^{2}'], [-2, a * a, 'x'], [2, a * a * a, '']]);
     const once = latexRationalSum([[1, a, 'x'], [-1, a * a, '']]);
@@ -209,12 +209,12 @@ const TRIG_TEMPLATES = ['power-reduction', 'odd-power', 'tan-cot', 'sec2-tan'] a
 
 export const trigIntegrals: GeneratorDef = {
   topicId: 'trig-integrals',
-  version: 3,
+  version: 4,
   templates: TRIG_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(TRIG_TEMPLATES);
     if (template === 'power-reduction') {
-      const b = ctx.int(1, 3);
+      const b = ctx.int(1, 4);
       const arg = linearArg(b);
       const arg2 = linearArg(2 * b);
       const fn = ctx.bool() ? 'sin' : 'cos';
@@ -231,31 +231,35 @@ export const trigIntegrals: GeneratorDef = {
     if (template === 'odd-power') {
       const n = ctx.int(1, 4);
       const m = n + 1;
+      const b = ctx.int(1, 2);
+      const arg = linearArg(b);
+      const k = b === 1 ? '' : `\\frac{1}{${b}}`;
+      const over = b * m;
       if (ctx.bool()) {
-        // ∫ sinⁿx cos x dx = sin^{n+1}x/(n+1)
-        const power = n === 1 ? '\\sin(x)' : `\\sin^{${n}}(x)`;
+        // ∫ sinⁿ(bx) cos(bx) dx = sin^{n+1}(bx)/(b(n+1))
+        const power = n === 1 ? `\\sin(${arg})` : `\\sin^{${n}}(${arg})`;
         return {
           templateId: template,
-          problemText: `$\\displaystyle\\int ${power}\\cos(x)\\,dx$${ASK_RESULT}`,
-          answer: antiderivative(`sin(x)^${n}*cos(x)`, `sin(x)^${m}/${m}`),
-          displayAnswer: `$\\frac{\\sin^{${m}}(x)}{${m}} + C$`,
-          explanation: `Let $u = \\sin(x)$, $du = \\cos(x)\\,dx$: $\\int u^{${n}}\\,du = \\frac{u^{${m}}}{${m}} = \\frac{\\sin^{${m}}(x)}{${m}} + C$.`,
-          hint: 'The $\\cos(x)\\,dx$ is the derivative of $\\sin(x)$: substitute $u = \\sin(x)$.',
+          problemText: `$\\displaystyle\\int ${power}\\cos(${arg})\\,dx$${ASK_RESULT}`,
+          answer: antiderivative(`sin(${b}*x)^${n}*cos(${b}*x)`, `sin(${b}*x)^${m}/${over}`),
+          displayAnswer: `$\\frac{\\sin^{${m}}(${arg})}{${over}} + C$`,
+          explanation: `Let $u = \\sin(${arg})$, $du = ${b === 1 ? '' : b}\\cos(${arg})\\,dx$: $${k}\\int u^{${n}}\\,du = \\frac{u^{${m}}}{${over}} = \\frac{\\sin^{${m}}(${arg})}{${over}} + C$.`,
+          hint: `The $\\cos(${arg})\\,dx$ is (a multiple of) the derivative of $\\sin(${arg})$: substitute $u = \\sin(${arg})$.`,
         };
       }
-      // ∫ cosⁿx sin x dx = −cos^{n+1}x/(n+1)
-      const power = n === 1 ? '\\cos(x)' : `\\cos^{${n}}(x)`;
+      // ∫ cosⁿ(bx) sin(bx) dx = −cos^{n+1}(bx)/(b(n+1))
+      const power = n === 1 ? `\\cos(${arg})` : `\\cos^{${n}}(${arg})`;
       return {
         templateId: template,
-        problemText: `$\\displaystyle\\int ${power}\\sin(x)\\,dx$${ASK_RESULT}`,
-        answer: antiderivative(`cos(x)^${n}*sin(x)`, `-cos(x)^${m}/${m}`),
-        displayAnswer: `$-\\frac{\\cos^{${m}}(x)}{${m}} + C$`,
-        explanation: `Let $u = \\cos(x)$, $du = -\\sin(x)\\,dx$: $-\\int u^{${n}}\\,du = -\\frac{u^{${m}}}{${m}} = -\\frac{\\cos^{${m}}(x)}{${m}} + C$.`,
-        hint: 'The $\\sin(x)\\,dx$ is (minus) the derivative of $\\cos(x)$: substitute $u = \\cos(x)$.',
+        problemText: `$\\displaystyle\\int ${power}\\sin(${arg})\\,dx$${ASK_RESULT}`,
+        answer: antiderivative(`cos(${b}*x)^${n}*sin(${b}*x)`, `-cos(${b}*x)^${m}/${over}`),
+        displayAnswer: `$-\\frac{\\cos^{${m}}(${arg})}{${over}} + C$`,
+        explanation: `Let $u = \\cos(${arg})$, $du = -${b === 1 ? '' : b}\\sin(${arg})\\,dx$: $-${k}\\int u^{${n}}\\,du = -\\frac{u^{${m}}}{${over}} = -\\frac{\\cos^{${m}}(${arg})}{${over}} + C$.`,
+        hint: `The $\\sin(${arg})\\,dx$ is (minus a multiple of) the derivative of $\\cos(${arg})$: substitute $u = \\cos(${arg})$.`,
       };
     }
     if (template === 'tan-cot') {
-      const b = ctx.int(1, 3);
+      const b = ctx.int(1, 4);
       const arg = linearArg(b);
       const ask = '\nWhat is the result? (omit $+C$; use absolute values where needed)';
       const k = b === 1 ? '' : `\\frac{1}{${b}}`;
@@ -280,17 +284,20 @@ export const trigIntegrals: GeneratorDef = {
         hint: `Rewrite $\\cot = \\frac{\\cos}{\\sin}$ and substitute $u = \\sin(${arg})$.`,
       };
     }
-    // ∫ sec²x tanⁿx dx = tan^{n+1}x/(n+1)
+    // ∫ sec²(bx) tanⁿ(bx) dx = tan^{n+1}(bx)/(b(n+1))
     const n = ctx.int(1, 3);
     const m = n + 1;
-    const power = n === 1 ? '\\tan(x)' : `\\tan^{${n}}(x)`;
+    const b = ctx.int(1, 2);
+    const arg = linearArg(b);
+    const over = b * m;
+    const power = n === 1 ? `\\tan(${arg})` : `\\tan^{${n}}(${arg})`;
     return {
       templateId: template,
-      problemText: `$\\displaystyle\\int \\sec^2(x)${power}\\,dx$${ASK_RESULT}`,
-      answer: antiderivative(`sec(x)^2*tan(x)^${n}`, `tan(x)^${m}/${m}`),
-      displayAnswer: `$\\frac{\\tan^{${m}}(x)}{${m}} + C$`,
-      explanation: `Let $u = \\tan(x)$, $du = \\sec^2(x)\\,dx$: $\\int u^{${n}}\\,du = \\frac{\\tan^{${m}}(x)}{${m}} + C$.${n === 1 ? ' (Since $\\sec^2 = 1 + \\tan^2$, $\\frac{\\sec^2(x)}{2}$ differs from this by a constant and is also correct.)' : ''}`,
-      hint: 'Let $u = \\tan(x)$, then $du = \\sec^2(x)\\,dx$.',
+      problemText: `$\\displaystyle\\int \\sec^2(${arg})${power}\\,dx$${ASK_RESULT}`,
+      answer: antiderivative(`sec(${b}*x)^2*tan(${b}*x)^${n}`, `tan(${b}*x)^${m}/${over}`),
+      displayAnswer: `$\\frac{\\tan^{${m}}(${arg})}{${over}} + C$`,
+      explanation: `Let $u = \\tan(${arg})$, $du = ${b === 1 ? '' : b}\\sec^2(${arg})\\,dx$: $${b === 1 ? '' : `\\frac{1}{${b}}`}\\int u^{${n}}\\,du = \\frac{\\tan^{${m}}(${arg})}{${over}} + C$.${n === 1 ? ` (Since $\\sec^2 = 1 + \\tan^2$, $\\frac{\\sec^2(${arg})}{${over}}$ differs from this by a constant and is also correct.)` : ''}`,
+      hint: `Let $u = \\tan(${arg})$, then $du = ${b === 1 ? '' : b}\\sec^2(${arg})\\,dx$.`,
     };
   },
 };
@@ -979,67 +986,83 @@ const APP_TEMPLATES = ['disk-y=x', 'washer-x-x^2', 'shell-y=x^2', 'arc-length-y=
 
 export const integrationApplications: GeneratorDef = {
   topicId: 'integration-applications',
-  version: 2,
+  version: 3,
   templates: APP_TEMPLATES,
   generate: (ctx) => {
     // The answer is the exact value; anything within half a unit of the last
     // requested decimal place is accepted.
     const template = ctx.pick(APP_TEMPLATES);
     if (template === 'disk-y=x') {
-      const a = ctx.int(2, 5);
-      const vol = Math.PI * Math.pow(a, 3) / 3;
+      // y = kx on [0, a] about the x-axis: V = π k² a³ / 3
+      const k = ctx.int(1, 3);
+      const a = ctx.int(1, 5);
+      const vol = Math.PI * k * k * a ** 3 / 3;
+      const shown = `${k === 1 ? '' : k}x`;
       return {
         templateId: template,
-        problemText: `Find the volume of the solid formed by revolving $y = x$ around the x-axis from $x = 0$ to $x = ${a}$.\n(Use the disk method. Round to 2 decimal places.)`,
+        problemText: `Find the volume of the solid formed by revolving $y = ${shown}$ around the x-axis from $x = 0$ to $x = ${a}$.\n(Use the disk method. Round to 2 decimal places.)`,
         answer: roundedTo(vol, 2),
-        displayAnswer: `$\\frac{${a * a * a}\\pi}{3} \\approx ${vol.toFixed(2)}$`,
-        explanation: `$V = \\pi\\int_0^{${a}} x^2\\,dx = \\pi\\left[\\frac{x^3}{3}\\right]_0^{${a}} = \\frac{${a * a * a}\\pi}{3} \\approx ${vol.toFixed(2)}$`,
-        hint: 'Disk method: $V = \\pi \\int_a^b [f(x)]^2\\,dx$. Here $f(x) = x$.',
+        displayAnswer: `$\\frac{${k * k * a ** 3}\\pi}{3} \\approx ${vol.toFixed(2)}$`,
+        explanation: `$V = \\pi\\int_0^{${a}} (${shown})^2\\,dx = ${k === 1 ? '' : k * k}\\pi\\left[\\frac{x^3}{3}\\right]_0^{${a}} = \\frac{${k * k * a ** 3}\\pi}{3} \\approx ${vol.toFixed(2)}$`,
+        hint: `Disk method: $V = \\pi \\int_a^b [f(x)]^2\\,dx$. Here $f(x) = ${shown}$.`,
       };
     }
     if (template === 'washer-x-x^2') {
-      const vol = 2 * Math.PI / 15;
+      // between y = cx and y = x² on [0, c] about the x-axis: V = π∫(c²x² − x⁴)dx = 2πc⁵/15
+      const c = ctx.int(1, 3);
+      const vol = 2 * Math.PI * c ** 5 / 15;
+      const line = `${c === 1 ? '' : c}x`;
       return {
         templateId: template,
-        problemText: 'Find the volume of the solid formed by revolving the region between $y = x$ and $y = x^2$ (from $x=0$ to $x=1$) around the x-axis.\n(Round to 3 decimal places.)',
+        problemText: `Find the volume of the solid formed by revolving the region between $y = ${line}$ and $y = x^2$ (from $x=0$ to $x=${c}$) around the x-axis.\n(Round to 3 decimal places.)`,
         answer: roundedTo(vol, 3),
-        displayAnswer: `$\\frac{2\\pi}{15} \\approx ${vol.toFixed(3)}$`,
-        explanation: `On $[0,1]$, $x \\geq x^2$, so the outer radius is $x$. $V = \\pi\\int_0^1 (x^2 - x^4)\\,dx = \\pi\\left[\\frac{x^3}{3} - \\frac{x^5}{5}\\right]_0^1 = \\pi\\left(\\frac{1}{3} - \\frac{1}{5}\\right) = \\frac{2\\pi}{15} \\approx ${vol.toFixed(3)}$`,
-        hint: 'Washer method: $V = \\pi \\int [R(x)]^2 - [r(x)]^2\\,dx$. Which function is farther from the x-axis on $[0,1]$?',
+        displayAnswer: `$\\frac{${2 * c ** 5}\\pi}{15} \\approx ${vol.toFixed(3)}$`,
+        explanation: `On $[0, ${c}]$, $${line} \\geq x^2$, so the outer radius is $${line}$ and the inner radius $x^2$. $V = \\pi\\int_0^{${c}} \\left(${c === 1 ? '' : c * c}x^2 - x^4\\right)dx = \\pi\\left(\\frac{${c * c}\\cdot ${c}^3}{3} - \\frac{${c}^5}{5}\\right) = \\frac{${2 * c ** 5}\\pi}{15} \\approx ${vol.toFixed(3)}$`,
+        hint: 'Washer method: $V = \\pi \\int [R(x)]^2 - [r(x)]^2\\,dx$. Which function is farther from the x-axis?',
       };
     }
     if (template === 'shell-y=x^2') {
-      const a = ctx.int(1, 3);
-      const vol = Math.PI * Math.pow(a, 4) / 2;
+      // y = kx² on [0, a] about the y-axis: V = 2π∫ x·kx² dx = πk a⁴/2
+      const k = ctx.int(1, 3);
+      const a = ctx.int(1, 4);
+      const vol = Math.PI * k * a ** 4 / 2;
+      const shown = `${k === 1 ? '' : k}x^2`;
       return {
         templateId: template,
-        problemText: `Use the shell method to find the volume when $y = x^2$ (from $x=0$ to $x=${a}$) is revolved around the y-axis.\n(Round to 2 decimal places.)`,
+        problemText: `Use the shell method to find the volume when $y = ${shown}$ (from $x=0$ to $x=${a}$) is revolved around the y-axis.\n(Round to 2 decimal places.)`,
         answer: roundedTo(vol, 2),
-        displayAnswer: `$\\frac{${Math.pow(a, 4)}\\pi}{2} \\approx ${vol.toFixed(2)}$`,
-        explanation: `$V = 2\\pi\\int_0^{${a}} x \\cdot x^2\\,dx = 2\\pi\\left[\\frac{x^4}{4}\\right]_0^{${a}} = \\frac{${Math.pow(a, 4)}\\pi}{2} \\approx ${vol.toFixed(2)}$`,
-        hint: 'Shell method: $V = 2\\pi \\int_a^b x \\cdot f(x)\\,dx$. Here $f(x) = x^2$.',
+        displayAnswer: `$\\frac{${k * a ** 4}\\pi}{2} \\approx ${vol.toFixed(2)}$`,
+        explanation: `$V = 2\\pi\\int_0^{${a}} x \\cdot ${shown}\\,dx = ${k === 1 ? '' : k}\\cdot 2\\pi\\left[\\frac{x^4}{4}\\right]_0^{${a}} = \\frac{${k * a ** 4}\\pi}{2} \\approx ${vol.toFixed(2)}$`,
+        hint: `Shell method: $V = 2\\pi \\int_a^b x \\cdot f(x)\\,dx$. Here $f(x) = ${shown}$.`,
       };
     }
     if (template === 'arc-length-y=x') {
+      // y = mx + b on [0, a]: L = a√(1 + m²)
+      const m = ctx.int(1, 4);
+      const b = ctx.int(-3, 3);
       const a = ctx.int(2, 6);
-      const length = a * Math.SQRT2;
+      const length = a * Math.sqrt(1 + m * m);
+      const shown = latexPolynomial([[m, 'x'], [b, '']]);
       return {
         templateId: template,
-        problemText: `Find the arc length of $y = x$ from $x = 0$ to $x = ${a}$.\n(Round to 2 decimal places.)`,
+        problemText: `Find the arc length of $y = ${shown}$ from $x = 0$ to $x = ${a}$.\n(Round to 2 decimal places.)`,
         answer: roundedTo(length, 2),
-        displayAnswer: `$${a}\\sqrt{2} \\approx ${length.toFixed(2)}$`,
-        explanation: `$L = \\int_0^{${a}} \\sqrt{1 + [f'(x)]^2}\\,dx = \\int_0^{${a}} \\sqrt{1 + 1}\\,dx = ${a}\\sqrt{2} \\approx ${length.toFixed(2)}$`,
+        displayAnswer: `$${a}\\sqrt{${1 + m * m}} \\approx ${length.toFixed(2)}$`,
+        explanation: `$f'(x) = ${m}$, so $L = \\int_0^{${a}} \\sqrt{1 + ${m}^2}\\,dx = ${a}\\sqrt{${1 + m * m}} \\approx ${length.toFixed(2)}$`,
         hint: 'Arc length: $L = \\int_a^b \\sqrt{1 + [f\'(x)]^2}\\,dx$. Find $f\'(x)$ first.',
       };
     }
+    // y = mx on [0, a] about the x-axis: S = 2π∫ mx √(1 + m²) dx = π m a² √(1 + m²)
+    const m = ctx.int(1, 3);
     const a = ctx.int(2, 4);
-    const area = Math.PI * Math.SQRT2 * a * a;
+    const area = Math.PI * m * a * a * Math.sqrt(1 + m * m);
+    const shown = `${m === 1 ? '' : m}x`;
     return {
       templateId: template,
-      problemText: `Find the surface area when $y = x$ from $x = 0$ to $x = ${a}$ is revolved around the x-axis.\n(Round to 2 decimal places.)`,
+      problemText: `Find the surface area when $y = ${shown}$ from $x = 0$ to $x = ${a}$ is revolved around the x-axis.\n(Round to 2 decimal places.)`,
       answer: roundedTo(area, 2),
-      displayAnswer: `$${a * a}\\sqrt{2}\\pi \\approx ${area.toFixed(2)}$`,
-      explanation: `Here $f(x) = x \\geq 0$ on $[0, ${a}]$. $S = 2\\pi\\int_0^{${a}} x\\sqrt{1 + 1}\\,dx = 2\\sqrt{2}\\pi\\left[\\frac{x^2}{2}\\right]_0^{${a}} = ${a * a}\\sqrt{2}\\pi \\approx ${area.toFixed(2)}$`,
+      displayAnswer: `$${m * a * a}\\sqrt{${1 + m * m}}\\,\\pi \\approx ${area.toFixed(2)}$`,
+      explanation: `Here $f(x) = ${shown} \\geq 0$ on $[0, ${a}]$ and $f'(x) = ${m}$. $S = 2\\pi\\int_0^{${a}} ${shown}\\sqrt{1 + ${m}^2}\\,dx = 2\\pi \\cdot ${m === 1 ? '' : m}\\sqrt{${1 + m * m}}\\left[\\frac{x^2}{2}\\right]_0^{${a}} = ${m * a * a}\\sqrt{${1 + m * m}}\\,\\pi \\approx ${area.toFixed(2)}$`,
       hint: 'Surface area: $S = 2\\pi \\int f(x)\\sqrt{1 + [f\'(x)]^2}\\,dx$ (for $f(x) \\geq 0$).',
     };
   },

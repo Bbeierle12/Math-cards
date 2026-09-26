@@ -26,6 +26,7 @@ export const INVARIANTS = {
   positiveAngles: 'every angle of the figure is positive',
   integerAnswer: 'the answer is an integer, as the prompt implies',
   boundHolds: 'a claimed error bound is at least the actual error',
+  nonDegenerate: 'the object has the shape the question assumes (e.g. a rational function that does not reduce to a constant)',
 } as const;
 
 export type InvariantName = keyof typeof INVARIANTS;

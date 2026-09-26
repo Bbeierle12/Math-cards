@@ -42,6 +42,16 @@ export const checkSpec = (spec: AnswerSpec, path = 'answer'): string[] => {
       break;
     case 'expression':
       if (!parses(spec.reference)) bad(`reference "${spec.reference}" does not parse`);
+      if (spec.forbid) {
+        // the reference itself must satisfy its form constraints
+        const node = parse(normalizeMathExpr(spec.reference));
+        node.traverse((n) => {
+          if (n.type !== 'FunctionNode') return;
+          const f = n as unknown as { fn: { name: string }; args: { type: string }[] };
+          if (spec.forbid!.functions?.includes(f.fn.name)) bad(`reference uses forbidden function ${f.fn.name}`);
+          if (spec.forbid!.simpleArguments && f.args.some(a => a.type !== 'SymbolNode')) bad('reference applies a function to a compound argument');
+        });
+      }
       for (const iv of spec.domain?.intervals ?? []) if (!(iv.lo <= iv.hi)) bad('domain interval with lo > hi');
       break;
     case 'equation':
@@ -106,6 +116,7 @@ const LEAKED_IN_MATH = /\b(NaN|undefined|Infinity|null)\b|\[object /;
 const FORMAT_SLIPS: [RegExp, string][] = [
   [/[+-]\s+-\s*\d/, 'a sign followed by a negative number ("+ -3"); write "- 3" or parenthesize'],
   [/(^|[^\d.\\a-z{])1x\b/, 'a coefficient of 1 written out ("1x")'],
+  [/=\s*;\s*\?/, 'a lost LaTeX escape ("= ;?" where "= \\;?" was meant)'],
 ];
 
 const mathSegments = (text: string): string[] =>

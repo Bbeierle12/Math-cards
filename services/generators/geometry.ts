@@ -43,10 +43,11 @@ export const triangles: GeneratorDef = {
 
 export const pythagoreanTheorem: GeneratorDef = {
   topicId: 'pythagorean-theorem',
-  version: 2,
+  version: 3,
   templates: ['find-hypotenuse', 'find-leg'],
   generate: (ctx) => {
-    const [a, b, c] = ctx.pick(PYTHAGOREAN_TRIPLES);
+    const k = ctx.int(1, 3); // multiples of a triple are triples
+    const [a, b, c] = ctx.pick(PYTHAGOREAN_TRIPLES).map(side => k * side);
     const missing = ctx.pick(['a', 'b', 'c'] as const);
     const drafts: Record<typeof missing, Omit<Draft, 'hint'>> = {
       a: {
@@ -123,10 +124,10 @@ export const areaPerimeter: GeneratorDef = {
 
 export const circles: GeneratorDef = {
   topicId: 'circles',
-  version: 2,
+  version: 3,
   templates: ['diameter', 'circumference', 'area'],
   generate: (ctx) => {
-    const r = ctx.int(3, 10);
+    const r = ctx.int(2, 16);
     const kind = ctx.pick(['circumference', 'area', 'diameter'] as const);
     if (kind === 'diameter') {
       return { templateId: 'diameter', problemText: `A circle has radius $${r}$. What is its diameter?`, answer: exact(2 * r), hint: '$d = 2r$', explanation: `$d = 2r = 2 \\times ${r} = ${2 * r}$` };

@@ -1,6 +1,6 @@
 /** Algebra 2. */
 import type { GeneratorDef } from './context';
-import { exact, fractionAnswer, gcd, latexNum, latexPolynomial, ordinalSuffix, simplifyFraction } from './context';
+import { exact, fractionAnswer, gcd, latexFrac, latexNum, latexPolynomial, ordinalSuffix, simplifyFraction } from './context';
 
 export const complexNumbers: GeneratorDef = {
   topicId: 'complex-numbers',
@@ -66,18 +66,43 @@ export const radicals: GeneratorDef = {
 
 export const logarithms: GeneratorDef = {
   topicId: 'logarithms',
-  version: 2,
-  templates: ['evaluate-log'],
+  version: 3,
+  templates: ['evaluate-log', 'negative-exponent', 'fractional-exponent'],
   generate: (ctx) => {
-    const base = ctx.pick([2, 3, 10]);
-    const exponent = ctx.int(2, 4);
-    const value = base ** exponent;
+    const template = ctx.pick(['evaluate-log', 'negative-exponent', 'fractional-exponent'] as const);
+    const base = ctx.pick([2, 3, 4, 5, 10]);
+    if (template === 'evaluate-log') {
+      const exponent = ctx.int(0, base === 10 ? 5 : base <= 3 ? 6 : 4);
+      const value = base ** exponent;
+      return {
+        templateId: template,
+        problemText: `$\\log_{${base}}(${value}) = \\;?$`,
+        answer: exact(exponent),
+        explanation: `$${base}^{${exponent}} = ${value}$, so $\\log_{${base}}(${value}) = ${exponent}$.`,
+        hint: `Ask yourself: ${base} to what power equals ${value}?`,
+      };
+    }
+    if (template === 'negative-exponent') {
+      const k = ctx.int(1, base === 10 ? 4 : 3);
+      const value = base ** k;
+      return {
+        templateId: template,
+        problemText: `$\\log_{${base}}\\left(\\frac{1}{${value}}\\right) = \\;?$`,
+        answer: exact(-k),
+        explanation: `$\\frac{1}{${value}} = ${base}^{-${k}}$, so $\\log_{${base}}\\left(\\frac{1}{${value}}\\right) = -${k}$.`,
+        hint: `A reciprocal is a negative power: $\\frac{1}{${base}^k} = ${base}^{-k}$.`,
+      };
+    }
+    const root = ctx.pick([2, 3]);
+    const k = ctx.int(1, 2);
+    const inside = root === 2 ? `\\sqrt{${base ** k}}` : `\\sqrt[3]{${base ** k}}`;
     return {
-      templateId: 'evaluate-log',
-      problemText: `$\\log_{${base}}(${value}) = \\;?$`,
-      answer: exact(exponent),
-      explanation: `$${base}^{${exponent}} = ${value}$, so $\\log_{${base}}(${value}) = ${exponent}$.`,
-      hint: `Ask yourself: ${base} to what power equals ${value}?`,
+      templateId: template,
+      problemText: `$\\log_{${base}}\\left(${inside}\\right) = \\;?$\n(Enter an exact value, e.g. a fraction.)`,
+      answer: exact(k / root),
+      displayAnswer: `$${latexFrac(k, root)}$`,
+      explanation: `$${inside} = ${base}^{${k}/${root}}$, so the logarithm is $${latexFrac(k, root)}$.`,
+      hint: `A root is a fractional power: $\\sqrt[n]{b^k} = b^{k/n}$.`,
     };
   },
 };

@@ -67,14 +67,14 @@ export const multiplication: GeneratorDef = {
 
 export const division: GeneratorDef = {
   topicId: 'division',
-  version: 2,
-  templates: ['exact-quotient', 'zero-dividend'],
+  version: 3,
+  templates: ['exact-quotient'],
   generate: (ctx) => {
     const { min, max } = resolveRange(ctx.settings, -10, 10);
     // A range that can only produce 0 (e.g. [0, 0]) still yields a valid problem.
     if (min === 0 && max === 0) {
       return {
-        templateId: 'zero-dividend',
+        templateId: 'exact-quotient', // the only quotient a range of {0} allows
         problemText: `$0 \\div 1 = \\;?$`,
         answer: exact(0, 'evaluated'),
         explanation: `$0 \\div 1 = 0$ because $0 \\times 1 = 0$.`,

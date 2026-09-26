@@ -15,9 +15,11 @@ Exit status 1 if any claim is refuted. Not part of the app build or of
 The claims are Python/SymPy expressions produced by our own exporter from our
 own generators, so they are evaluated with eval() in a SymPy namespace.
 """
+import io
 import json
 import random
 import sys
+import tokenize
 from collections import defaultdict
 
 import sympy
@@ -32,8 +34,19 @@ NS.update({'x': x, 't': t, 'theta': theta, 'y': y, 'n': n, 'e': E, 'E': E})
 TOL = 1e-12
 
 
+def exact_integers(text):
+    """Wrap integer literals as SymPy Integers, so 1/2 is a Rational, not the float 0.5."""
+    out = []
+    for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+        if tok.type == tokenize.NUMBER and tok.string.isdigit():
+            out.append((tokenize.NAME, f'Integer({tok.string})'))
+        else:
+            out.append((tok.type, tok.string))
+    return tokenize.untokenize(out)
+
+
 def ev(text):
-    return eval(text, dict(NS))  # noqa: S307 - our own exporter's output, dev-only
+    return eval(exact_integers(text), dict(NS))  # noqa: S307 - our own exporter's output, dev-only
 
 
 def close(a, b):

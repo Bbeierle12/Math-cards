@@ -166,6 +166,13 @@ export type AnswerSpec =
       domainPolicy?: DomainPolicy;
       /** Names the student may assign the expression to: ['u'] accepts "u = x^2+5". */
       assignable?: string[];
+      /**
+       * Form constraints for "complete the identity" items, where restating
+       * the prompt is the same function but not an answer: `functions` may
+       * not appear (tan θ = ? forbids tan), and with `simpleArguments` every
+       * function must be applied to a bare variable (sin 2θ = ? rejects sin(2θ)).
+       */
+      forbid?: { functions?: string[]; simpleArguments?: boolean };
     }
   /** An equation lhs = rhs, equal up to a nonzero factor and rearrangement. */
   | { kind: 'equation'; lhs: string; rhs: string; parameters?: string[] }
@@ -285,4 +292,63 @@ export interface UserSettings {
   // Audio & Feedback
   soundEnabled: boolean;
   hapticFeedback: boolean;
+}
+// ---------------------------------------------------------------------------
+// Learning record (docs/PLAN.md, Phase 3)
+// ---------------------------------------------------------------------------
+
+/** One answered problem. The log of these is the source of truth; counters are derived. */
+export interface AttemptEvent {
+  /** Epoch milliseconds. */
+  t: number;
+  skillId: TopicId;
+  generatorVersion: number;
+  templateId: string;
+  seed: string;
+  /** Hash of the problem's content: repeats of the very same problem are recognised. */
+  instance: string;
+  correct: boolean;
+  /** False for a second try at the same problem (weaker evidence). */
+  firstAttempt: boolean;
+  hintUsed: boolean;
+  timedOut?: boolean;
+  responseMs?: number;
+}
+
+/** Everything known about one skill, derived by folding its events over a baseline. */
+export interface SkillState {
+  /** Weighted evidence of proficiency (see services/learning/mastery.ts). */
+  evidence: number;
+  correct: number;
+  attempted: number;
+  /** Correct answers per template: proficiency must span templates. */
+  templates: Record<string, number>;
+  /** Recently seen problem instances (bounded), to discount exact repeats. */
+  instances: string[];
+  /** Carries counters migrated from the pre-log progress format (no template information). */
+  legacy: boolean;
+  /** When the skill last became proficient; null while it is not. */
+  proficientAt: number | null;
+  /** Proficient and has passed a delayed review; reversible on a failed review. */
+  mastered: boolean;
+  /** Current review interval in days (0 while not scheduled). */
+  stability: number;
+  dueAt: number | null;
+  lastReviewAt: number | null;
+  lapses: number;
+}
+
+export interface LearningLog {
+  version: 1;
+  /** State folded out of the event list (old events after compaction, and migrated progress). */
+  baseline: {
+    skills: Partial<Record<TopicId, SkillState>>;
+    attempted: number;
+    correct: number;
+    currentStreak: number;
+    longestStreak: number;
+  };
+  events: AttemptEvent[];
+  /** When the pre-log `userProgress` was migrated (it is left in place, so the migration is reversible). */
+  migratedAt?: number;
 }

@@ -90,8 +90,15 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return p.answer.kind === 'finiteSet' ? [{ type: 'roots', poly: poly(q), x: 'x', roots: p.answer.elements, exact: true }] : null;
     }
     case 'rational-functions': {
-      const [, d] = m(p, /\\frac\{1\}\{(.+?)\}\$/);
-      return [{ type: 'roots', poly: poly(d), x: 'x', roots: [Number(num(p))], exact: true }];
+      const [, top, bottom] = m(p, /\\frac\{(.+?)\}\{(.+?)\}\$/);
+      if (/vertical asymptote/.test(p.problemText)) {
+        // a pole: the denominator vanishes and the function is unbounded there
+        return [
+          { type: 'roots', poly: poly(bottom), x: 'x', roots: [Number(num(p))], exact: true },
+          { type: 'value', expr: `Piecewise((1, Ne(S(${poly(top)}).subs(x, ${num(p)}), 0)), (0, True))`, value: '1' },
+        ];
+      }
+      return [{ type: 'limit', expr: `(${poly(top)})/(${poly(bottom)})`, x: 'x', at: 'oo', value: num(p) }];
     }
     case 'limits': {
       const [, at, body] = m(p, /\\lim_\{x \\to (-?\d+)\} \\left\[(.+)\\right\]/);
@@ -119,13 +126,14 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return [{ type: 'antiderivative', F: `${c}/(${e})*x**(${e})`, f: `${c}*x**${n ?? 1}`, x: 'x' }];
     }
     case 'integration-substitution': {
-      const [, c, n] = m(p, /\\int 2x\(x\^2 \+ (\d+)\)\^\{(\d+)\}/);
-      if (p.answer.kind !== 'expression') return null;
-      // u is the inner function and its derivative 2x is the factor present
+      const [, factor, inner, n] = m(p, /\\int (.+?)\(((?:\\sin\(x\)|e\^x|x\^\d) \+ \d+)\)\^\{(\d+)\}\\,dx/);
+      if (p.answer.kind !== 'anyOf') return null;
+      const options = p.answer.options.filter((o): o is Extract<typeof o, { kind: 'expression' }> => o.kind === 'expression');
+      // every accepted u has derivative equal to the displayed factor
       return [
-        { type: 'identity', a: sym(p.answer.reference), b: `x**2 + ${c}` },
-        { type: 'derivative', f: sym(p.answer.reference), g: '2*x', x: 'x' },
-        { type: 'antiderivative', F: `(x**2 + ${c})**(${n}+1)/(${n}+1)`, f: `2*x*(x**2 + ${c})**${n}`, x: 'x' },
+        ...options.map(o => ({ type: 'derivative', f: sym(o.reference), g: texSym(factor), x: 'x' } as Claim)),
+        { type: 'identity', a: sym(options[0].reference), b: texSym(inner) },
+        { type: 'antiderivative', F: `(${texSym(inner)})**(${n}+1)/(${n}+1)`, f: `${texSym(factor)}*(${texSym(inner)})**${n}`, x: 'x' },
       ];
     }
     case 'integration-by-parts':
@@ -250,13 +258,27 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return null;
     }
     case 'integration-applications': {
-      const a = p.problemText.match(/to \$x ?= ?(\d+)\$/)?.[1];
-      const table: Record<string, [string, string]> = {
-        'disk-y=x': ['pi*x**2', a ?? ''], 'washer-x-x^2': ['pi*(x**2 - x**4)', '1'], 'shell-y=x^2': ['2*pi*x*x**2', a ?? ''],
-        'arc-length-y=x': ['sqrt(1 + diff(x, x)**2)', a ?? ''], 'surface-area-y=x': ['2*pi*x*sqrt(1 + diff(x, x)**2)', a ?? ''],
-      };
-      const row = table[p.templateId];
-      return row && row[1] ? [{ type: 'definite', f: row[0], x: 'x', a: '0', b: row[1], value: num(p) }] : null;
+      const t = p.problemText;
+      let r: RegExpMatchArray | null;
+      if ((r = t.match(/revolving \$y = (\d*)x\$ around the x-axis from \$x = 0\$ to \$x = (\d+)\$/))) {
+        return [{ type: 'definite', f: `pi*(${r[1] || 1}*x)**2`, x: 'x', a: '0', b: r[2], value: num(p) }];
+      }
+      if ((r = t.match(/between \$y = (\d*)x\$ and \$y = x\^2\$ \(from \$x=0\$ to \$x=(\d+)\$\)/))) {
+        return [
+          { type: 'definite', f: `pi*((${r[1] || 1}*x)**2 - x**4)`, x: 'x', a: '0', b: r[2], value: num(p) },
+          { type: 'roots', poly: `${r[1] || 1}*x - x**2`, x: 'x', roots: [0, Number(r[2])], exact: true }, // the region's ends
+        ];
+      }
+      if ((r = t.match(/shell method[\s\S]*\$y = (\d*)x\^2\$ \(from \$x=0\$ to \$x=(\d+)\$\)/))) {
+        return [{ type: 'definite', f: `2*pi*x*${r[1] || 1}*x**2`, x: 'x', a: '0', b: r[2], value: num(p) }];
+      }
+      if ((r = t.match(/arc length of \$y = (.+)\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
+        return [{ type: 'definite', f: `sqrt(1 + diff(${poly(r[1])}, x)**2)`, x: 'x', a: '0', b: r[2], value: num(p) }];
+      }
+      if ((r = t.match(/surface area when \$y = (\d*)x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
+        return [{ type: 'definite', f: `2*pi*${r[1] || 1}*x*sqrt(1 + ${r[1] || 1}**2)`, x: 'x', a: '0', b: r[2], value: num(p) }];
+      }
+      return null;
     }
     case 'trig-substitution': {
       if (p.templateId === 'quarter-circle') {
@@ -276,27 +298,26 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return null;
     }
     case 'trig-identities': {
-      const lhs: Record<string, string> = {
-        pythagorean: 'sin(theta)**2 + cos(theta)**2', quotient: 'tan(theta)', 'pythagorean-tan': '1 + tan(theta)**2',
-        'cofunction-sin': 'sin(pi/2 - theta)', 'cofunction-cos': 'cos(pi/2 - theta)',
-      };
-      const l = lhs[p.templateId];
-      return l && p.answer.kind === 'expression' ? [{ type: 'identity', a: l, b: sym(p.answer.reference) }] : null;
+      const [, lhsTex] = m(p, /identity: \$(.+) = \\;\?\$/);
+      // degrees in the prompt: 90° is pi/2 for SymPy
+      const lhs = texSym(lhsTex.replace(/(\d+)°/g, '($1*\\pi/180)'));
+      return p.answer.kind === 'expression' ? [{ type: 'identity', a: lhs, b: sym(p.answer.reference) }] : null;
     }
     case 'trig-special-angles': {
       const [, fn, deg] = m(p, /\\(sin|cos|tan)\((\d+)°\)/);
       return [{ type: 'value', expr: `N(${fn}(${deg}*pi/180), 30)`, value: num(p) }];
     }
     case 'inverse-trig': {
-      const [, fn] = m(p, /\\(sin|cos|tan)\^\{-1\}/);
-      const arg = p.problemText.match(/\\left\((.+)\\right\)\$$/)?.[1] ?? '';
-      const value = ({ '\\frac{1}{2}': '1/2', '\\frac{\\sqrt{3}}{2}': 'sqrt(3)/2', '\\frac{\\sqrt{2}}{2}': 'sqrt(2)/2', '\\frac{\\sqrt{3}}{3}': 'sqrt(3)/3', '\\sqrt{3}': 'sqrt(3)', '1': '1' } as Record<string, string>)[arg];
-      return value ? [{ type: 'value', expr: `a${fn}(${value})*180/pi`, value: num(p) }] : null;
+      const [, fn, arg] = m(p, /\$\\(sin|cos|tan)\^\{-1\}\\left\((.+)\\right\)\$$/);
+      return [{ type: 'value', expr: `a${fn}(${texSym(arg)})*180/pi`, value: num(p) }];
     }
     case 'trig-equations': {
-      const [, fn, rhs] = m(p, /\$\\(sin|cos|tan)\(\\theta\) = (.+)\$$/);
-      const value = ({ '\\frac{1}{2}': '1/2', '\\frac{\\sqrt{3}}{2}': 'sqrt(3)/2', '\\frac{\\sqrt{2}}{2}': 'sqrt(2)/2', '\\frac{\\sqrt{3}}{3}': 'sqrt(3)/3', '\\sqrt{3}': 'sqrt(3)', '1': '1' } as Record<string, string>)[rhs];
-      return value ? [{ type: 'value', expr: `${fn}(${num(p)}*pi/180) - (${value})`, value: '0' }] : null;
+      const [, fn, rhs] = m(p, /\$\\(sin|cos|tan)\(\\theta\) = (.+?)\$/);
+      if (p.answer.kind === 'finiteSet') {
+        // the solution set of fn(θ) = rhs on [0, 2π), in degrees
+        return [{ type: 'value', expr: `Piecewise((1, Eq(FiniteSet(*[s*180/pi for s in solveset(Eq(${fn}(x), ${texSym(rhs)}), x, Interval.Ropen(0, 2*pi))]), FiniteSet(${p.answer.elements.join(', ')}))), (0, True))`, value: '1' }];
+      }
+      return [{ type: 'value', expr: `${fn}(${num(p)}*pi/180) - (${texSym(rhs)})`, value: '0' }];
     }
     case 'systems-of-equations': {
       const lines = p.problemText.split('\n');
@@ -311,8 +332,8 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return [{ type: 'value', expr: `im(${z(z1)} ${op} ${z(z2)})`, value: num(p) }];
     }
     case 'logarithms': {
-      const [, b, v] = m(p, /\\log_\{(\d+)\}\((\d+)\)/);
-      return [{ type: 'value', expr: `log(${v}, ${b})`, value: num(p) }];
+      const [, base, arg] = m(p, /\\log_\{(\d+)\}(?:\\left)?\((.+?)(?:\\right)?\) = /);
+      return [{ type: 'value', expr: `log(${texSym(arg)}, ${base})`, value: num(p) }];
     }
     case 'polar-coordinates': {
       let r: RegExpMatchArray | null;

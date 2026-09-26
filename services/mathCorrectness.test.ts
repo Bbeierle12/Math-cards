@@ -72,6 +72,12 @@ const EXACT_LATEX: Record<string, number> = {
   '\\sqrt{3}': Math.sqrt(3),
   '1': 1,
 };
+/** Value of a displayed exact LaTeX value, sign included ("-\\frac{\\sqrt{3}}{2}"). */
+const exactValue = (latex: string): number | undefined => {
+  const neg = latex.startsWith('-');
+  const v = ({ ...EXACT_LATEX, '0': 0 } as Record<string, number>)[neg ? latex.slice(1) : latex];
+  return v === undefined ? undefined : neg ? -v : v;
+};
 const trig = (fn: string, deg: number) => (Math as unknown as Record<string, (x: number) => number>)[fn](deg * Math.PI / 180);
 
 // ===========================================================================
@@ -117,10 +123,10 @@ describe('audit reproductions', () => {
   it('trig equations and inverse trig display exact values, never rounded decimals', () => {
     for (const p of [...sample('trig-equations'), ...sample('inverse-trig')]) {
       expect(p.problemText).not.toMatch(/0\.\d{3}/);
-      expect(p.problemText).toMatch(/\\frac|\\sqrt|\\left\(1\\right\)|= 1\$$/);
+      const shown = p.problemText.match(/\\left\((.+)\\right\)\$$/)?.[1] ?? p.problemText.match(/= (.+)\$(\n|$)/)?.[1];
+      expect(exactValue(shown ?? ''), p.problemText).toBeDefined();
     }
   });
-
   it('integration by parts accepts the audit\'s valid spellings', () => {
     const byText = (re: RegExp) => sampleWhere('integration-by-parts', q => re.test(q.problemText), 1)[0];
     expect(validateAnswer(byText(/\\int x\\cos\(x\)\\,dx/), 'cos(x)+x*sin(x)')).toBe(true);
@@ -152,14 +158,17 @@ describe('audit reproductions', () => {
     expect(validateAnswer(p, '0.501')).toBe(false);
   });
 
-  it('requested rounding is enforced: arc length of y = x on [0, 4] to 2 places', () => {
-    const [p] = sampleWhere('integration-applications', q => /arc length/.test(q.problemText) && /x = 4\$/.test(q.problemText), 1);
-    expect(validateAnswer(p, '5.66')).toBe(true);
-    expect(validateAnswer(p, '4*sqrt(2)')).toBe(true);
-    expect(validateAnswer(p, '5.70')).toBe(false);
-    expect(validateAnswer(p, '5.65')).toBe(false);
+  it('requested rounding is enforced: arc lengths to 2 places', () => {
+    for (const p of sampleWhere('integration-applications', q => /arc length/.test(q.problemText), 5)) {
+      const m = must(p.problemText.match(/arc length of \$y = (.+)\$ from \$x = 0\$ to \$x = (\d+)\$/), p);
+      const slope = coef(terms(m[1]), 'x');
+      const L = int(m[2]) * Math.sqrt(1 + slope * slope);
+      expect(validateAnswer(p, L.toFixed(2))).toBe(true);
+      expect(validateAnswer(p, `${m[2]}*sqrt(${1 + slope * slope})`)).toBe(true);
+      expect(validateAnswer(p, (Number(L.toFixed(2)) + 0.04).toFixed(2))).toBe(false);
+      expect(validateAnswer(p, (Number(L.toFixed(2)) - 0.01).toFixed(2))).toBe(false);
+    }
   });
-
   it('exact answers are exact: Taylor coefficients', () => {
     const [p] = sampleWhere('taylor-maclaurin', q => /coefficient of \$x\^\{2\}\$ in the Maclaurin series for \$e\^\{2x\}\$/.test(q.problemText), 1);
     expect(validateAnswer(p, '2')).toBe(true);
@@ -236,19 +245,30 @@ describe('audit reproductions', () => {
     expect(validateAnswer(pz, '0 < p < 1')).toBe(false);
     expect(validateAnswer(pz, 'p > 1')).toBe(false);
   });
-  it('identity answers reject domain-invalid rewrites such as θ/θ for 1', () => {
-    const [p] = sampleWhere('trig-identities', q => ref(q) === '1', 1);
-    expect(validateAnswer(p, '1')).toBe(true);
-    expect(validateAnswer(p, 'theta/theta')).toBe(false);
-    expect(validateAnswer(p, 'sin(theta)^2+cos(theta)^2')).toBe(true);
+  it('identity answers reject domain-invalid rewrites and restatements of the prompt', () => {
+    const byId = (id: string) => sampleWhere('trig-identities', q => q.templateId === id, 1)[0];
+    const pyth = byId('pythagorean');
+    expect(validateAnswer(pyth, '1')).toBe(true);
+    expect(validateAnswer(pyth, 'theta/theta')).toBe(false);                 // undefined at θ = 0
+    expect(validateAnswer(pyth, 'sin(theta)^2+cos(theta)^2')).toBe(false);   // the prompt, not an answer
+    const quotient = byId('quotient');
+    expect(validateAnswer(quotient, 'sin(θ)/cos(θ)')).toBe(true);
+    expect(validateAnswer(quotient, 'tan(theta)')).toBe(false);
+    const double = byId('double-angle-sin');
+    expect(validateAnswer(double, '2sin(θ)cos(θ)')).toBe(true);
+    expect(validateAnswer(double, 'sin(2θ)')).toBe(false);
+    const cos2 = byId('double-angle-cos');
+    for (const form of ['cos(θ)^2 - sin(θ)^2', '1 - 2sin(θ)^2', '2cos(θ)^2 - 1']) expect(validateAnswer(cos2, form)).toBe(true);
+    expect(validateAnswer(cos2, 'cos(2θ)')).toBe(false);
+    const cof = byId('cofunction-sin');
+    expect(validateAnswer(cof, 'cos(theta)')).toBe(true);
+    expect(validateAnswer(cof, 'sin(pi/2 - theta)')).toBe(false);
   });
-
   it('tangent explanations do not claim a value at 90°', () => {
-    for (const p of sampleWhere('trig-equations', q => /\\tan/.test(q.problemText), 3)) {
+    for (const p of sampleWhere('trig-equations', q => /\\tan/.test(q.problemText) && /0° \\leq \\theta \\leq 90°/.test(q.problemText), 3)) {
       expect(p.explanation).toMatch(/\[0°, 90°\)/);
     }
   });
-
   it('arithmetic answers cannot be restated as the problem itself', () => {
     const [p] = sampleWhere('addition', q => !/-/.test(q.problemText), 1);
     const m = p.problemText.match(/\$(\d+) \+ (\d+) =/)!;
@@ -565,12 +585,19 @@ describe('independent recomputation: algebra 2', () => {
   });
 
   it('logarithms', () => {
-    for (const p of sample('logarithms')) {
-      const m = must(p.problemText.match(/\\log_\{(\d+)\}\((\d+)\)/), p);
-      expect(num(p)).toBeCloseTo(Math.log(int(m[2])) / Math.log(int(m[1])), 9);
+    for (const p of sample('logarithms', 60)) {
+      const t = p.problemText;
+      const base = int(must(t.match(/\\log_\{(\d+)\}/), p)[1]);
+      let arg: number;
+      let m: RegExpMatchArray | null;
+      if ((m = t.match(/\\left\(\\frac\{1\}\{(\d+)\}\\right\)/))) arg = 1 / int(m[1]);
+      else if ((m = t.match(/\\sqrt\[3\]\{(\d+)\}/))) arg = Math.cbrt(int(m[1]));
+      else if ((m = t.match(/\\sqrt\{(\d+)\}/))) arg = Math.sqrt(int(m[1]));
+      else arg = int(must(t.match(/\\log_\{\d+\}\((\d+)\)/), p)[1]);
+      expect(num(p)).toBeCloseTo(Math.log(arg) / Math.log(base), 9);
+      expect(validateAnswer(p, String(num(p) + 1))).toBe(false);
     }
   });
-
   it('sequences-series and sequences', () => {
     for (const p of [...sample('sequences-series'), ...sample('sequences', 140)]) {
       const t = p.problemText;
@@ -643,43 +670,73 @@ describe('independent recomputation: trigonometry', () => {
     }
   });
 
-  it('trig-equations: the displayed exact value is the ratio of the stored angle', () => {
-    for (const p of sample('trig-equations')) {
-      const m = must(p.problemText.match(/\$\\(sin|cos|tan)\(\\theta\) = (.+)\$$/), p);
-      const value = EXACT_LATEX[m[2]];
+  it('trig-equations: every solution, and only solutions', () => {
+    for (const p of sample('trig-equations', 80)) {
+      const m = must(p.problemText.match(/\$\\(sin|cos|tan)\(\\theta\) = (.+?)\$/), p);
+      const value = exactValue(m[2]);
       expect(value, `unknown exact value ${m[2]}`).toBeDefined();
-      expect(trig(m[1], num(p))).toBeCloseTo(value, 12);
-      expect(num(p)).toBeGreaterThanOrEqual(0);
-      expect(num(p)).toBeLessThanOrEqual(90);
+      if (/0° \\leq \\theta \\leq 90°/.test(p.problemText)) {
+        expect(trig(m[1], num(p))).toBeCloseTo(value!, 12);
+        expect(num(p)).toBeGreaterThanOrEqual(0);
+        expect(num(p)).toBeLessThanOrEqual(90);
+        continue;
+      }
+      // all solutions in [0°, 360°), found by scanning every whole degree
+      const found: number[] = [];
+      for (let d = 0; d < 360; d++) {
+        const v = trig(m[1], d);
+        if (Number.isFinite(v) && Math.abs(v) < 1e6 && Math.abs(v - value!) < 1e-9) found.push(d);
+      }
+      expect(p.answer.kind).toBe('finiteSet');
+      if (p.answer.kind === 'finiteSet') expect([...p.answer.elements].sort((a, b) => a - b)).toEqual(found);
+      expect(validateAnswer(p, found.map(d => `${d}°`).join(', '))).toBe(true);
+      if (found.length > 1) expect(validateAnswer(p, String(found[0]))).toBe(false);
     }
   });
-
   it('inverse-trig: the stored angle is the principal value', () => {
-    for (const p of sample('inverse-trig')) {
+    for (const p of sample('inverse-trig', 60)) {
       const m = must(p.problemText.match(/\$\\(sin|cos|tan)\^\{-1\}\\left\((.+)\\right\)\$$/), p);
-      const value = EXACT_LATEX[m[2]];
+      const value = exactValue(m[2]);
       expect(value, `unknown exact value ${m[2]}`).toBeDefined();
       const inverse = { sin: Math.asin, cos: Math.acos, tan: Math.atan }[m[1]]!;
-      expect(inverse(value) * 180 / Math.PI).toBeCloseTo(num(p), 9);
+      expect(inverse(value!) * 180 / Math.PI).toBeCloseTo(num(p), 9);
+      if (num(p) < 0) expect(validateAnswer(p, String(num(p) + 360))).toBe(false); // coterminal, but not the principal value
     }
   });
-
   it('trig-identities: the canonical answer equals the left-hand side numerically', () => {
+    const rad = Math.PI / 180;
     const lhs: Record<string, (t: number) => number> = {
       '\\sin^2\\theta + \\cos^2\\theta': t => Math.sin(t) ** 2 + Math.cos(t) ** 2,
       '\\tan\\theta': Math.tan,
+      '\\cot\\theta': t => 1 / Math.tan(t),
+      '\\sec\\theta': t => 1 / Math.cos(t),
+      '\\csc\\theta': t => 1 / Math.sin(t),
       '1 + \\tan^2\\theta': t => 1 + Math.tan(t) ** 2,
-      '\\sin(90° - \\theta)': t => Math.sin(Math.PI / 2 - t),
-      '\\cos(90° - \\theta)': t => Math.cos(Math.PI / 2 - t),
+      '1 + \\cot^2\\theta': t => 1 + 1 / Math.tan(t) ** 2,
+      '\\sin(90° - \\theta)': t => Math.sin(90 * rad - t),
+      '\\cos(90° - \\theta)': t => Math.cos(90 * rad - t),
+      '\\tan(90° - \\theta)': t => Math.tan(90 * rad - t),
+      '\\sin(-\\theta)': t => Math.sin(-t),
+      '\\cos(-\\theta)': t => Math.cos(-t),
+      '\\sin(180° - \\theta)': t => Math.sin(180 * rad - t),
+      '\\cos(\\theta + 180°)': t => Math.cos(t + 180 * rad),
+      '\\sin(2\\theta)': t => Math.sin(2 * t),
+      '\\cos(2\\theta)': t => Math.cos(2 * t),
     };
-    for (const p of sample('trig-identities')) {
+    const seen = new Set<string>();
+    for (const p of sample('trig-identities', 120)) {
       const m = must(p.problemText.match(/identity: \$(.+) = \\;\?\$/), p);
       const f = lhs[m[1]];
       expect(f, `unknown identity ${m[1]}`).toBeDefined();
+      seen.add(m[1]);
       for (const t of [0.3, 0.8, 1.2, 2.4]) {
         expect(evalAt(ref(p), { theta: t })).toBeCloseTo(f(t), 9);
       }
+      // restating the left side is never accepted
+      const restated = m[1].replace(/\\(sin|cos|tan|cot|sec|csc)/g, '$1').replace(/°/g, '*pi/180').replace(/\\theta/g, '(theta)').replace(/(\d+)\*pi\/180/g, '($1*pi/180)');
+      expect(validateAnswer(p, restated), `accepted the prompt ${restated}`).toBe(false);
     }
+    expect(seen.size).toBe(Object.keys(lhs).length);
   });
 });
 
@@ -715,14 +772,24 @@ describe('independent recomputation: pre-calculus', () => {
   });
 
   it('rational-functions', () => {
-    for (const p of sample('rational-functions')) {
-      const m = must(p.problemText.match(/\\frac\{1\}\{(.+?)\}\$/), p);
-      const t = terms(m[1]);
-      expect(coef(t, 'x')).toBe(1);
-      expect(num(p)).toBe(0 - coef(t, '')); // 0 − c, not −c: no −0
+    for (const p of sample('rational-functions', 60)) {
+      const t = p.problemText;
+      const m = must(t.match(/\\frac\{(.+?)\}\{(.+?)\}\$/), p);
+      const [top, bottom] = [terms(m[1]), terms(m[2])];
+      const [a, b, c, d] = [coef(top, 'x'), coef(top, ''), coef(bottom, 'x'), coef(bottom, '')];
+      if (/vertical asymptote/.test(t)) {
+        const x = -d / c;
+        expect(num(p)).toBeCloseTo(x, 12);
+        expect(Math.abs(a * x + b)).toBeGreaterThan(1e-9); // the numerator does not cancel the pole
+      } else {
+        expect(/horizontal asymptote/.test(t)).toBe(true);
+        expect(a * d - b * c).not.toBe(0); // not a constant function
+        expect(num(p)).toBeCloseTo(a / c, 12);
+        const f = (x: number) => (a * x + b) / (c * x + d);
+        expect(f(1e9)).toBeCloseTo(num(p), 6);
+      }
     }
   });
-
   it('exponential-functions', () => {
     for (const p of sample('exponential-functions')) {
       const m = must(p.problemText.match(/starts at \$(\d+)\$ and doubles every period. What is the population after \$(\d+)\$/), p);
@@ -786,12 +853,19 @@ describe('independent recomputation: calculus 1', () => {
     }
   });
 
-  it('integration-substitution: u is the inner function', () => {
-    for (const p of sample('integration-substitution')) {
-      const m = must(p.problemText.match(/\\int 2x\(x\^2 \+ (\d+)\)\^\{(\d+)\}/), p);
-      expect(ref(p)).toBe(`x^2+${m[1]}`);
-      expect(validateAnswer(p, `x² + ${m[1]}`)).toBe(true);
-      expect(validateAnswer(p, `x^2+${int(m[1]) + 1}`)).toBe(false);
+  it('integration-substitution: du is exactly the remaining factor', () => {
+    for (const p of sample('integration-substitution', 60)) {
+      const m = must(p.problemText.match(/\\int (.+?)\(((?:\\sin\(x\)|e\^x|x\^\d) \+ \d+)\)\^\{(\d+)\}\\,dx/), p);
+      const [factor, inner] = [latexToExpr(m[1]), latexToExpr(m[2])];
+      // the reference u, and its derivative equals the displayed factor
+      const u = ref(p.answer.kind === 'anyOf' ? { ...p, answer: p.answer.options[0] } : p);
+      const du = derivative(u, 'x');
+      for (const x of [0.3, 0.9, 1.7]) {
+        expect(evalAt(u, { x })).toBeCloseTo(evaluate(inner, { x }) as number, 9);
+        expect(du.evaluate({ x })).toBeCloseTo(evaluate(factor, { x }) as number, 9);
+      }
+      expect(validateAnswer(p, `u = ${u}`)).toBe(true);
+      expect(validateAnswer(p, `u = (${u})^2`)).toBe(false);
     }
   });
 });
@@ -1041,20 +1115,24 @@ describe('independent recomputation: calculus 2 — values', () => {
   });
 
   it('integration applications by Simpson\'s rule', () => {
-    for (const p of sample('integration-applications', 60)) {
+    for (const p of sample('integration-applications', 80)) {
       const t = p.problemText;
       let m: RegExpMatchArray | null;
       let expected: number;
-      if ((m = t.match(/revolving \$y = x\$ around the x-axis from \$x = 0\$ to \$x = (\d+)\$/))) {
-        const a = int(m[1]); expected = Math.PI * integrate(x => x * x, 0, a);
-      } else if (/between \$y = x\$ and \$y = x\^2\$/.test(t)) {
-        expected = Math.PI * integrate(x => x * x - x ** 4, 0, 1);
-      } else if ((m = t.match(/shell method[\s\S]*from \$x=0\$ to \$x=(\d+)\$/))) {
-        const a = int(m[1]); expected = 2 * Math.PI * integrate(x => x * x * x, 0, a);
-      } else if ((m = t.match(/arc length of \$y = x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
-        const a = int(m[1]); expected = integrate(() => Math.SQRT2, 0, a);
-      } else if ((m = t.match(/surface area when \$y = x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
-        const a = int(m[1]); expected = 2 * Math.PI * integrate(x => x * Math.SQRT2, 0, a);
+      if ((m = t.match(/revolving \$y = (\d*)x\$ around the x-axis from \$x = 0\$ to \$x = (\d+)\$/))) {
+        const [k, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])]; expected = Math.PI * integrate(x => (k * x) ** 2, 0, a);
+      } else if ((m = t.match(/between \$y = (\d*)x\$ and \$y = x\^2\$ \(from \$x=0\$ to \$x=(\d+)\$\)/))) {
+        const [c, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])];
+        expect(a).toBe(c); // the curves meet at x = 0 and x = c
+        expected = Math.PI * integrate(x => (c * x) ** 2 - x ** 4, 0, c);
+      } else if ((m = t.match(/shell method[\s\S]*\$y = (\d*)x\^2\$ \(from \$x=0\$ to \$x=(\d+)\$\)/))) {
+        const [k, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])]; expected = 2 * Math.PI * integrate(x => x * k * x * x, 0, a);
+      } else if ((m = t.match(/arc length of \$y = (.+)\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
+        const slope = coef(terms(m[1]), 'x');
+        expected = integrate(() => Math.sqrt(1 + slope * slope), 0, int(m[2]));
+      } else if ((m = t.match(/surface area when \$y = (\d*)x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
+        const [k, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])];
+        expected = 2 * Math.PI * integrate(x => k * x * Math.sqrt(1 + k * k), 0, a);
       } else throw new Error(`Could not parse: ${t}`);
       expect(num(p)).toBeCloseTo(expected, 6);
       const tolerance = numberSpec(p).tolerance;
@@ -1064,7 +1142,6 @@ describe('independent recomputation: calculus 2 — values', () => {
       expect(validateAnswer(p, (Number(expected.toFixed(places)) + 2 * Math.pow(10, -places)).toFixed(places))).toBe(false);
     }
   });
-
   it('trig substitutions turn the displayed radicand into a perfect square; quarter circles integrate to πr²/4', () => {
     for (const p of sample('trig-substitution', 80)) {
       const t = p.problemText;

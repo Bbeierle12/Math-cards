@@ -133,7 +133,7 @@ export const parseIntervalSet = (raw: string, variable: string): Interval[] | nu
   return null;
 };
 
-/** Parse a finite set of reals: "2, -3", "{2,-3}", "x = 2 or x = -3", "∅". */
+/** Parse a finite set of reals: "2, -3", "{2,-3}", "x = 2 or x = -3", "30°, 150°", "∅". */
 export const parseFiniteSet = (raw: string): number[] | null => {
   let s = raw.trim().toLowerCase().replace(/[−–]/g, '-');
   if (!s) return null;
@@ -143,7 +143,7 @@ export const parseFiniteSet = (raw: string): number[] | null => {
   if (items.length === 0) return null;
   const out: number[] = [];
   for (const item of items) {
-    const value = parseNumericInput(item.replace(/^[a-z]\s*=\s*/, ''));
+    const value = parseNumericInput(item.replace(/^[a-z]\s*=\s*/, '').replace(/\s*°$/, ''));
     if (value === null) return null;
     out.push(value);
   }

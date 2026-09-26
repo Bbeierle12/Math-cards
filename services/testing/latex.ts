@@ -34,7 +34,11 @@ export const coef = (t: Record<string, number>, mono: string): number => t[mono]
  * when mathjs parses the result.
  */
 export const latexToExpr = (tex: string): string => {
-  let s = tex.replace(/\\displaystyle|\\,|\;|\\left|\\right/g, ' ');
+  let s = tex.replace(/\\displaystyle|\\,|\\;|\\left|\\right/g, ' ');
+  // \sin^2\theta → (sin(theta))^(2);  \tan\theta → tan(theta);  \theta → theta
+  s = s.replace(/\\(sin|cos|tan|sec|csc|cot)\^\{?(\d+)\}?\\theta/g, ' ($1(theta))^($2) ')
+    .replace(/\\(sin|cos|tan|sec|csc|cot)\\theta/g, ' $1(theta) ')
+    .replace(/\\theta/g, ' theta ');
   // \sin^{3}(x), \sec^2(x) → (sin(x))^(3)
   s = s.replace(/\\(sin|cos|tan|sec|csc|cot)\^\{?(\d+)\}?\(([^()]*)\)/g, ' ($1($3))^($2) ');
   s = s.replace(/\\(sin|cos|tan|sec|csc|cot)\(/g, ' $1(').replace(/\\ln\(/g, ' log(');

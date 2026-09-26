@@ -103,19 +103,37 @@ export const integralsBasic: GeneratorDef = {
   },
 };
 
+const SUB_FAMILIES = {
+  'inner-derivative-present': { inner: (c: number) => [`x^2+${c}`, 'x^2', `x^2 + ${c}`, 'x^2'], factor: '2x', du: '2x\\,dx' },
+  'cubic-inner': { inner: (c: number) => [`x^3+${c}`, 'x^3', `x^3 + ${c}`, 'x^3'], factor: '3x^2', du: '3x^2\\,dx' },
+  'trig-inner': { inner: (c: number) => [`sin(x)+${c}`, 'sin(x)', `\\sin(x) + ${c}`, '\\sin(x)'], factor: '\\cos(x)', du: '\\cos(x)\\,dx' },
+  'exp-inner': { inner: (c: number) => [`e^x+${c}`, 'e^x', `e^x + ${c}`, 'e^x'], factor: 'e^x', du: 'e^x\\,dx' },
+} as const;
+const SUB_TEMPLATES = Object.keys(SUB_FAMILIES) as (keyof typeof SUB_FAMILIES)[];
+
 export const integrationSubstitution: GeneratorDef = {
   topicId: 'integration-substitution',
-  version: 2,
-  templates: ['inner-derivative-present'],
+  version: 3,
+  templates: SUB_TEMPLATES,
   generate: (ctx) => {
+    const template = ctx.pick(SUB_TEMPLATES);
+    const family = SUB_FAMILIES[template];
     const n = ctx.int(2, 4);
     const c = ctx.int(1, 5);
+    const [inner, bare, innerTex, bareTex] = family.inner(c);
+    // u = g(x) + c and u = g(x) both reduce the integral to ∫(…)ⁿ du
     return {
-      templateId: 'inner-derivative-present',
-      problemText: `$\\displaystyle\\int 2x(x^2 + ${c})^{${n}}\\,dx$\nWhat substitution $u$ should you use?`,
-      answer: { kind: 'expression', reference: `x^2+${c}`, assignable: ['u'] },
-      displayAnswer: `$u = x^2 + ${c}$`,
-      explanation: `Let $u = x^2 + ${c}$. Then $du = 2x\\,dx$, which is exactly the remaining factor, so the integral becomes $\\int u^{${n}}\\,du$.`,
+      templateId: template,
+      problemText: `$\\displaystyle\\int ${family.factor}(${innerTex})^{${n}}\\,dx$\nWhat substitution $u$ should you use?`,
+      answer: {
+        kind: 'anyOf',
+        options: [
+          { kind: 'expression', reference: inner, assignable: ['u'] },
+          { kind: 'expression', reference: bare, assignable: ['u'] },
+        ],
+      },
+      displayAnswer: `$u = ${innerTex}$ (or $u = ${bareTex}$)`,
+      explanation: `Let $u = ${innerTex}$. Then $du = ${family.du}$, which is exactly the remaining factor, so the integral becomes $\\int u^{${n}}\\,du$. ($u = ${bareTex}$ works too: the integral becomes $\\int (u + ${c})^{${n}}\\,du$.)`,
       hint: 'Look for a function whose derivative is also in the integrand.',
     };
   },
