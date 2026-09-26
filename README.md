@@ -114,6 +114,24 @@ replayed exactly. Generators state the validity conditions of an instance with
 and retries on a derived seed, and a generator that cannot produce a valid
 instance fails loudly instead of shipping an invalid problem.
 
+## Worked solutions and input preview
+
+- **Worked solutions.** `problem.solution` is a list of steps. A theorem step
+  names the result, states each hypothesis together with its check for this
+  instance, and only then gives the conclusion (Integral Test: positive,
+  continuous, decreasing; then the integral; then the verdict). Generators
+  that give no steps have their explanation split into sentences. A theorem
+  step without hypotheses, or a hypothesis without its check, fails the
+  structural checks, and the sweep renders every step with KaTeX. After a
+  wrong answer the practice screen shows the solution (automatically, or on
+  request).
+- **Input preview.** Under each typed answer, "Reads as:" shows how the grader
+  parses the input (`services/grading/preview.ts`, which uses the same
+  normalizer and set parsers as `grade`), so `√3/2`, `1/2x` or `x < 3` can be
+  checked before submitting. It never says whether the answer is right.
+- **Symbol keys** (π, √, ^, θ, ∞, °, ≤, ≥, ∪) insert at the caret. Which keys
+  appear depends only on the answer kind, never on the answer itself.
+
 ## Progress, mastery and reviews
 
 Progress is an append-only log of attempts (`learningLog` in localStorage);
@@ -158,6 +176,9 @@ the whole history.
 
 `components/formulaSheets.test.tsx` renders every formula sheet and asserts the
 hypotheses and domain conditions each statement needs.
+
+`docs/cas-evaluation.md` records why a second symbolic library (CortexJS
+Compute Engine) was evaluated and not adopted.
 
 `services/mathCorrectness.test.ts` recomputes every exercise family's answer
 from the displayed text (independently of the generator) and reproduces the
