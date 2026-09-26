@@ -1,6 +1,6 @@
 # Math-Cards: Mathematical Architecture Plan
 
-Status: in progress (Phases 1–3 done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
+Status: Phases 1–4 done · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
 
 This plan turns the comparative design review (WeBWorK, STACK, Numbas, IMathAS, Alcumus,
 ALEKS, IXL, FSRS) into sequenced engineering work. It keeps the constraints already
@@ -243,6 +243,33 @@ exists; existing users see their progress preserved.
   the Phase 1 corpus as a helper for canonical forms and form constraints (factored,
   lowest terms, rationalized). It never decides domain equality. Adopt only if the
   corpus shows concrete wins and bundle growth is acceptable.
+
+**Phase 4 done.** As built:
+- **Structured solutions** (`SolutionStep` in `types.ts`, `components/WorkedSolution.tsx`).
+  A theorem step names the result, lists each hypothesis with its check for the instance,
+  then concludes; the structural checks reject a theorem step without hypotheses or a
+  hypothesis without its check, and the sweep renders every step. Explicit theorem steps
+  for the geometric, p-series, Ratio, nth-term, Alternating Series and Integral tests (the
+  Integral Test is a new template, $\sum_{n\geq 2} 1/(n(\ln n)^p)$, recomputed from its terms
+  and proved by the oracle), the alternating-series and Lagrange remainders, radii by the
+  ratio and geometric tests, the MCT and the Pythagorean theorem; every other generator's
+  explanation is split into steps. A wrong answer offers the solution on request when the
+  auto-show setting is off.
+- **Input preview** (`services/grading/preview.ts`): KaTeX of the grader's own reading
+  (same normalizer and set parsers), no verdict. Instead of MathLive, symbol keys insert
+  at the caret; the key set depends only on the answer kind, so it reveals nothing. The
+  preview work found and fixed a grading bug: `√3/2` was read as √(3/2).
+- **Fact registry** (`data/facts.ts`, `components/FactSheet.tsx`): the seven sheets render
+  from 200 facts with statements, hypotheses, conclusions, sources (OpenStax sections,
+  DLMF equations) and counterexamples; `formulaSheets.test.tsx` asserts against the
+  registry (every theorem, test or rule states hypotheses; no condition hidden in a
+  statement; every segment renders). Moving the statements into data surfaced missing or
+  wrong conditions, now corrected: exponent rules for non-integer exponents, the atan2
+  quadrant rule, polar area and arc-length ranges, trig-substitution ranges, a₁ ≠ 0 for
+  a divergent geometric series, radians for trig calculus, and others.
+- **Secondary symbolic layer: not adopted.** See `docs/cas-evaluation.md`: Compute
+  Engine's verdicts are right on 5 of 9 corpus rows (the grader: 9 of 9), its canonical
+  form turns `x/x` into `1`, and it would add 943 KB gzipped to a 397 KB app.
 
 ---
 

@@ -174,8 +174,14 @@ the whole history.
   text, and `scripts/oracle/check.py` proves each one with SymPy.
 - `npm run typecheck`, `npm run build`.
 
-`components/formulaSheets.test.tsx` renders every formula sheet and asserts the
-hypotheses and domain conditions each statement needs.
+The formula sheets render from a fact registry (`data/facts.ts`): each fact has
+its statement, the hypotheses under which it holds, a conclusion where it is a
+test or theorem, an editorial source (OpenStax, DLMF) and, where useful, a
+counterexample showing why a hypothesis is needed.
+`components/formulaSheets.test.tsx` asserts that every theorem, test and rule
+states its hypotheses, that no condition is hidden inside a statement, that
+every formula renders, and that each sheet shows the hypotheses next to their
+statement.
 
 `docs/cas-evaluation.md` records why a second symbolic library (CortexJS
 Compute Engine) was evaluated and not adopted.
