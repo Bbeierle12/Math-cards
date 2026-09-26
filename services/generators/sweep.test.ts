@@ -20,7 +20,8 @@ import { checkDraft } from './checks';
 import katex from 'katex';
 import { canonicalInput, displayOf, grade, wrongInputs } from '../grading';
 import { instanceKey } from '../learning';
-import type { GeneratorSettings, Problem } from '../../types';
+import type { AnswerSpec, GeneratorSettings, Problem } from '../../types';
+import { previewInput } from '../grading/preview';
 
 const SEEDS = Number(process.env.SWEEP_SEEDS || 150);
 /** 1.5 × the default evidence threshold (10). */
@@ -83,6 +84,15 @@ describe(`seed sweep (${SEEDS} seeds per generator)`, () => {
         expect(generateProblem(p.generatorId, p.settings, p.seed), where).toEqual(p);
         const canonical = canonicalInput(p.answer);
         expect(grade(p.answer, canonical), `${where}\nrejected its own answer ${JSON.stringify(canonical)}`).toBe(true);
+        // the live preview reads the canonical answer, and what it shows renders
+        const slots: [AnswerSpec | null, string][] = p.answer.kind === 'multipart'
+          ? p.answer.parts.map((part, i) => [part.spec, (canonical as string[])[i]])
+          : [[p.answer, canonical as string]];
+        for (const [spec, input] of slots) {
+          const preview = previewInput(spec, input);
+          expect(preview === null || 'tex' in preview, `${where}\npreview of ${JSON.stringify(input)}: ${JSON.stringify(preview)}`).toBe(true);
+          if (preview && 'tex' in preview) expect(katexErrors(`$${preview.tex}$`), where).toEqual([]);
+        }
         for (const wrong of wrongInputs(p.answer)) {
           expect(grade(p.answer, wrong), `${where}\naccepted ${JSON.stringify(wrong)}`).toBe(false);
         }

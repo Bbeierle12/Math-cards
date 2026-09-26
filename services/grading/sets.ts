@@ -133,17 +133,28 @@ export const parseIntervalSet = (raw: string, variable: string): Interval[] | nu
   return null;
 };
 
-/** Parse a finite set of reals: "2, -3", "{2,-3}", "x = 2 or x = -3", "30°, 150°", "∅". */
-export const parseFiniteSet = (raw: string): number[] | null => {
+/**
+ * The items of a typed finite set, each reduced to the number it names:
+ * "x = 2 or x = -3" → ["2", "-3"], "30°, 150°" → ["30", "150"], "∅" → [].
+ * Null when there is nothing to read.
+ */
+export const finiteSetItems = (raw: string): string[] | null => {
   let s = raw.trim().toLowerCase().replace(/[−–]/g, '-');
   if (!s) return null;
   if (/^(∅|\{\s*\}|none|no\s*(real\s*)?solutions?)$/.test(s)) return [];
   s = s.replace(/^\{(.*)\}$/, '$1');
   const items = s.split(/,|;|\bor\b|\band\b/).map(t => t.trim()).filter(Boolean);
   if (items.length === 0) return null;
+  return items.map(item => item.replace(/^[a-z]\s*=\s*/, '').replace(/\s*°$/, ''));
+};
+
+/** Parse a finite set of reals: "2, -3", "{2,-3}", "x = 2 or x = -3", "30°, 150°", "∅". */
+export const parseFiniteSet = (raw: string): number[] | null => {
+  const items = finiteSetItems(raw);
+  if (items === null) return null;
   const out: number[] = [];
   for (const item of items) {
-    const value = parseNumericInput(item.replace(/^[a-z]\s*=\s*/, '').replace(/\s*°$/, ''));
+    const value = parseNumericInput(item);
     if (value === null) return null;
     out.push(value);
   }

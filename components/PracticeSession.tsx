@@ -26,6 +26,7 @@ export default function PracticeSession({ topicId, onComplete, learning }: Pract
   const [answerValues, setAnswerValues] = useState<string[]>(['']);
   const [answerStatus, setAnswerStatus] = useState<'idle' | 'correct' | 'incorrect'>('idle');
   const [showHint, setShowHint] = useState(false);
+  const [showSolution, setShowSolution] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
   const [timerRemaining, setTimerRemaining] = useState(settings.timerDurationSeconds);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -111,6 +112,7 @@ export default function PracticeSession({ topicId, onComplete, learning }: Pract
     setAnswerValues(emptyValues(next));
     setAnswerStatus('idle');
     setShowHint(false);
+    setShowSolution(false);
     setSessionCount(prev => prev + 1);
     // Reset the countdown in the SAME batch as the status change. Otherwise the
     // expiry effect below would observe {timerRemaining: 0, status: 'idle'} for
@@ -361,8 +363,13 @@ export default function PracticeSession({ topicId, onComplete, learning }: Pract
           {answerStatus === 'incorrect' && (
             <p>The correct answer is: <span className="font-bold"><MathText text={answerDisplay(currentProblem)} /></span></p>
           )}
-          {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && (
+          {answerStatus === 'incorrect' && (settings.showExplanationOnIncorrect || showSolution) && (
             <WorkedSolution steps={currentProblem.solution} />
+          )}
+          {answerStatus === 'incorrect' && !settings.showExplanationOnIncorrect && !showSolution && (
+            <button type="button" onClick={() => setShowSolution(true)} className="mt-2 text-sm underline text-slate-300 hover:text-white">
+              Show worked solution
+            </button>
           )}
           {answerStatus === 'correct' && settings.autoAdvanceOnCorrect && (
             <p className="mt-1 text-sm text-green-400/60">Next question in a moment...</p>
