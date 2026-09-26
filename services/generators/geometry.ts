@@ -1,7 +1,7 @@
 /** Geometry. Problems that say "use π ≈ 3.14" are graded against the 3.14 value only. */
 import { PYTHAGOREAN_TRIPLES } from '../../constants';
 import type { Draft, GeneratorDef } from './context';
-import { degrees, exact, roundTo, roundedTo } from './context';
+import { degrees, exact, roundTo, roundedTo, step, theorem } from './context';
 
 export const angles: GeneratorDef = {
   topicId: 'angles',
@@ -69,7 +69,23 @@ export const pythagoreanTheorem: GeneratorDef = {
         explanation: `$c^2 = a^2 + b^2 = ${a * a} + ${b * b} = ${c * c}$, so $c = \\sqrt{${c * c}} = ${c}$.`,
       },
     };
-    return { ...drafts[missing], hint: 'Pythagorean theorem: $a^2 + b^2 = c^2$, where $c$ is the hypotenuse.' };
+    const square = {
+      a: `$a^2 = c^2 - b^2 = ${c * c} - ${b * b} = ${a * a}$.`,
+      b: `$b^2 = c^2 - a^2 = ${c * c} - ${a * a} = ${b * b}$.`,
+      c: `$c^2 = a^2 + b^2 = ${a * a} + ${b * b} = ${c * c}$.`,
+    }[missing];
+    const side = { a, b, c }[missing];
+    return {
+      ...drafts[missing],
+      hint: 'Pythagorean theorem: $a^2 + b^2 = c^2$, where $c$ is the hypotenuse.',
+      solution: [
+        theorem('Pythagorean theorem', [
+          ['The triangle has a right angle, and $c$ is the side opposite it', `given: a right triangle ${missing === 'c' ? 'with legs $a$ and $b$' : 'whose hypotenuse is $c$'}`],
+        ], '$a^2 + b^2 = c^2$.'),
+        step(square),
+        step(`A length is positive, so $${missing} = \\sqrt{${side * side}} = ${side}$.`),
+      ],
+    };
   },
 };
 

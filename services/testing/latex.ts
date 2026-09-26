@@ -51,6 +51,7 @@ export const latexToExpr = (tex: string): string => {
       .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, ' (($1)/($2)) ');
   } while (s !== prev);
   s = s.replace(/\\cdot/g, '*').replace(/\\pi/g, 'pi').replace(/\s+/g, ' ').trim();
-  // "n (…)" would parse as a call of n: make juxtaposition before a parenthesis explicit
-  return s.replace(/([a-zA-Z0-9)!])\s+\(/g, '$1 * (');
+  // "n (…)" would parse as a call of n, and "n log(n)" loses its space downstream:
+  // make juxtaposition before a parenthesis or a function explicit
+  return s.replace(/([a-zA-Z0-9)!])\s+(?=\(|(?:sin|cos|tan|sec|csc|cot|log|sqrt|cbrt)\()/g, '$1 * ');
 };

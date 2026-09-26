@@ -7,7 +7,7 @@
  * The registry (./index.ts) turns a Draft into a Problem and records the
  * generator id, version and seed so the exact problem can be replayed.
  */
-import type { AnswerSpec, FractionAnswer, GeneratorSettings, Interval, NumberForm, TopicId } from '../../types';
+import type { AnswerSpec, FractionAnswer, GeneratorSettings, Interval, NumberForm, SolutionStep, TopicId } from '../../types';
 import type { Rng } from '../random';
 
 export type { GeneratorSettings };
@@ -48,6 +48,8 @@ export interface Draft {
   answer: AnswerSpec;
   displayAnswer?: string;
   explanation: string;
+  /** Worked solution; when absent the explanation is split into steps. */
+  solution?: SolutionStep[];
   hint?: string;
 }
 
@@ -69,6 +71,37 @@ export class InvariantViolation extends Error {
     super(`generator invariant violated: ${invariant} (${INVARIANTS[invariant]})`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Worked solutions
+// ---------------------------------------------------------------------------
+
+/**
+ * Split a prose explanation into steps at sentence ends outside math:
+ * ". " (or "! ", "? ", ".) ") followed by a capital letter, a "$", or "(".
+ */
+export const stepsFromExplanation = (text: string): SolutionStep[] => {
+  const out: string[] = [];
+  let start = 0;
+  let inMath = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '$' && text[i - 1] !== '\\') inMath = !inMath;
+    const end = /[.!?]/.test(c) || (c === ')' && /[.!?]/.test(text[i - 1] ?? ''));   // "…." or "….)"
+    if (!inMath && end && text[i + 1] === ' ' && /[A-Z$(]/.test(text[i + 2] ?? '')) {
+      out.push(text.slice(start, i + 1).trim());
+      start = i + 2;
+    }
+  }
+  const rest = text.slice(start).trim();
+  if (rest) out.push(rest);
+  return out.filter(Boolean).map(t => ({ kind: 'step', text: t }));
+};
+
+export const step = (text: string): SolutionStep => ({ kind: 'step', text });
+
+export const theorem = (name: string, hypotheses: [condition: string, check: string][], conclusion: string): SolutionStep =>
+  ({ kind: 'theorem', name, hypotheses: hypotheses.map(([condition, check]) => ({ condition, check })), conclusion });
 
 // ---------------------------------------------------------------------------
 // Answer builders

@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { GENERATORS, generateProblem } from './index';
-import { INVARIANTS } from './context';
+import { INVARIANTS, stepsFromExplanation } from './context';
 import { checkDraft } from './checks';
 import katex from 'katex';
 import { canonicalInput, displayOf, grade, wrongInputs } from '../grading';
@@ -39,6 +39,11 @@ const katexErrors = (text: string): string[] => mathSegments(text).flatMap(tex =
     return [`${tex}: ${(e as Error).message}`];
   }
 });
+
+/** Every text of a worked solution the student sees. */
+const solutionTexts = (p: Problem): string[] => p.solution.flatMap(st => (st.kind === 'step'
+  ? [st.text]
+  : [st.name, ...st.hypotheses.flatMap(h => [h.condition, h.check]), st.conclusion]));
 
 const sweep = (topic: Parameters<typeof generateProblem>[0], settings: GeneratorSettings = {}) => {
   const unique = new Map<string, Problem>();
@@ -71,7 +76,8 @@ describe(`seed sweep (${SEEDS} seeds per generator)`, () => {
       for (const p of unique) {
         const where = `${topic} seed ${p.seed}: ${p.problemText}`;
         expect(checkDraft({ ...p }), where).toEqual([]);
-        for (const text of [p.problemText, p.explanation, p.hint ?? '', p.displayAnswer ?? displayOf(p.answer)]) {
+        expect(p.solution.length, `${where}: no worked solution`).toBeGreaterThan(0);
+        for (const text of [p.problemText, p.explanation, p.hint ?? '', p.displayAnswer ?? displayOf(p.answer), ...solutionTexts(p)]) {
           expect(katexErrors(text), where).toEqual([]);
         }
         expect(generateProblem(p.generatorId, p.settings, p.seed), where).toEqual(p);
@@ -121,6 +127,23 @@ describe('structural checks', () => {
     expect(checkDraft({ ...base, problemText: 'Solve $3x + -4 = 2$' })).not.toEqual([]);
     expect(checkDraft({ ...base, problemText: 'Solve $1x = 2$' })).not.toEqual([]);
     expect(checkDraft({ ...base, problemText: 'Solve $x - (-4) = 2$, then $11x = 22$ and $\\frac{1}{x}$' })).toEqual([]);
+  });
+
+  it('reject theorem steps that do not state and check their hypotheses', () => {
+    const withSolution = (solution: unknown) => checkDraft({ ...base, solution: solution as never });
+    expect(withSolution([{ kind: 'theorem', name: 'Ratio Test', hypotheses: [{ condition: '$L < 1$', check: '$L = 0$' }], conclusion: 'It converges.' }])).toEqual([]);
+    expect(withSolution([{ kind: 'theorem', name: 'Ratio Test', hypotheses: [], conclusion: 'It converges.' }])).not.toEqual([]);
+    expect(withSolution([{ kind: 'theorem', name: 'Ratio Test', hypotheses: [{ condition: '$L < 1$', check: '' }], conclusion: 'It converges.' }])).not.toEqual([]);
+    expect(withSolution([{ kind: 'step', text: '' }])).not.toEqual([]);
+    expect(withSolution([{ kind: 'step', text: 'So $x = \\frac{1}{2$.' }])).not.toEqual([]);
+  });
+
+  it('split a prose explanation into steps at sentence ends outside math', () => {
+    const steps = stepsFromExplanation('Let $u = x$. Then $du = dx$, so $x = 2.5$. (For $x > 0$.) Done: $x. Y$ stays whole.');
+    expect(steps.map(s => (s.kind === 'step' ? s.text : ''))).toEqual([
+      'Let $u = x$.', 'Then $du = dx$, so $x = 2.5$.', '(For $x > 0$.)', 'Done: $x. Y$ stays whole.',
+    ]);
+    expect(stepsFromExplanation('One sentence $a_n = 1$')).toEqual([{ kind: 'step', text: 'One sentence $a_n = 1$' }]);
   });
 
   it('reject malformed answer specs', () => {

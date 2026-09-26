@@ -62,6 +62,7 @@ const problemWith = (answer: AnswerSpec, topicId: TopicId = 'addition'): Problem
   problemText: '',
   answer,
   explanation: '',
+  solution: [],
   generatorId: topicId,
   generatorVersion: 0,
   seed: 'test',

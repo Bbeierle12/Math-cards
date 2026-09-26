@@ -17,7 +17,7 @@
  */
 import type { GeneratorSettings, Problem, TopicId } from '../../types';
 import { createRng, randomSeed } from '../random';
-import { InvariantViolation } from './context';
+import { InvariantViolation, stepsFromExplanation } from './context';
 import { checkDraft } from './checks';
 import type { GenContext, GeneratorDef } from './context';
 import * as arithmetic from './arithmetic';
@@ -94,6 +94,7 @@ export const instantiate = (def: GeneratorDef, settings: GeneratorSettings, seed
       problemText: draft.problemText,
       answer: draft.answer,
       explanation: draft.explanation,
+      solution: draft.solution ?? stepsFromExplanation(draft.explanation),
       generatorId: def.topicId,
       generatorVersion: def.version,
       seed,

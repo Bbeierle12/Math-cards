@@ -7,11 +7,11 @@
  * claim symbolically, and mathCorrectness.test.ts recomputes it from the
  * prompt text.
  */
-import type { AnswerSpec } from '../../types';
+import type { AnswerSpec, SolutionStep } from '../../types';
 import type { Draft, GeneratorDef } from './context';
 import {
   choice, degrees, exact, latexFrac, latexFraction, latexPolynomial, latexPower, ordinalSuffix, roundedTo,
-  simplifyFraction,
+  simplifyFraction, step, theorem,
 } from './context';
 
 // ---------------------------------------------------------------------------
@@ -76,6 +76,12 @@ const sciTex = (v: number, sig: number): string => {
 };
 
 const factorial = (k: number): number => (k <= 1 ? 1 : k * factorial(k - 1));
+
+/** base^k, parenthesized unless k = 1. */
+const powOf = (base: string, k: number): string => (k === 1 ? base : `\\left(${base}\\right)^{${k}}`);
+
+/** A draft with an explicit worked solution. */
+const solved = (draft: Draft, ...solution: SolutionStep[]): Draft => ({ ...draft, solution });
 
 // ---------------------------------------------------------------------------
 // Answer shapes
@@ -524,17 +530,27 @@ export const sequences: GeneratorDef = {
       if (ctx.bool()) {
         // n/(n + c): increasing (a_{n+1} − a_n = c/((n+c)(n+1+c)) > 0), bounded above by 1 → 1
         const c = ctx.int(1, 5);
-        return convergence(template,
+        return solved(convergence(template,
           `The sequence $a_n = \\frac{n}{n + ${c}}$ is increasing and bounded above by $1$.\nBy the Monotone Convergence Theorem, does it converge? If it converges, give its limit.`,
           1, 'Limit', '1',
-          `The MCT guarantees convergence; the limit is $\\lim \\frac{n}{n + ${c}} = \\lim \\frac{1}{1 + ${c}/n} = 1$.`, hint);
+          `The MCT guarantees convergence; the limit is $\\lim \\frac{n}{n + ${c}} = \\lim \\frac{1}{1 + ${c}/n} = 1$.`, hint),
+        theorem('Monotone Convergence Theorem', [
+          ['$(a_n)$ is increasing', `$a_{n+1} - a_n = \\frac{${c}}{(n + ${c})(n + ${c + 1})} > 0$ for every $n \\geq 1$`],
+          ['$(a_n)$ is bounded above', `$\\frac{n}{n + ${c}} < \\frac{n + ${c}}{n + ${c}} = 1$ for every $n \\geq 1$`],
+        ], '$(a_n)$ converges.'),
+        step(`Its limit: $\\lim \\frac{n}{n + ${c}} = \\lim \\frac{1}{1 + ${c}/n} = 1$.`));
       }
       // kn/(n + 1): increasing, bounded above by k → k
       const k = ctx.int(2, 6);
-      return convergence(template,
+      return solved(convergence(template,
         `The sequence $a_n = \\frac{${k}n}{n + 1}$ is increasing and bounded above by $${k}$.\nBy the Monotone Convergence Theorem, does it converge? If it converges, give its limit.`,
         k, 'Limit', `${k}`,
-        `The MCT guarantees convergence; the limit is $\\lim \\frac{${k}n}{n + 1} = \\lim \\frac{${k}}{1 + 1/n} = ${k}$. (A bound need not be the limit; here it is.)`, hint);
+        `The MCT guarantees convergence; the limit is $\\lim \\frac{${k}n}{n + 1} = \\lim \\frac{${k}}{1 + 1/n} = ${k}$. (A bound need not be the limit; here it is.)`, hint),
+      theorem('Monotone Convergence Theorem', [
+        ['$(a_n)$ is increasing', `$a_{n+1} - a_n = \\frac{${k}}{(n + 1)(n + 2)} > 0$ for every $n \\geq 1$`],
+        ['$(a_n)$ is bounded above', `$\\frac{${k}n}{n + 1} < \\frac{${k}(n + 1)}{n + 1} = ${k}$ for every $n \\geq 1$`],
+      ], '$(a_n)$ converges.'),
+      step(`Its limit: $\\lim \\frac{${k}n}{n + 1} = \\lim \\frac{${k}}{1 + 1/n} = ${k}$. (A bound need not be the limit; here it is.)`));
     }
     // Is a_n monotonic?
     const c = ctx.int(1, 6);
@@ -561,81 +577,161 @@ export const sequences: GeneratorDef = {
 // Series convergence
 // ---------------------------------------------------------------------------
 
-const SERIES_TEMPLATES = ['geometric', 'p-series', 'ratio-test', 'nth-term', 'alternating'] as const;
+const SERIES_TEMPLATES = ['geometric', 'p-series', 'ratio-test', 'nth-term', 'alternating', 'integral-test'] as const;
 const ASK_VERDICT = 'Does the series converge or diverge?';
+
+const NTH_TERM_TEST = '$n$th-term test for divergence';
+const NTH_TERM_HYPOTHESIS = '$\\lim_{n\\to\\infty} a_n \\neq 0$, or the limit does not exist';
 
 export const seriesConvergence: GeneratorDef = {
   topicId: 'series-convergence',
-  version: 3,
+  version: 4,
   templates: SERIES_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(SERIES_TEMPLATES);
-    const verdict = (converges: boolean, text: string, explanation: string, hint: string): Draft => ({
+    const verdict = (converges: boolean, text: string, explanation: string, hint: string, solution: SolutionStep[]): Draft => ({
       templateId: template, problemText: text, answer: verdictChoice(converges),
-      displayAnswer: converges ? 'Converges' : 'Diverges', explanation, hint,
+      displayAnswer: converges ? 'Converges' : 'Diverges', explanation, hint, solution,
     });
     if (template === 'geometric') {
       // Σ_{n≥0} a rⁿ = a/(1 − r) for |r| < 1; diverges for |r| ≥ 1
       const [p, q] = ctx.pick([[1, 2], [1, 3], [2, 3], [3, 4], [1, 4], [-1, 2], [-1, 3], [-2, 3], [3, 2], [2, 1], [5, 4], [-3, 2], [-1, 1]] as const);
       const a = ctx.int(1, 5);
       const r = latexFraction(p, q);
+      const absR = latexFraction(Math.abs(p), q);
       const text = `Does $\\displaystyle\\sum_{n=0}^{\\infty} ${a === 1 ? '' : a}${baseTex(p, q)}^n$ converge or diverge? If it converges, give its sum.`;
       const hint = 'A geometric series $\\sum_{n=0}^{\\infty} ar^n$ converges exactly when $|r| < 1$, to $\\frac{a}{1-r}$.';
+      const form: [string, string] = ['The series is $\\sum_{n=0}^{\\infty} ar^n$ with $a \\neq 0$', `$a = ${a}$ and $r = ${r}$`];
       if (Math.abs(p) < q) {
         const sum = simplifyFraction(a * q, q - p);
         const tex = latexFraction(sum.numerator, sum.denominator);
-        return convergence(template, text, (a * q) / (q - p), 'Sum', tex,
-          `Geometric with $a = ${a}$ and $r = ${r}$, $|r| < 1$: the sum is $\\frac{a}{1 - r} = \\frac{${a}}{1 - (${r})} = ${tex}$.`, hint);
+        return solved(convergence(template, text, (a * q) / (q - p), 'Sum', tex,
+          `Geometric with $a = ${a}$ and $r = ${r}$, $|r| < 1$: the sum is $\\frac{a}{1 - r} = \\frac{${a}}{1 - ${p < 0 ? `(${r})` : r}} = ${tex}$.`, hint),
+        theorem('Geometric series test', [form, ['$|r| < 1$', `$|r| = ${absR} < 1$`]],
+          `The series converges, to $\\frac{a}{1 - r} = \\frac{${a}}{1 - ${p < 0 ? `(${r})` : r}} = ${tex}$.`));
       }
-      return convergence(template, text, null, 'Sum', null,
-        `Geometric with $r = ${r}$ and $|r| ${Math.abs(p) === q ? '=' : '>'} 1$: the terms do not tend to $0$, so the series diverges.`, hint);
+      return solved(convergence(template, text, null, 'Sum', null,
+        `Geometric with $r = ${r}$ and $|r| ${Math.abs(p) === q ? '=' : '>'} 1$: the terms do not tend to $0$, so the series diverges.`, hint),
+      theorem('Geometric series test', [form, ['$|r| \\geq 1$', `$|r| = ${absR} ${Math.abs(p) === q ? '=' : '>'} 1$`]],
+        'The terms $ar^n$ do not tend to $0$, so the series diverges.'));
     }
     if (template === 'p-series') {
       const [n, d] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1], [4, 3], [2, 3]] as const);
       const c = ctx.int(1, 5);
       const converges = n > d;
+      const pTex = latexFraction(n, d);
+      const pow = powTex('n', n, d);
+      const outcome = converges ? 'converges' : 'diverges';
       return verdict(converges,
-        `Consider $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{${c}}{${powTex('n', n, d)}}$.\n${ASK_VERDICT}`,
-        `This is ${c === 1 ? 'a' : `$${c}$ times a`} $p$-series with $p = ${latexFraction(n, d)}$, which converges exactly when $p > 1$. Here $p ${converges ? '>' : '\\leq'} 1$, so it ${converges ? 'converges' : 'diverges'}.`,
-        'Identify $p$ in $\\sum \\frac{1}{n^p}$; a constant factor does not change convergence.');
+        `Consider $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{${c}}{${pow}}$.\n${ASK_VERDICT}`,
+        `This is ${c === 1 ? 'a' : `$${c}$ times a`} $p$-series with $p = ${pTex}$, which converges exactly when $p > 1$. Here $p ${converges ? '>' : '\\leq'} 1$, so it ${outcome}.`,
+        'Identify $p$ in $\\sum \\frac{1}{n^p}$; a constant factor does not change convergence.',
+        [
+          ...(c === 1 ? [] : [step(`Factor out the constant: $\\sum_{n=1}^{\\infty} \\frac{${c}}{${pow}} = ${c}\\sum_{n=1}^{\\infty} \\frac{1}{${pow}}$.`)]),
+          theorem('$p$-series test', [
+            ['The series is $\\sum_{n=1}^{\\infty} \\frac{1}{n^p}$ for a constant $p$', `$\\frac{1}{${pow}}$ has $p = ${pTex}$`],
+            [converges ? '$p > 1$' : '$p \\leq 1$', `$p = ${pTex} ${converges ? '>' : n === d ? '=' : '<'} 1$`],
+          ], `$\\sum_{n=1}^{\\infty} \\frac{1}{${pow}}$ ${outcome}.`),
+          ...(c === 1 ? [] : [step(`A nonzero constant multiple of a series converges exactly when the series does, so the given series ${outcome}.`)]),
+        ]);
     }
     if (template === 'ratio-test') {
       const c = ctx.int(2, 5);
       const k = ctx.int(1, 3);
       const family = ctx.pick(['poly/exp', 'exp/fact', 'fact/exp', 'exp/poly', 'fact/power'] as const);
       const f = {
-        'poly/exp': { term: `\\frac{${latexPower('n', k)}}{${c}^n}`, L: `\\frac{1}{${c}}`, converges: true },
-        'exp/fact': { term: `\\frac{${c}^n}{n!}`, L: '0', converges: true },
-        'fact/exp': { term: `\\frac{n!}{${c}^n}`, L: '\\infty', converges: false },
-        'exp/poly': { term: `\\frac{${c}^n}{${latexPower('n', k)}}`, L: `${c}`, converges: false },
-        'fact/power': { term: '\\frac{n!}{n^n}', L: '\\frac{1}{e}', converges: true },
+        'poly/exp': { term: `\\frac{${latexPower('n', k)}}{${c}^n}`, ratio: `${powOf('\\frac{n+1}{n}', k)} \\cdot \\frac{1}{${c}}`, L: `\\frac{1}{${c}}`, compare: `$L = \\frac{1}{${c}} < 1$`, converges: true },
+        'exp/fact': { term: `\\frac{${c}^n}{n!}`, ratio: `\\frac{${c}}{n+1}`, L: '0', compare: '$L = 0 < 1$', converges: true },
+        'fact/exp': { term: `\\frac{n!}{${c}^n}`, ratio: `\\frac{n+1}{${c}}`, L: '\\infty', compare: '$L = \\infty$', converges: false },
+        'exp/poly': { term: `\\frac{${c}^n}{${latexPower('n', k)}}`, ratio: `${c} \\cdot ${powOf('\\frac{n}{n+1}', k)}`, L: `${c}`, compare: `$L = ${c} > 1$`, converges: false },
+        'fact/power': { term: '\\frac{n!}{n^n}', ratio: '\\frac{(n+1)!}{(n+1)^{n+1}} \\cdot \\frac{n^n}{n!} = \\left(\\frac{n}{n+1}\\right)^n = \\frac{1}{\\left(1 + \\frac{1}{n}\\right)^n}', L: '\\frac{1}{e}', compare: '$L = \\frac{1}{e} < 1$, since $e > 1$', converges: true },
       }[family];
       return verdict(f.converges,
         `Use the Ratio Test on $\\displaystyle\\sum_{n=1}^{\\infty} ${f.term}$.\n${ASK_VERDICT}`,
         `$\\lim_{n\\to\\infty} \\left|\\frac{a_{n+1}}{a_n}\\right| = ${f.L}$, which is ${f.converges ? '$< 1$: the series converges' : '$> 1$: the series diverges'}.`,
-        'Compute $L = \\lim \\left|\\frac{a_{n+1}}{a_n}\\right|$: $L < 1$ converges, $L > 1$ diverges.');
+        'Compute $L = \\lim \\left|\\frac{a_{n+1}}{a_n}\\right|$: $L < 1$ converges, $L > 1$ diverges.',
+        [theorem('Ratio Test', [
+          ['$a_n \\neq 0$ for every $n$', `$a_n = ${f.term} > 0$ for every $n \\geq 1$`],
+          ['$L = \\lim_{n\\to\\infty} \\left|\\frac{a_{n+1}}{a_n}\\right|$ exists (possibly $\\infty$)', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = ${f.ratio} \\to ${f.L}$`],
+          [f.converges ? '$L < 1$' : '$L > 1$ (including $L = \\infty$)', f.compare],
+        ], f.converges ? 'The series converges (absolutely).' : 'The series diverges.')]);
     }
     if (template === 'nth-term') {
       const [a, b, c, d] = [ctx.int(1, 5), ctx.int(0, 5), ctx.int(1, 5), ctx.int(1, 5)];
       const limit = simplifyFraction(a, c);
+      const limitTex = latexFraction(limit.numerator, limit.denominator);
+      const term = `\\frac{${latexPolynomial([[a, 'n'], [b, '']])}}{${latexPolynomial([[c, 'n'], [d, '']])}}`;
       return verdict(false,
-        `Apply the $n$th-term test to $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{${latexPolynomial([[a, 'n'], [b, '']])}}{${latexPolynomial([[c, 'n'], [d, '']])}}$.\n${ASK_VERDICT}`,
-        `$\\lim_{n\\to\\infty} a_n = ${latexFraction(limit.numerator, limit.denominator)} \\neq 0$, so by the $n$th-term test the series diverges.`,
-        'If $\\lim a_n \\neq 0$, the series cannot converge.');
+        `Apply the $n$th-term test to $\\displaystyle\\sum_{n=1}^{\\infty} ${term}$.\n${ASK_VERDICT}`,
+        `$\\lim_{n\\to\\infty} a_n = ${limitTex} \\neq 0$, so by the $n$th-term test the series diverges.`,
+        'If $\\lim a_n \\neq 0$, the series cannot converge.',
+        [theorem(NTH_TERM_TEST, [
+          [NTH_TERM_HYPOTHESIS, `dividing the numerator and denominator by $n$, $a_n = \\frac{${perN(a, b)}}{${perN(c, d)}} \\to ${limitTex} \\neq 0$`],
+        ], 'The series diverges.')]);
+    }
+    if (template === 'integral-test') {
+      // Σ_{n≥2} 1/(n (ln n)^p): with u = ln x the integral is ∫_{ln 2}^∞ u^{-p} du, finite exactly when p > 1
+      const [pn, pd] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1]] as const);
+      const converges = pn > pd;
+      const pTex = latexFraction(pn, pd);
+      const exponent = pd === 1 ? `${pn}` : `${pn}/${pd}`;
+      const lnPow = (v: string) => (pn === pd ? `\\ln(${v})` : pn === 1 && pd === 2 ? `\\sqrt{\\ln(${v})}` : `(\\ln(${v}))^{${exponent}}`);
+      const fx = `\\frac{1}{x\\,${lnPow('x')}}`;
+      const uPow = pn === pd ? 'u' : pn === 1 && pd === 2 ? '\\sqrt{u}' : `u^{${exponent}}`;
+      const outcome = converges ? 'converges' : 'diverges';
+      const evaluate = {
+        '1/2': '$\\int_{\\ln 2}^{b} \\frac{du}{\\sqrt{u}} = 2\\sqrt{b} - 2\\sqrt{\\ln 2} \\to \\infty$ as $b \\to \\infty$: the integral diverges.',
+        '1/1': '$\\int_{\\ln 2}^{b} \\frac{du}{u} = \\ln(b) - \\ln(\\ln 2) \\to \\infty$ as $b \\to \\infty$: the integral diverges.',
+        '3/2': '$\\int_{\\ln 2}^{\\infty} \\frac{du}{u^{3/2}} = \\left[-\\frac{2}{\\sqrt{u}}\\right]_{\\ln 2}^{\\infty} = \\frac{2}{\\sqrt{\\ln 2}}$: the integral converges.',
+        '2/1': '$\\int_{\\ln 2}^{\\infty} \\frac{du}{u^{2}} = \\left[-\\frac{1}{u}\\right]_{\\ln 2}^{\\infty} = \\frac{1}{\\ln 2}$: the integral converges.',
+        '3/1': '$\\int_{\\ln 2}^{\\infty} \\frac{du}{u^{3}} = \\left[-\\frac{1}{2u^{2}}\\right]_{\\ln 2}^{\\infty} = \\frac{1}{2(\\ln 2)^{2}}$: the integral converges.',
+      }[`${pn}/${pd}` as '1/2' | '1/1' | '3/2' | '2/1' | '3/1'];
+      return verdict(converges,
+        `Use the Integral Test on $\\displaystyle\\sum_{n=2}^{\\infty} \\frac{1}{n\\,${lnPow('n')}}$.\n${ASK_VERDICT}`,
+        `$f(x) = ${fx}$ is positive, continuous and decreasing on $[2, \\infty)$. With $u = \\ln(x)$, $\\int_2^{\\infty} f(x)\\,dx = \\int_{\\ln 2}^{\\infty} \\frac{du}{${uPow}}$, which ${outcome} since $p = ${pTex} ${converges ? '>' : '\\leq'} 1$. By the Integral Test the series ${outcome}.`,
+        'Check that $f(x)$ is positive, continuous and decreasing, then substitute $u = \\ln(x)$ in $\\int_2^{\\infty} f(x)\\,dx$.',
+        [
+          theorem('Integral Test', [
+            [`$f(x) = ${fx}$ is positive on $[2, \\infty)$`, 'for $x \\geq 2$, $x > 0$ and $\\ln(x) \\geq \\ln(2) > 0$'],
+            ['$f$ is continuous on $[2, \\infty)$', 'its denominator is continuous and nonzero there'],
+            ['$f$ is decreasing on $[2, \\infty)$', `$x$ and $${lnPow('x')}$ are positive and increasing there, so their product increases and $f$ decreases`],
+          ], '$\\sum_{n=2}^{\\infty} f(n)$ and $\\int_2^{\\infty} f(x)\\,dx$ both converge or both diverge.'),
+          step(`Substitute $u = \\ln(x)$, $du = \\frac{dx}{x}$: $\\int_2^{\\infty} ${fx}\\,dx = \\int_{\\ln 2}^{\\infty} \\frac{du}{${uPow}}$.`),
+          step(evaluate),
+          step(`So the series ${outcome}.`),
+        ]);
     }
     // alternating series
     if (ctx.bool(0.65)) {
       const [n, d] = ctx.pick([[1, 2], [1, 1], [2, 1], [3, 1]] as const);
+      const pow = powTex('n', n, d);
+      const pTex = latexFraction(n, d);
       return verdict(true,
-        `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{${powTex('n', n, d)}}$.\n${ASK_VERDICT}`,
-        `Alternating Series Test: $b_n = \\frac{1}{${powTex('n', n, d)}}$ is decreasing and $b_n \\to 0$, so the series converges.${n <= d ? ' (Only conditionally: the series of absolute values is a divergent $p$-series.)' : ''}`,
-        'Check the Alternating Series Test: is $b_n$ decreasing with limit $0$?');
+        `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{${pow}}$.\n${ASK_VERDICT}`,
+        `Alternating Series Test: $b_n = \\frac{1}{${pow}}$ is decreasing and $b_n \\to 0$, so the series converges.${n <= d ? ' (Only conditionally: the series of absolute values is a divergent $p$-series.)' : ''}`,
+        'Check the Alternating Series Test: is $b_n$ decreasing with limit $0$?',
+        [
+          theorem('Alternating Series Test', [
+            ['The series is $\\sum (-1)^{n+1} b_n$ with $b_n > 0$', `$b_n = \\frac{1}{${pow}} > 0$ for $n \\geq 1$`],
+            ['$b_n$ is decreasing', `$${n === d ? 'n + 1 > n' : `(n+1)^{${pTex}} > n^{${pTex}}`}$, so $b_{n+1} < b_n$`],
+            ['$b_n \\to 0$', `$${pow} \\to \\infty$, so $b_n \\to 0$`],
+          ], 'The series converges.'),
+          step(n <= d
+            ? `The convergence is only conditional: $\\sum |a_n| = \\sum \\frac{1}{${pow}}$ is a $p$-series with $p = ${pTex} \\leq 1$, which diverges.`
+            : `The convergence is absolute: $\\sum |a_n| = \\sum \\frac{1}{${pow}}$ is a $p$-series with $p = ${pTex} > 1$.`),
+        ]);
     }
     const c = ctx.int(1, 4);
     return verdict(false,
       `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} (-1)^n \\frac{n}{n + ${c}}$.\n${ASK_VERDICT}`,
       `$\\frac{n}{n + ${c}} \\to 1$, so the terms $(-1)^n \\frac{n}{n + ${c}}$ do not tend to $0$: by the $n$th-term test the series diverges. (The Alternating Series Test does not apply, since $b_n \\not\\to 0$.)`,
-      'Before any other test, check whether the terms tend to $0$.');
+      'Before any other test, check whether the terms tend to $0$.',
+      [
+        step(`The Alternating Series Test does not apply: it needs $b_n \\to 0$, and $b_n = \\frac{n}{n + ${c}} \\to 1$.`),
+        theorem(NTH_TERM_TEST, [
+          [NTH_TERM_HYPOTHESIS, `$|a_n| = \\frac{n}{n + ${c}} \\to 1$ while the sign alternates, so $a_n$ has no limit`],
+        ], 'The series diverges.'),
+      ]);
   },
 };
 
@@ -654,35 +750,65 @@ export const powerSeries: GeneratorDef = {
     const template = ctx.pick(POWER_TEMPLATES);
     const c = ctx.int(2, 5);
     const k = ctx.int(1, 3);
-    const q = (series: string, R: number, rTex: string, why: string): Draft => ({
+    const q = (series: string, R: number, rTex: string, why: string, solution: SolutionStep[]): Draft => ({
       templateId: template,
       problemText: `Find the radius of convergence $R$ of\n$\\displaystyle\\sum_{n=0}^{\\infty} ${series}$`,
       answer: radius(R),
       displayAnswer: `$R = ${rTex}$`,
       explanation: why,
+      solution,
       hint: R_HINT,
     });
+    /** Σ wⁿ converges exactly when |w| < 1. */
+    const geometric = (rewrite: string, w: string, radiusFrom: string) =>
+      theorem('Geometric series test', [['The series is $\\sum_{n=0}^{\\infty} w^n$', `$${rewrite}$, so $w = ${w}$`]],
+        `It converges exactly when $|w| < 1$: ${radiusFrom}.`);
+    /** The ratio test on the coefficients: R = 1/L. */
+    const ratio = (nonzero: string, ratioTex: string, L: string, conclusion: string) =>
+      theorem('Ratio Test for the radius of convergence', [
+        ['$a_n \\neq 0$ for every large $n$', nonzero],
+        ['$L = \\lim_{n\\to\\infty} \\left|\\frac{a_{n+1}}{a_n}\\right|$ exists (possibly $0$ or $\\infty$)', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = ${ratioTex} \\to ${L}$`],
+      ], conclusion);
     if (template === 'scaled-geometric') {
       return ctx.bool()
-        ? q(`\\frac{x^n}{${c}^n}`, c, `${c}`, `This is $\\sum \\left(\\frac{x}{${c}}\\right)^n$, a geometric series that converges exactly when $\\left|\\frac{x}{${c}}\\right| < 1$, i.e. $|x| < ${c}$: $R = ${c}$.`)
-        : q(`${c}^n x^n`, 1 / c, `\\frac{1}{${c}}`, `This is $\\sum (${c}x)^n$, geometric, converging exactly when $|${c}x| < 1$, i.e. $|x| < \\frac{1}{${c}}$: $R = \\frac{1}{${c}}$.`);
+        ? q(`\\frac{x^n}{${c}^n}`, c, `${c}`, `This is $\\sum \\left(\\frac{x}{${c}}\\right)^n$, a geometric series that converges exactly when $\\left|\\frac{x}{${c}}\\right| < 1$, i.e. $|x| < ${c}$: $R = ${c}$.`,
+          [geometric(`\\frac{x^n}{${c}^n} = \\left(\\frac{x}{${c}}\\right)^n`, `\\frac{x}{${c}}`, `$\\left|\\frac{x}{${c}}\\right| < 1$, i.e. $|x| < ${c}$, so $R = ${c}$`)])
+        : q(`${c}^n x^n`, 1 / c, `\\frac{1}{${c}}`, `This is $\\sum (${c}x)^n$, geometric, converging exactly when $|${c}x| < 1$, i.e. $|x| < \\frac{1}{${c}}$: $R = \\frac{1}{${c}}$.`,
+          [geometric(`${c}^n x^n = (${c}x)^n`, `${c}x`, `$|${c}x| < 1$, i.e. $|x| < \\frac{1}{${c}}$, so $R = \\frac{1}{${c}}$`)]);
     }
     if (template === 'polynomial-coefficient') {
       const f = ctx.pick(['n^k', '1/n^k', '1/(n c^n)'] as const);
-      if (f === 'n^k') return q(`${latexPower('n', k)} x^n`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\left(\\frac{n+1}{n}\\right)^{${k}} \\to 1$, so $R = 1$.`);
-      if (f === '1/n^k') return q(`\\frac{x^n}{(n+1)${k === 1 ? '' : `^{${k}}`}}`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\left(\\frac{n+1}{n+2}\\right)^{${k}} \\to 1$, so $R = 1$.`);
-      return q(`\\frac{x^n}{(n+1)${c}^n}`, c, `${c}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{n+1}{${c}(n+2)} \\to \\frac{1}{${c}}$, so $R = ${c}$.`);
+      if (f === 'n^k') {
+        return q(`${latexPower('n', k)} x^n`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\left(\\frac{n+1}{n}\\right)^{${k}} \\to 1$, so $R = 1$.`,
+          [ratio(`$a_n = ${latexPower('n', k)} > 0$ for $n \\geq 1$`, powOf('\\frac{n+1}{n}', k), '1', '$R = \\frac{1}{L} = 1$.')]);
+      }
+      if (f === '1/n^k') {
+        const denominator = `(n+1)${k === 1 ? '' : `^{${k}}`}`;
+        return q(`\\frac{x^n}{${denominator}}`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\left(\\frac{n+1}{n+2}\\right)^{${k}} \\to 1$, so $R = 1$.`,
+          [ratio(`$a_n = \\frac{1}{${denominator}} > 0$`, powOf('\\frac{n+1}{n+2}', k), '1', '$R = \\frac{1}{L} = 1$.')]);
+      }
+      return q(`\\frac{x^n}{(n+1)${c}^n}`, c, `${c}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{n+1}{${c}(n+2)} \\to \\frac{1}{${c}}$, so $R = ${c}$.`,
+        [ratio(`$a_n = \\frac{1}{(n+1)${c}^n} > 0$`, `\\frac{n+1}{${c}(n+2)}`, `\\frac{1}{${c}}`, `$R = \\frac{1}{L} = ${c}$.`)]);
     }
     if (template === 'factorial') {
       const f = ctx.pick(['1/n!', 'c^n/n!', 'n!'] as const);
-      if (f === '1/n!') return q('\\frac{x^n}{n!}', Infinity, '\\infty', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{1}{n+1} \\to 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^x$).');
-      if (f === 'c^n/n!') return q(`\\frac{${c}^n x^n}{n!}`, Infinity, '\\infty', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{${c}}{n+1} \\to 0$, so $R = \\infty$ (it is the series of $e^{${c}x}$).`);
-      return q('n!\\, x^n', 0, '0', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = n + 1 \\to \\infty$, so the series converges only at $x = 0$: $R = 0$.');
+      if (f === '1/n!') {
+        return q('\\frac{x^n}{n!}', Infinity, '\\infty', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{1}{n+1} \\to 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^x$).',
+          [ratio('$a_n = \\frac{1}{n!} > 0$', '\\frac{1}{n+1}', '0', '$L = 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^x$).')]);
+      }
+      if (f === 'c^n/n!') {
+        return q(`\\frac{${c}^n x^n}{n!}`, Infinity, '\\infty', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{${c}}{n+1} \\to 0$, so $R = \\infty$ (it is the series of $e^{${c}x}$).`,
+          [ratio(`$a_n = \\frac{${c}^n}{n!} > 0$`, `\\frac{${c}}{n+1}`, '0', `$L = 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^{${c}x}$).`)]);
+      }
+      return q('n!\\, x^n', 0, '0', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = n + 1 \\to \\infty$, so the series converges only at $x = 0$: $R = 0$.',
+        [ratio('$a_n = n! > 0$', 'n + 1', '\\infty', '$L = \\infty$, so the series converges only at $x = 0$: $R = 0$.')]);
     }
     // shifted centre: Σ (x − a)ⁿ / cⁿ, R = c (the centre does not change the radius)
     const a = ctx.pick([-4, -3, -2, -1, 1, 2, 3, 4]);
     const shift = a > 0 ? `x - ${a}` : `x + ${-a}`;
-    return q(`\\frac{(${shift})^n}{${c}^n}`, c, `${c}`, `This is geometric in $\\frac{${shift}}{${c}}$: it converges exactly when $|${shift}| < ${c}$, so $R = ${c}$ (centred at $x = ${a}$).`);
+    return q(`\\frac{(${shift})^n}{${c}^n}`, c, `${c}`, `This is geometric in $\\frac{${shift}}{${c}}$: it converges exactly when $|${shift}| < ${c}$, so $R = ${c}$ (centred at $x = ${a}$).`,
+      [geometric(`\\frac{(${shift})^n}{${c}^n} = \\left(\\frac{${shift}}{${c}}\\right)^n`, `\\frac{${shift}}{${c}}`,
+        `$|${shift}| < ${c}$, an interval of radius $${c}$ centred at $x = ${a}$, so $R = ${c}$`)]);
   },
 };
 
@@ -805,6 +931,16 @@ export const taylorMaclaurin: GeneratorDef = {
         displayAnswer: `$${M}\\frac{${Math.abs(h)}^{${n + 1}}}{${n + 1}!} \\approx ${sciTex(bound, 2)}$`,
         explanation: `$|R_{${n}}(x)| \\leq \\frac{M|x|^{${n + 1}}}{${n + 1}!}$, where $M$ bounds $|f^{(${n + 1})}(c)| = e^c$ for $c$ between $0$ and $${h}$. Since $e^c$ is increasing, ${h > 0 ? `$M = e^{${h}}$ (using $M = 1$ would NOT be a valid bound, since $e^c > 1$ for $c > 0$)` : '$M = e^0 = 1$ (for $c \\leq 0$, $e^c \\leq 1$)'}. The bound is $${M}\\frac{${Math.abs(h)}^{${n + 1}}}{${factorial(n + 1)}} \\approx ${sciTex(bound, 3)}$; the actual error is $\\approx ${sciTex(actual, 3)}$, below it.`,
         hint: 'The Lagrange remainder: $|R_n(x)| \\leq \\frac{M|x|^{n+1}}{(n+1)!}$, where $M$ bounds $|f^{(n+1)}|$ between $0$ and $x$.',
+        solution: [
+          theorem("Taylor's theorem with the Lagrange remainder", [
+            [`$f$ has continuous derivatives up to order $${n + 1}$ between $0$ and $x$`, '$f(x) = e^x$ has $f^{(k)}(x) = e^x$ for every $k$, continuous everywhere'],
+            [`$|f^{(${n + 1})}(c)| \\leq M$ for every $c$ between $0$ and $${h}$`, h > 0
+              ? `$e^c$ is increasing, so on $[0, ${h}]$ it is at most $M = e^{${h}}$`
+              : `$e^c$ is increasing, so on $[${h}, 0]$ it is at most $M = e^0 = 1$`],
+          ], `$|R_{${n}}(${h})| \\leq \\frac{M\\,|${h}|^{${n + 1}}}{${n + 1}!} = ${M}\\frac{${Math.abs(h)}^{${n + 1}}}{${factorial(n + 1)}} \\approx ${sciTex(bound, 3)}$.`),
+          ...(h > 0 ? [step(`Taking $M = 1$ would not be valid: $e^c > 1$ for $0 < c \\leq ${h}$.`)] : []),
+          step(`Check: the actual error is $\\approx ${sciTex(actual, 3)}$, below the bound.`),
+        ],
       };
     }
     // alternating series remainder: |S − S_N| ≤ b_{N+1} = 1/(N+1)^p
@@ -818,6 +954,13 @@ export const taylorMaclaurin: GeneratorDef = {
       displayAnswer: `$${latexFrac(1, denom)}$`,
       explanation: `For an alternating series with decreasing $b_n \\to 0$, the error after $N$ terms is at most the first omitted term: $b_{${N + 1}} = \\frac{1}{${p === 1 ? N + 1 : `${N + 1}^2`}} = ${latexFrac(1, denom)}$.`,
       hint: 'For an alternating series, the error is bounded by the absolute value of the first omitted term.',
+      solution: [
+        theorem('Alternating Series Estimation Theorem', [
+          ['The series is $\\sum (-1)^{n+1} b_n$ with $b_n > 0$', `$b_n = \\frac{1}{${latexPower('n', p)}} > 0$`],
+          ['$b_n$ is decreasing', `$${p === 1 ? 'n + 1 > n' : '(n+1)^{2} > n^{2}'}$, so $b_{n+1} < b_n$`],
+          ['$b_n \\to 0$', `$${latexPower('n', p)} \\to \\infty$`],
+        ], `The error after $N = ${N}$ terms is at most the first omitted term: $|S - S_{${N}}| \\leq b_{${N + 1}} = ${p === 1 ? latexFrac(1, denom) : `\\frac{1}{${N + 1}^2} = ${latexFrac(1, denom)}`}$.`),
+      ],
     };
   },
 };

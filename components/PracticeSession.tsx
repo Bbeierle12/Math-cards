@@ -7,6 +7,7 @@ import ProgressBar from './ProgressBar';
 import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon, CheckIcon } from './Icons';
 import { useSettings } from '../contexts/SettingsContext';
 import MathText from './MathText';
+import WorkedSolution from './WorkedSolution';
 import { describeSkill, instanceKey, nextProblem } from '../services/learning';
 import type { Learning } from '../hooks/useLearning';
 import { templateCount } from '../hooks/useLearning';
@@ -360,8 +361,8 @@ export default function PracticeSession({ topicId, onComplete, learning }: Pract
           {answerStatus === 'incorrect' && (
             <p>The correct answer is: <span className="font-bold"><MathText text={answerDisplay(currentProblem)} /></span></p>
           )}
-          {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && currentProblem.explanation && (
-            <p className="mt-2 text-sm text-slate-300"><MathText text={currentProblem.explanation} /></p>
+          {answerStatus === 'incorrect' && settings.showExplanationOnIncorrect && (
+            <WorkedSolution steps={currentProblem.solution} />
           )}
           {answerStatus === 'correct' && settings.autoAdvanceOnCorrect && (
             <p className="mt-1 text-sm text-green-400/60">Next question in a moment...</p>

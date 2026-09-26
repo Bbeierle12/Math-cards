@@ -199,6 +199,16 @@ export interface FractionAnswer {
   denominator: number;
 }
 
+/**
+ * One step of a worked solution, rendered with MathText.
+ *  - step: a line of working
+ *  - theorem: a named result applied to this problem, with each hypothesis
+ *    stated and checked for this instance, then what it gives
+ */
+export type SolutionStep =
+  | { kind: 'step'; text: string }
+  | { kind: 'theorem'; name: string; hypotheses: { condition: string; check: string }[]; conclusion: string };
+
 export interface Problem {
   id: string;
   topicId: TopicId;
@@ -211,6 +221,8 @@ export interface Problem {
    */
   displayAnswer?: string;
   explanation: string;
+  /** The worked solution, step by step (derived from `explanation` when a generator gives no steps). */
+  solution: SolutionStep[];
   hint?: string;
   /**
    * Provenance: the problem is exactly generateProblem(generatorId, settings,

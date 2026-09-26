@@ -973,6 +973,15 @@ describe('independent recomputation: calculus 2 — values', () => {
         const L = Math.abs(a(61) / a(60));
         expect(Math.abs(L - 1), t).toBeGreaterThan(0.05);
         expect(verdict, t).toBe(L < 1 ? 'converges' : 'diverges');
+      } else if (/Integral Test/.test(t)) {
+        // Σ 1/(n (ln n)^p): p read back from the displayed terms at two points (so the
+        // terms really have that form); the series converges exactly when p > 1
+        expect(start, t).toBe(2);
+        const pAt = (n: number) => -Math.log(n * a(n)) / Math.log(Math.log(n));
+        const pEstimate = pAt(1e6);
+        expect(pAt(1e3), t).toBeCloseTo(pEstimate, 9);
+        expect(Math.abs(pEstimate - 1) < 1e-9 || Math.abs(pEstimate - 1) > 0.1, t).toBe(true);
+        expect(verdict, t).toBe(pEstimate > 1 + 1e-9 ? 'converges' : 'diverges');
       } else if (/nth\$-term test/.test(t)) {
         expect(Math.abs(a(1e7)), t).toBeGreaterThan(0.05);
         expect(verdict).toBe('diverges');

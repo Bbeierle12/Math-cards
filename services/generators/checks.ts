@@ -146,6 +146,20 @@ export const checkDraft = (draft: Draft): string[] => {
   out.push(...checkText(draft.explanation, 'explanation'));
   if (draft.displayAnswer !== undefined) out.push(...checkText(draft.displayAnswer, 'displayAnswer'));
   if (draft.hint !== undefined) out.push(...checkText(draft.hint, 'hint'));
+  for (const [i, st] of (draft.solution ?? []).entries()) {
+    if (st.kind === 'step') {
+      if (!st.text.trim()) out.push(`solution[${i}]: empty step`);
+      out.push(...checkText(st.text, `solution[${i}]`));
+    } else {
+      if (!st.name.trim()) out.push(`solution[${i}]: theorem without a name`);
+      if (st.hypotheses.length === 0) out.push(`solution[${i}]: ${st.name} applied without stating its hypotheses`);
+      for (const h of st.hypotheses) {
+        if (!h.condition.trim() || !h.check.trim()) out.push(`solution[${i}]: ${st.name}: a hypothesis without its check`);
+        out.push(...checkText(h.condition, `solution[${i}].condition`), ...checkText(h.check, `solution[${i}].check`));
+      }
+      out.push(...checkText(st.conclusion, `solution[${i}].conclusion`));
+    }
+  }
   out.push(...checkSpec(draft.answer));
   return out;
 };
