@@ -1,14 +1,14 @@
 
 import React from 'react';
-import { UserProgress } from '../types';
+import type { Totals } from '../services/learning';
 import { CheckIcon, FlameIcon, TrophyIcon, PercentIcon } from './Icons';
 
 interface StatsDisplayProps {
-  userProgress: UserProgress;
+  totals: Totals;
 }
 
-export default function StatsDisplay({ userProgress }: StatsDisplayProps) {
-  const { totalProblemsAttempted, totalCorrect, currentStreak, longestStreak } = userProgress;
+export default function StatsDisplay({ totals }: StatsDisplayProps) {
+  const { attempted: totalProblemsAttempted, correct: totalCorrect, currentStreak, longestStreak } = totals;
   const accuracy = totalProblemsAttempted > 0 ? Math.round((totalCorrect / totalProblemsAttempted) * 100) : 0;
 
   const stats = [

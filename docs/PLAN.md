@@ -1,6 +1,6 @@
 # Math-Cards: Mathematical Architecture Plan
 
-Status: in progress (Phases 1 and 2 done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
+Status: in progress (Phases 1–3 done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
 
 This plan turns the comparative design review (WeBWorK, STACK, Numbas, IMathAS, Alcumus,
 ALEKS, IXL, FSRS) into sequenced engineering work. It keeps the constraints already
@@ -200,6 +200,29 @@ template ships with its invariant list and a recomputation test.
 
 Exit criteria: no topic depends on exact-item repetition for mastery; a review queue
 exists; existing users see their progress preserved.
+
+**Phase 3 done.** As built (`services/learning/`, `hooks/useLearning.ts`):
+- Event log with baseline snapshots instead of IndexedDB: past 5,000 events the oldest
+  are folded into the baseline, so localStorage stays bounded.
+- Evidence weights differ from the sketch in one respect: an *exact repeat* of a problem
+  (same content, any seed) counts ¼, rather than "a template seen twice counts ½". Most
+  topics have one or two templates with random parameters, where every instance is new
+  evidence; what must not count is repeating the same item. A hint halves the weight and
+  an error costs ½ (floor 0), so guessing does not accumulate.
+- No topic caps at proficient. Instead every generator declares its templates, the full
+  sweep requires ≥ 15 distinct problems per generator, and a test drives every topic to
+  proficiency on fresh problems in exactly `threshold` correct answers. To get there the
+  fact topics were broadened (the whole unit circle; principal values with negative
+  arguments; all solutions in [0°, 360°); 16 identities; logarithms of reciprocals and
+  roots; asymptotes of (ax + b)/(cx + d); four substitution families; parametrized
+  applications) and 3.4 parametrized every Calculus 2 bank.
+- Identity items reject restating the prompt (`forbid` in the expression spec); before,
+  `tan θ` was accepted for "tan θ = ?" as the same function.
+- Mastery: a review passed first-try without a hint at least 3 days after proficiency;
+  a failed review returns the skill to proficient, losing proficiency clears the schedule.
+  The review queue is listed above the curriculum.
+- Migration keeps the old `userProgress` key untouched (reversible); legacy counters become
+  the baseline and a legacy skill needs no template spread.
 
 ---
 

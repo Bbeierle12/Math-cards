@@ -1,23 +1,24 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { TopicId, Problem, UserProgress } from '../types';
-import { answerDisplay, generateProblem, validateAnswer } from '../services/mathService';
+import { TopicId, Problem } from '../types';
+import { answerDisplay, validateAnswer } from '../services/mathService';
 import { CURRICULUM } from '../constants';
 import ProgressBar from './ProgressBar';
-import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon } from './Icons';
+import { ArrowLeftIcon, LightbulbIcon, LoaderIcon, TrophyIcon, TimerIcon, CheckIcon } from './Icons';
 import { useSettings } from '../contexts/SettingsContext';
 import MathText from './MathText';
-import { isTopicMastered } from '../services/mastery';
+import { describeSkill, instanceKey, nextProblem } from '../services/learning';
+import type { Learning } from '../hooks/useLearning';
+import { templateCount } from '../hooks/useLearning';
 import AnswerInput, { emptyValues, toSubmission } from './AnswerInput';
 
 interface PracticeSessionProps {
   topicId: TopicId;
   onComplete: () => void;
-  userProgress: UserProgress;
-  setUserProgress: (value: UserProgress | ((prev: UserProgress) => UserProgress)) => void;
+  learning: Learning;
 }
 
-export default function PracticeSession({ topicId, onComplete, userProgress, setUserProgress }: PracticeSessionProps) {
+export default function PracticeSession({ topicId, onComplete, learning }: PracticeSessionProps) {
   const { settings } = useSettings();
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   // One string per input slot of the current problem (see AnswerInput).
@@ -30,14 +31,34 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // True only when the countdown for the CURRENT problem actually reached zero.
   const timedOutRef = useRef(false);
+  // For the attempt record: when the problem was shown, and whether its hint was opened before answering.
+  const shownAtRef = useRef(Date.now());
+  const hintUsedRef = useRef(false);
 
-  const masteryThreshold = settings.masteryThreshold;
+  const { record, skills, rules, now } = learning;
+  // The latest skill state, for problem selection from timers (auto-advance) that outlive a render.
+  const skillsRef = useRef(skills);
+  skillsRef.current = skills;
+  const progress = describeSkill(skills[topicId], rules, templateCount(topicId), now);
+  const isMastered = progress.status === 'mastered';
+  const isProficient = progress.status === 'proficient';
 
-  const topicProgress = useMemo(() => {
-    return userProgress.topicProgress[topicId] || { correct: 0, attempted: 0, mastery: false };
-  }, [userProgress, topicId]);
-  // Same definition as unlocking/badges: derived from the current threshold.
-  const isMastered = isTopicMastered(topicProgress, masteryThreshold);
+  /** Append this attempt to the learning log. */
+  const recordAttempt = useCallback((problem: Problem, correct: boolean, timedOut = false) => {
+    record({
+      t: Date.now(),
+      skillId: topicId,
+      generatorVersion: problem.generatorVersion,
+      templateId: problem.templateId,
+      seed: problem.seed,
+      instance: instanceKey(problem),
+      correct,
+      firstAttempt: true,
+      hintUsed: hintUsedRef.current,
+      ...(timedOut ? { timedOut: true } : {}),
+      responseMs: Date.now() - shownAtRef.current,
+    });
+  }, [record, topicId]);
 
   const topicInfo = useMemo(() => {
     for (const level of CURRICULUM) {
@@ -81,7 +102,10 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       onComplete();
       return;
     }
-    const next = generateProblem(topicId, { numberRange: settings.numberRange, allowNegatives: settings.allowNegatives });
+    // A fresh seed, aimed at the least-practised template, avoiding problems already seen.
+    const next = nextProblem(topicId, { numberRange: settings.numberRange, allowNegatives: settings.allowNegatives }, skillsRef.current[topicId]);
+    shownAtRef.current = Date.now();
+    hintUsedRef.current = false;
     setCurrentProblem(next);
     setAnswerValues(emptyValues(next));
     setAnswerStatus('idle');
@@ -122,20 +146,9 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     if (settings.timerEnabled && timerRemaining === 0 && timedOutRef.current && answerStatus === 'idle' && currentProblem) {
       timedOutRef.current = false;
       setAnswerStatus('incorrect');
-      setUserProgress(prevProgress => {
-        const newProgress = { ...prevProgress, topicProgress: { ...prevProgress.topicProgress } };
-        const topicStats = newProgress.topicProgress[topicId]
-          ? { ...newProgress.topicProgress[topicId] }
-          : { correct: 0, attempted: 0, mastery: false };
-        topicStats.attempted += 1;
-        newProgress.totalProblemsAttempted = (newProgress.totalProblemsAttempted || 0) + 1;
-        newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak || 0);
-        newProgress.currentStreak = 0;
-        newProgress.topicProgress[topicId] = topicStats;
-        return newProgress;
-      });
+      recordAttempt(currentProblem, false, true);
     }
-  }, [timerRemaining, settings.timerEnabled, answerStatus, currentProblem, topicId, setUserProgress]);
+  }, [timerRemaining, settings.timerEnabled, answerStatus, currentProblem, recordAttempt]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
 
@@ -198,35 +211,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
       }
     }
 
-    setUserProgress(prevProgress => {
-        const newProgress = {
-            ...prevProgress,
-            topicProgress: { ...prevProgress.topicProgress }
-        };
-
-        const topicStats = newProgress.topicProgress[topicId]
-            ? { ...newProgress.topicProgress[topicId] }
-            : { correct: 0, attempted: 0, mastery: false };
-
-        topicStats.attempted += 1;
-        newProgress.totalProblemsAttempted = (newProgress.totalProblemsAttempted || 0) + 1;
-
-        if (isCorrect) {
-            topicStats.correct += 1;
-            newProgress.totalCorrect = (newProgress.totalCorrect || 0) + 1;
-            newProgress.currentStreak = (newProgress.currentStreak || 0) + 1;
-        } else {
-            newProgress.currentStreak = 0;
-        }
-
-        // Derive mastery from data — re-evaluate every time so threshold changes take effect
-        topicStats.mastery = topicStats.correct >= masteryThreshold;
-
-        newProgress.longestStreak = Math.max(newProgress.longestStreak || 0, newProgress.currentStreak);
-        newProgress.topicProgress[topicId] = topicStats;
-
-        return newProgress;
-    });
+    recordAttempt(currentProblem, isCorrect);
 
     // Auto-advance on correct
     if (isCorrect && settings.autoAdvanceOnCorrect) {
@@ -244,7 +229,7 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
     );
   }
 
-  const masteryPercent = (topicProgress.correct / masteryThreshold) * 100;
+  const masteryPercent = isMastered || isProficient ? 100 : progress.evidenceFraction * 100;
 
   const fontSizeClasses = {
     small: 'text-2xl sm:text-3xl',
@@ -267,6 +252,12 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
                 Mastered
               </span>
             )}
+            {isProficient && (
+              <span className="flex items-center gap-2 text-base font-semibold text-cyan-300 bg-cyan-500/10 px-3 py-1 rounded-full">
+                <CheckIcon className="w-4 h-4" />
+                Proficient
+              </span>
+            )}
            </h2>
            <p className="text-slate-400 text-sm mt-1">{topicInfo.description}</p>
         </div>
@@ -282,8 +273,13 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
             {settings.problemsPerSession > 0 && (
               <p className="text-sm text-slate-400">Problem {Math.min(sessionCount, settings.problemsPerSession)} / {settings.problemsPerSession}</p>
             )}
-            <p className="text-right text-sm text-slate-300 ml-auto">{topicProgress.correct} / {masteryThreshold} Correct</p>
+            <p className="text-right text-sm text-slate-300 ml-auto">
+              {isMastered || isProficient
+                ? 'Proficient'
+                : `Evidence ${Math.round(progress.evidence * 10) / 10} / ${rules.threshold}${progress.templatesRequired > 0 ? ` · ${progress.templatesCovered} / ${progress.templatesRequired} problem types` : ''}`}
+            </p>
           </div>
+          <p className="text-xs text-slate-400 mt-1">{progress.next}</p>
         </div>
 
       {/* Timer display */}
@@ -323,7 +319,10 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
               {currentProblem.hint && (
                 <button
                   type="button"
-                  onClick={() => setShowHint(!showHint)}
+                  onClick={() => {
+                    if (!showHint) hintUsedRef.current = true;
+                    setShowHint(!showHint);
+                  }}
                   className="px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-transform transform hover:scale-105"
                   title="Show hint"
                 >

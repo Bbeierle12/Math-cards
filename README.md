@@ -114,6 +114,33 @@ replayed exactly. Generators state the validity conditions of an instance with
 and retries on a derived seed, and a generator that cannot produce a valid
 instance fails loudly instead of shipping an invalid problem.
 
+## Progress, mastery and reviews
+
+Progress is an append-only log of attempts (`learningLog` in localStorage);
+every counter, status and schedule is derived from it
+(`services/learning/`), so changing the threshold in settings re-evaluates
+the whole history.
+
+- **Evidence.** A correct first attempt on a problem not seen before counts
+  1; a hint halves it; an exact repeat of a problem already seen counts a
+  quarter; an error subtracts ½ (never below 0).
+- **Proficient** when evidence reaches the threshold (default 10) *and* the
+  correct answers span at least min(3, available) of the topic's problem
+  types. Unlocking the next topic needs proficiency.
+- **Mastered** when a scheduled review taken at least 3 days after reaching
+  proficiency is passed on the first try, without a hint. Reviews follow a
+  1 → 3 → 7 → 21 → 60-day ladder (a late success skips rungs; a miss halves
+  the interval and returns a mastered skill to proficient). Due reviews are
+  listed at the top of the topic list.
+- **Next problem.** Practice aims at the problem type with the fewest
+  correct answers and always uses a fresh seed, avoiding problems already
+  seen. Every topic offers at least 15 distinct problems, and a test checks
+  that each reaches proficiency in exactly `threshold` fresh correct answers.
+- **Migration.** Counter-based progress from earlier versions becomes the
+  starting point of the log (a topic mastered under the old rule stays
+  proficient and is scheduled for review). The old `userProgress` key is
+  read once and never modified, so reverting the app restores it.
+
 ## Tests
 
 - `npm test` — the app suite (includes a quick 150-seed sweep of every generator).

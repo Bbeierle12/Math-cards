@@ -135,6 +135,7 @@ export interface SkillProgress {
   evidenceFraction: number;
   evidence: number;
   templatesCovered: number;
+  /** 0 when the requirement is waived (progress migrated from the counter format has no template record). */
   templatesRequired: number;
   dueAt: number | null;
   /** What is still missing, in words, for the UI. */
@@ -168,7 +169,7 @@ export const describeSkill = (state: SkillState | undefined, rules: MasteryRules
     evidenceFraction: Math.min(1, s.evidence / rules.threshold),
     evidence: s.evidence,
     templatesCovered: covered,
-    templatesRequired: required,
+    templatesRequired: s.legacy ? 0 : required,
     dueAt: s.dueAt,
     next,
   };
