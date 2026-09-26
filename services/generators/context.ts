@@ -12,6 +12,23 @@ import type { Rng } from '../random';
 
 export type { GeneratorSettings };
 
+/**
+ * Named validity conditions of a generated instance. A generator states the
+ * ones its template can violate with ctx.require(condition, name); the
+ * registry retries on a derived seed when one fails.
+ */
+export const INVARIANTS = {
+  nonZeroDenominator: 'no division by zero in the prompt, the answer or the working',
+  uniqueRealSolution: 'the equation or system has exactly one solution',
+  distinctRoots: '"the larger / smaller root" presupposes two distinct roots',
+  answerNotTrivial: 'the prompt does not already state the answer (e.g. a quotient that is not constant)',
+  triangleInequality: 'the side lengths form a nondegenerate triangle',
+  positiveAngles: 'every angle of the figure is positive',
+  integerAnswer: 'the answer is an integer, as the prompt implies',
+} as const;
+
+export type InvariantName = keyof typeof INVARIANTS;
+
 export interface GenContext extends Rng {
   settings: GeneratorSettings;
   /**
@@ -19,7 +36,7 @@ export interface GenContext extends Rng {
    * the registry discards the draft and retries with a derived seed; a
    * generator whose invariants cannot be met fails loudly.
    */
-  require(condition: boolean, invariant: string): void;
+  require(condition: boolean, invariant: InvariantName): void;
 }
 
 export interface Draft {
@@ -40,8 +57,8 @@ export interface GeneratorDef {
 }
 
 export class InvariantViolation extends Error {
-  constructor(public readonly invariant: string) {
-    super(`generator invariant violated: ${invariant}`);
+  constructor(public readonly invariant: InvariantName) {
+    super(`generator invariant violated: ${invariant} (${INVARIANTS[invariant]})`);
   }
 }
 
@@ -151,6 +168,14 @@ export const ordinalSuffix = (n: number): string => {
 
 /** v^k written the textbook way: x, x^{2}, 1 for k = 0. */
 export const latexPower = (v: string, k: number): string => (k === 0 ? '1' : k === 1 ? v : `${v}^{${k}}`);
+
+/** c·v^k written the textbook way: 3x^{2}, -x^{-2}, x, 5 (for k = 0). */
+export const latexMonomial = (coef: number, v: string, k: number): string => {
+  if (coef === 0) return '0';
+  if (k === 0) return `${coef}`;
+  const c = coef === 1 ? '' : coef === -1 ? '-' : `${coef}`;
+  return `${c}${latexPower(v, k)}`;
+};
 
 /** "(x - 3)" / "(x + 3)" / "x" for the factor x − r. */
 export const latexLinearFactor = (variable: string, root: number): string =>

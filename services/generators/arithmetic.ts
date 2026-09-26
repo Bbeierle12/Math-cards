@@ -82,7 +82,7 @@ export const division: GeneratorDef = {
     const b = ctx.pick(divisors);
     const result = ctx.int(min, max);
     const a = b * result;
-    ctx.require(b !== 0, 'nonzero divisor');
+    ctx.require(b !== 0, 'nonZeroDenominator');
     return {
       templateId: 'exact-quotient',
       problemText: `$${a} \\div ${latexNum(b)} = \\;?$`,

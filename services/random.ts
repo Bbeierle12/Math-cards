@@ -53,8 +53,13 @@ export const createRng = (seed: string): Rng => {
   };
 };
 
-/** A fresh seed for a new problem (not itself reproducible; it is recorded on the problem). */
-export const randomSeed = (): string =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-    ? crypto.randomUUID().slice(0, 13)
-    : Math.random().toString(36).slice(2, 15);
+/**
+ * A fresh seed for a new problem (not itself reproducible; it is recorded on
+ * the problem). crypto.getRandomValues is available in every browser, secure
+ * context or not (randomUUID is not), and in Node.
+ */
+export const randomSeed = (): string => {
+  const words = new Uint32Array(2);
+  globalThis.crypto.getRandomValues(words);
+  return Array.from(words, w => w.toString(36).padStart(7, '0')).join('');
+};

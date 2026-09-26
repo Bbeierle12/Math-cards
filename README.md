@@ -116,6 +116,19 @@ instance fails loudly instead of shipping an invalid problem.
 
 ## Tests
 
+- `npm test` — the app suite (includes a quick 150-seed sweep of every generator).
+- `npm run test:sweep` — every generator × 2,000 seeds: generation never throws,
+  structural checks and named invariants hold, each problem replays from its
+  provenance, the canonical answer passes the production grader and every
+  must-reject input fails; the independent recomputation suite runs on the
+  same number of seeds.
+- `npm run oracle` — development-only CAS oracle (needs `python3` with
+  `sympy`): `scripts/oracle/export.eval.ts` turns generated problems into
+  symbolic claims (derivatives, antiderivatives, definite and improper
+  integrals, roots, limits, series, identities) reconstructed from the prompt
+  text, and `scripts/oracle/check.py` proves each one with SymPy.
+- `npm run typecheck`, `npm run build`.
+
 `components/formulaSheets.test.tsx` renders every formula sheet and asserts the
 hypotheses and domain conditions each statement needs.
 

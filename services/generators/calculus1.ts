@@ -1,6 +1,6 @@
 /** Calculus 1. */
 import type { GeneratorDef } from './context';
-import { exact, latexPolynomial, latexPower, latexTerm } from './context';
+import { exact, latexMonomial, latexPolynomial, latexPower, latexTerm } from './context';
 
 export const limits: GeneratorDef = {
   topicId: 'limits',
@@ -38,7 +38,7 @@ export const derivativesBasic: GeneratorDef = {
 
 export const derivativesProductQuotient: GeneratorDef = {
   topicId: 'derivatives-product-quotient',
-  version: 2,
+  version: 3,
   generate: (ctx) => {
     const a = ctx.int(2, 6);
     const b = ctx.int(2, 6);
@@ -52,12 +52,12 @@ export const derivativesProductQuotient: GeneratorDef = {
       };
     }
     // x^a / x^b with a ≠ b (x^a/x^a = 1 has derivative 0, which has no exponent to ask about)
-    ctx.require(a !== b, 'quotient is not constant');
+    ctx.require(a !== b, 'answerNotTrivial');
     return {
       templateId: 'quotient-of-powers',
       problemText: `Simplify then find $\\frac{d}{dx}\\left[\\frac{x^{${a}}}{x^{${b}}}\\right]$ (for $x \\neq 0$). What is the new exponent?`,
       answer: exact(a - b - 1),
-      explanation: `$\\frac{x^{${a}}}{x^{${b}}} = x^{${a - b}}$ for $x \\neq 0$, and $\\frac{d}{dx}[x^{${a - b}}] = ${a - b}x^{${a - b - 1}}$. The new exponent is $${a - b - 1}$.`,
+      explanation: `$\\frac{x^{${a}}}{x^{${b}}} = ${latexPower('x', a - b)}$ for $x \\neq 0$, and $\\frac{d}{dx}\\left[${latexPower('x', a - b)}\\right] = ${a - b === 1 ? '1 \\cdot x^{0} = 1' : latexMonomial(a - b, 'x', a - b - 1)}$. The new exponent is $${a - b - 1}$.`,
       hint: 'Simplify first: $\\frac{x^a}{x^b} = x^{a-b}$, then use power rule.',
     };
   },
@@ -83,11 +83,11 @@ export const chainRule: GeneratorDef = {
 
 export const integralsBasic: GeneratorDef = {
   topicId: 'integrals-basic',
-  version: 2,
+  version: 3,
   generate: (ctx) => {
     const c = ctx.int(2, 10);
     const n = ctx.int(1, 4);
-    const coeffs = c % (n + 1) === 0 ? `${c / (n + 1)}` : `\\frac{${c}}{${n + 1}}`;
+    const coeffs = c % (n + 1) !== 0 ? `\\frac{${c}}{${n + 1}}` : c / (n + 1) === 1 ? '' : `${c / (n + 1)}`;
     return {
       templateId: 'power-rule-exponent',
       problemText: `$\\displaystyle\\int ${c}${latexPower('x', n)}\\,dx$. What is the new exponent?`,

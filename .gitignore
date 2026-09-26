@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .vercel
 .env
+
+# development-only CAS oracle output
+scripts/oracle/out/

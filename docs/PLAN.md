@@ -1,6 +1,6 @@
 # Math-Cards: Mathematical Architecture Plan
 
-Status: in progress (Phase 1 and Phase 2a done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
+Status: in progress (Phases 1 and 2 done) · Baseline: `main` after PR #9 and PR #10 · Owner: repository maintainer
 
 This plan turns the comparative design review (WeBWorK, STACK, Numbas, IMathAS, Alcumus,
 ALEKS, IXL, FSRS) into sequenced engineering work. It keeps the constraints already
@@ -134,8 +134,22 @@ yes/no and word answers are choices; textbook polynomial formatting (no `1x`, `+
 `+ 0`); ordinal suffixes. Defects found by the new tests and fixed: `numbersEqual`
 treated ±∞ as equal to every finite number (so `(-∞, 0)` "equalled" `(1, ∞)`), and
 single-backslash `\;` in several prompts rendered as a stray `;`.
-Remaining for 2b: the invariant catalogue, the 2,000-seed sweep, removing the last
-`Math.random` fallback, and the SymPy oracle script.
+
+**Phase 2b done.** Named invariant catalogue (`INVARIANTS` in
+`services/generators/context.ts`; `ctx.require` accepts only catalogue names) plus
+registry-level structural checks on every draft (`services/generators/checks.ts`:
+well-formed spec, no leaked `NaN`/`undefined`, balanced LaTeX, no `+ -3` or `1x`);
+a structural failure throws at once, since it is a bug rather than an unlucky draw.
+`npm run test:sweep` runs every generator × 2,000 seeds (replay, canonical passes,
+must-reject inputs fail) and the recomputation suite on the same seed count, in about
+a minute. `Math.random` is gone from the app (a test enforces it); seeds come from
+`crypto.getRandomValues`, and the practice view prints the replayable problem id.
+The oracle is `npm run oracle`: SymPy (CPython rather than Pyodide; it is dev-only)
+proves 1,768 claims over 1,620 distinct problems, with 0 refuted and 0 unproven. The
+sweep and structural checks found and fixed: `-1x^{-2}`, `-1x = -7` and `1x^{2}` in
+explanations, and "the larger solution" asked of a double root (now `distinctRoots`).
+CI (`.github/workflows/ci.yml`) runs typecheck, tests, the sweep, the build and the
+oracle.
 
 ---
 

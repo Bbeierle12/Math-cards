@@ -29,7 +29,7 @@ export const rationalExpressions: GeneratorDef = {
     // (ax)/(bx) = a/b for x ≠ 0, entered in lowest terms
     const a = ctx.int(2, 9);
     const b = ctx.int(2, 9);
-    ctx.require(a !== b, 'nontrivial quotient');
+    ctx.require(a !== b, 'answerNotTrivial');
     const s = simplifyFraction(a, b);
     const reduced = s.denominator === 1 ? `${s.numerator}` : `\\frac{${s.numerator}}{${s.denominator}}`;
     return {

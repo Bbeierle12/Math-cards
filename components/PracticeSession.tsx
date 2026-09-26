@@ -370,6 +370,13 @@ export default function PracticeSession({ topicId, onComplete, userProgress, set
         </div>
       )}
 
+      {/* Replayable reference: generateProblem(generatorId, settings, seed) reproduces this exact problem. */}
+      <p className="mt-6 text-center text-xs text-slate-500">
+        Problem <span className="font-mono select-all" title="Quote this when reporting a problem">
+          {currentProblem.id}{currentProblem.settings ? ` ${JSON.stringify(currentProblem.settings)}` : ''}
+        </span>
+      </p>
+
     </div>
   );
 }

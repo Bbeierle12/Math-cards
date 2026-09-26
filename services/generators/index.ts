@@ -10,11 +10,15 @@
  * ctx.require(). When one fails the draft is discarded and the generator runs
  * again on a seed derived from the original one (still deterministic); if no
  * valid instance turns up the generator is broken and generation fails loudly
- * instead of shipping an invalid problem.
+ * instead of shipping an invalid problem. Every draft also passes the
+ * structural checks in ./checks.ts (well-formed answer spec, no leaked NaN or
+ * undefined, balanced LaTeX); a draft that fails them is a generator bug and
+ * throws immediately.
  */
 import type { GeneratorSettings, Problem, TopicId } from '../../types';
 import { createRng, randomSeed } from '../random';
 import { InvariantViolation } from './context';
+import { checkDraft } from './checks';
 import type { GenContext, GeneratorDef } from './context';
 import * as arithmetic from './arithmetic';
 import * as prealgebra from './prealgebra';
@@ -76,6 +80,10 @@ export const instantiate = (def: GeneratorDef, settings: GeneratorSettings, seed
         continue;
       }
       throw e;
+    }
+    const defects = checkDraft(draft);
+    if (defects.length > 0) {
+      throw new Error(`generator ${def.topicId} v${def.version} produced an invalid problem (seed ${JSON.stringify(seed)}): ${defects.join('; ')}`);
     }
     const problem: Problem = {
       id: `${def.topicId}@${def.version}:${seed}`,

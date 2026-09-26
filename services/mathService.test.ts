@@ -437,7 +437,7 @@ describe('generator invariants', () => {
       generate: (ctx) => {
         calls++;
         const n = ctx.int(1, 10);
-        ctx.require(n === 7, 'n is 7');
+        ctx.require(n === 7, 'integerAnswer');
         return { templateId: 't', problemText: `${n}`, answer: exact(n), explanation: 'e' };
       },
     };
@@ -454,11 +454,11 @@ describe('generator invariants', () => {
       topicId: 'addition',
       version: 3,
       generate: (ctx) => {
-        ctx.require(false, 'impossible');
+        ctx.require(false, 'answerNotTrivial');
         return { templateId: 't', problemText: '', answer: exact(0), explanation: '' };
       },
     };
-    expect(() => instantiate(broken, {}, 'x')).toThrow(new RegExp(`no valid instance in ${MAX_ATTEMPTS} attempts.*impossible`));
+    expect(() => instantiate(broken, {}, 'x')).toThrow(new RegExp(`no valid instance in ${MAX_ATTEMPTS} attempts.*answerNotTrivial`));
   });
 
   it('other errors are not swallowed', () => {

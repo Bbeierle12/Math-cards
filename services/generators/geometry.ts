@@ -28,7 +28,7 @@ export const triangles: GeneratorDef = {
     const angle1 = ctx.int(30, 80);
     const angle2 = ctx.int(30, 80);
     const angle3 = 180 - angle1 - angle2;
-    ctx.require(angle3 > 0, 'positive third angle');
+    ctx.require(angle3 > 0, 'positiveAngles');
     return {
       templateId: 'angle-sum',
       problemText: `A triangle has angles of $${angle1}°$ and $${angle2}°$. What is the third angle?`,
@@ -101,7 +101,7 @@ export const areaPerimeter: GeneratorDef = {
         const s1 = ctx.int(5, 12);
         const s2 = ctx.int(5, 12);
         const s3 = ctx.int(Math.abs(s1 - s2) + 1, s1 + s2 - 1); // triangle inequality
-        ctx.require(s1 + s2 > s3 && s1 + s3 > s2 && s2 + s3 > s1, 'triangle inequality');
+        ctx.require(s1 + s2 > s3 && s1 + s3 > s2 && s2 + s3 > s1, 'triangleInequality');
         return { templateId: 'triangle-perimeter', problemText: `Find the perimeter of a triangle with sides $${s1}$, $${s2}$, and $${s3}$.`, answer: exact(s1 + s2 + s3), hint: '$P = a + b + c$', explanation: `$P = ${s1} + ${s2} + ${s3} = ${s1 + s2 + s3}$` };
       }
       case 'circle': {

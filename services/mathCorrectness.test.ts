@@ -16,8 +16,11 @@ import { AnswerSpec, Problem, TopicId } from '../types';
 import { coef, terms } from './testing/latex';
 
 const N = 40;
+/** `npm run test:sweep` raises every family's sample to the sweep's seed count. */
+const SWEEP = Number(process.env.SWEEP_SEEDS || 0);
 // Deterministic seeds: every run checks the same problems, and a failure names a replayable seed.
-const sample = (topic: TopicId, n = N): Problem[] => Array.from({ length: n }, (_, i) => generateProblem(topic, {}, `mc-${i}`));
+const sample = (topic: TopicId, n = N): Problem[] =>
+  Array.from({ length: Math.max(n, SWEEP) }, (_, i) => generateProblem(topic, {}, `mc-${i}`));
 const sampleWhere = (topic: TopicId, pred: (p: Problem) => boolean, want = 8): Problem[] => {
   const out: Problem[] = [];
   for (let i = 0; i < 600 && out.length < want; i++) {
@@ -673,7 +676,7 @@ describe('independent recomputation: pre-calculus', () => {
       const m = must(p.problemText.match(/\\frac\{1\}\{(.+?)\}\$/), p);
       const t = terms(m[1]);
       expect(coef(t, 'x')).toBe(1);
-      expect(num(p)).toBe(-coef(t, ''));
+      expect(num(p)).toBe(0 - coef(t, '')); // 0 − c, not −c: no −0
     }
   });
 

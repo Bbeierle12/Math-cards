@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:sweep": "vitest run --config vitest.sweep.config.mts",
+    "typecheck": "tsc --noEmit -p .",
+    "oracle": "vitest run --config scripts/oracle/vitest.config.mts && python3 scripts/oracle/check.py"
   },
   "dependencies": {
     "katex": "^0.16.38",

@@ -12,7 +12,7 @@ export const multiStepEquations: GeneratorDef = {
     const b = ctx.int(-15, 15);
     const c = ctx.int(1, a - 1);
     const d = (a - c) * x + b;
-    ctx.require(a !== c, 'unique solution');
+    ctx.require(a !== c, 'uniqueRealSolution');
     const lhs = latexPolynomial([[a, 'x'], [b, '']]);
     const rhs = latexPolynomial([[c, 'x'], [d, '']]);
     const moved = latexPolynomial([[a - c, 'x'], [b, '']]);
@@ -58,7 +58,7 @@ export const inequalities: GeneratorDef = {
 
 export const systemsOfEquations: GeneratorDef = {
   topicId: 'systems-of-equations',
-  version: 2,
+  version: 3,
   generate: (ctx) => {
     const x = ctx.int(2, 8);
     const y = ctx.int(2, 8);
@@ -66,7 +66,7 @@ export const systemsOfEquations: GeneratorDef = {
     const b1 = ctx.int(1, 5);
     const a2 = ctx.int(1, 5);
     const b2 = ctx.int(1, 5);
-    ctx.require(a1 * b2 - a2 * b1 !== 0, 'independent equations (nonzero determinant)');
+    ctx.require(a1 * b2 - a2 * b1 !== 0, 'uniqueRealSolution');
     const c1 = a1 * x + b1 * y;
     const c2 = a2 * x + b2 * y;
     const det = a1 * b2 - a2 * b1;
@@ -74,7 +74,7 @@ export const systemsOfEquations: GeneratorDef = {
       templateId: 'solve-for-x',
       problemText: `$${latexPolynomial([[a1, 'x'], [b1, 'y']])} = ${c1}$\n$${latexPolynomial([[a2, 'x'], [b2, 'y']])} = ${c2}$\nFind $x$:`,
       answer: exact(x),
-      explanation: `Eliminate $y$: multiply the first equation by $${b2}$ and the second by $${b1}$, then subtract: $(${a1 * b2} - ${a2 * b1})x = ${c1 * b2} - ${c2 * b1}$, so $${det}x = ${c1 * b2 - c2 * b1}$ and $x = ${x}$. (Then $y = ${y}$.)`,
+      explanation: `Eliminate $y$: multiply the first equation by $${b2}$ and the second by $${b1}$, then subtract: $(${a1 * b2} - ${a2 * b1})x = ${c1 * b2} - ${c2 * b1}$, so $${latexPolynomial([[det, 'x']])} = ${c1 * b2 - c2 * b1}$ and $x = ${x}$. (Then $y = ${y}$.)`,
       hint: 'Try using substitution or elimination method.',
     };
   },
@@ -156,19 +156,18 @@ export const factoring: GeneratorDef = {
 
 export const quadraticEquations: GeneratorDef = {
   topicId: 'quadratic-equations',
-  version: 2,
+  version: 3,
   generate: (ctx) => {
     // (x − a)(x − b) = 0
     const a = ctx.pick([-8, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8]);
     const b = ctx.pick([-8, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8]);
+    ctx.require(a !== b, 'distinctRoots');
     const quadratic = latexPolynomial([[1, 'x^2'], [-(a + b), 'x'], [a * b, '']]);
     return {
       templateId: 'factorable-monic',
       problemText: `Solve for $x$: $${quadratic} = 0$\nWhat is the larger solution?`,
       answer: exact(Math.max(a, b)),
-      explanation: a === b
-        ? `Factor: $${latexLinearFactor('x', a)}^2 = 0$, so the only solution is $x = ${a}$.`
-        : `Factor: $${latexLinearFactor('x', a)}${latexLinearFactor('x', b)} = 0$, so $x = ${a}$ or $x = ${b}$. The larger solution is $${Math.max(a, b)}$.`,
+      explanation: `Factor: $${latexLinearFactor('x', a)}${latexLinearFactor('x', b)} = 0$, so $x = ${a}$ or $x = ${b}$. The larger solution is $${Math.max(a, b)}$.`,
       hint: `Try factoring first, or use the quadratic formula: $x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$`,
     };
   },
