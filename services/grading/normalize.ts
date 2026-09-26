@@ -43,7 +43,14 @@ export const normalizeMathExpr = (raw: string): string => {
   s = s
     .replace(/²/g, '^2').replace(/³/g, '^3').replace(/⁴/g, '^4').replace(/⁵/g, '^5')
     .replace(/[·×]/g, '*').replace(/÷/g, '/').replace(/[−–]/g, '-').replace(/\*\*/g, '^')
-    .replace(/θ/g, 'theta').replace(/π/g, 'pi').replace(/√/g, 'sqrt').replace(/∞/g, 'infinity')
+    .replace(/θ/g, 'theta')
+    // π next to a name is a product ("xπ", "πr"), not a longer name ("xpi", "pir")
+    .replace(/π/g, (_c, i: number, str: string) =>
+      `${/[a-z]/.test(str[i - 1] ?? '') ? '*' : ''}pi${/[a-z0-9(√]/.test(str[i + 1] ?? '') ? '*' : ''}`)
+    // √3, √x, √pi: the radical applies to the number or name right after it; √(…) keeps its parentheses
+    .replace(/√\s*(\d+(?:\.\d+)?|[a-z]+)/g, 'sqrt($1)').replace(/√/g, 'sqrt')
+    .replace(/([a-z])sqrt\(/g, '$1*sqrt(')   // x√2 is x·√2
+    .replace(/∞/g, 'infinity')
     .replace(/<=/g, '≤').replace(/>=/g, '≥');
   // |expr| -> (abs(expr)) (non-nested); the outer parentheses keep "ln|u|" parseable as ln(...)
   s = s.replace(/\|([^|]+)\|/g, '(abs($1))');

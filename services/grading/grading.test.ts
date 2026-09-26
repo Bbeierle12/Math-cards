@@ -22,6 +22,19 @@ describe('normalizeMathExpr', () => {
   it('does not mangle function names containing x', () => {
     expect(normalizeMathExpr('exp(x)*(x-1)')).toBe('exp(x)*(x-1)');
   });
+
+  it('applies √ to the number or name right after it, and π and √ next to a name are products', () => {
+    expect(normalizeMathExpr('√3/2')).toBe('sqrt(3)/2');          // not sqrt(3/2)
+    expect(parseNumericInput('√3/2')).toBeCloseTo(Math.sqrt(3) / 2, 12);
+    expect(normalizeMathExpr('√(x+1)')).toBe('sqrt(x+1)');
+    expect(normalizeMathExpr('x√2')).toBe('x*sqrt(2)');
+    expect(normalizeMathExpr('π√2')).toBe('pi*sqrt(2)');
+    expect(normalizeMathExpr('2π')).toBe('2pi');
+    expect(normalizeMathExpr('πr^2')).toBe('pi*r^2');
+    expect(normalizeMathExpr('xπ')).toBe('x*pi');
+    expect(parseNumericInput('π/4')).toBeCloseTo(Math.PI / 4, 12);
+    expect(expressionsEquivalent('x√2', 'sqrt(2)*x')).toBe(true);
+  });
 });
 
 describe('freeVariables', () => {
