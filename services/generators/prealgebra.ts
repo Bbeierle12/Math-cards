@@ -5,6 +5,7 @@ import { exact, fractionAnswer, latexFrac, latexFraction, latexNum, roundTo, sim
 export const simpleLinearEquations: GeneratorDef = {
   topicId: 'simple-linear-equations',
   version: 2,
+  templates: ['ax+b=c'],
   generate: (ctx) => {
     const x = ctx.int(2, 10);
     const a = ctx.int(2, 5);
@@ -23,6 +24,7 @@ export const simpleLinearEquations: GeneratorDef = {
 export const fractionsBasic: GeneratorDef = {
   topicId: 'fractions-basic',
   version: 2,
+  templates: ['add', 'subtract', 'multiply', 'divide'],
   generate: (ctx) => {
     const op = ctx.pick(['+', '-', '×', '÷'] as const);
     const num1 = ctx.int(1, 9);
@@ -55,6 +57,7 @@ export const fractionsBasic: GeneratorDef = {
 export const decimals: GeneratorDef = {
   topicId: 'decimals',
   version: 3,
+  templates: ['add', 'subtract', 'multiply'],
   generate: (ctx) => {
     const op = ctx.pick(['+', '-', '×'] as const);
     let a = ctx.int(1, 99) / 10;
@@ -79,6 +82,7 @@ export const decimals: GeneratorDef = {
 export const orderOfOperations: GeneratorDef = {
   topicId: 'order-of-operations',
   version: 2,
+  templates: ['a+b*c', '(a+b)*c', 'a*b+c*d'],
   generate: (ctx) => {
     const a = ctx.int(1, 10);
     const b = ctx.int(1, 10);
@@ -114,6 +118,7 @@ export const orderOfOperations: GeneratorDef = {
 export const integers: GeneratorDef = {
   topicId: 'integers',
   version: 2,
+  templates: ['add', 'subtract', 'multiply'],
   generate: (ctx) => {
     const a = ctx.int(-20, 20);
     const b = ctx.int(-20, 20);

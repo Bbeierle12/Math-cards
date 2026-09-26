@@ -82,6 +82,7 @@ export const instantiate = (def: GeneratorDef, settings: GeneratorSettings, seed
       throw e;
     }
     const defects = checkDraft(draft);
+    if (!def.templates.includes(draft.templateId)) defects.push(`templateId "${draft.templateId}" is not declared in templates`);
     if (defects.length > 0) {
       throw new Error(`generator ${def.topicId} v${def.version} produced an invalid problem (seed ${JSON.stringify(seed)}): ${defects.join('; ')}`);
     }

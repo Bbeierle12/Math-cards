@@ -15,7 +15,7 @@ import * as path from 'node:path';
 import { parse } from 'mathjs';
 import { GENERATORS, generateProblem } from '../../services/generators';
 import { normalizeMathExpr, referenceNumber } from '../../services/grading';
-import { coef, terms } from '../../services/testing/latex';
+import { coef, latexToExpr, terms } from '../../services/testing/latex';
 import type { Problem } from '../../types';
 
 const SEEDS = Number(process.env.ORACLE_SEEDS || 300);
@@ -36,7 +36,8 @@ type Claim =
   | { type: 'converges'; term: string; n: string; start: number; value: boolean }
   | { type: 'radius'; coef: string; n: string; value: string }                 // radius of Σ coef·x^n
   | { type: 'maclaurin'; f: string; x: string; order: number; poly: string }
-  | { type: 'value'; expr: string; value: string };                            // expr = value
+  | { type: 'value'; expr: string; value: string }                             // expr = value
+  | { type: 'monotonic'; expr: string; n: string; value: boolean };           // a_n monotonic for n ≥ 1
 
 interface Record_ { topic: string; seed: string; templateId: string; problemText: string; claims: Claim[] }
 
@@ -46,6 +47,7 @@ const sym = (expr: string): string => {
   return node.toString({ implicit: 'show', parenthesis: 'keep' })
     .replace(/\be\b/g, 'E')
     .replace(/\babs\(/g, 'Abs(')
+    .replace(/\b(\w+)!/g, 'factorial($1)')
     .replace(/\^/g, '**');
 };
 /** Displayed polynomial ("x^2 - 5x") → SymPy text. */
@@ -57,6 +59,15 @@ const num = (p: Problem): string => {
   return String(v);
 };
 const verdict = (p: Problem): string | null => (p.answer.kind === 'choice' ? p.answer.answer : null);
+/** Displayed LaTeX → SymPy text. */
+const texSym = (tex: string): string => sym(latexToExpr(tex));
+/** The key of a convergence question: its value as a string, or null for "diverges". */
+const convergenceValue = (p: Problem): string | null => {
+  if (p.answer.kind !== 'multipart') throw new Error(`not a convergence question: ${p.problemText}`);
+  const [v, value] = p.answer.parts;
+  if (v.spec?.kind !== 'choice') throw new Error('no verdict');
+  return v.spec.answer === 'diverges' ? null : value.spec && value.spec.kind === 'number' ? String(value.spec.value) : 'nan';
+};
 const m = (p: Problem, re: RegExp): RegExpMatchArray => {
   const r = p.problemText.match(re);
   if (!r) throw new Error(`unparsed prompt for ${p.topicId}/${p.templateId}: ${p.problemText}`);
@@ -118,26 +129,34 @@ const claimsFor = (p: Problem): Claim[] | null => {
       ];
     }
     case 'integration-by-parts':
-    case 'trig-integrals':
+    case 'trig-integrals': {
+      // the integrand as displayed, not the one stored for the grader
+      const [, shown] = m(p, /\\int (.+?)\\,dx\$/);
       return p.answer.kind === 'antiderivative' && p.answer.reference
-        ? [{ type: 'antiderivative', F: sym(p.answer.reference), f: sym(p.answer.integrand), x: 'x' }]
+        ? [
+          { type: 'antiderivative', F: sym(p.answer.reference), f: texSym(shown), x: 'x' },
+          { type: 'identity', a: sym(p.answer.integrand), b: texSym(shown) },
+        ]
         : null;
+    }
     case 'improper-integrals': {
-      const table: Record<string, [string, string, string]> = {
-        '1/x^2': ['1/x**2', '1', 'oo'], '1/x^3': ['1/x**3', '1', 'oo'], 'e^-x': ['exp(-x)', '0', 'oo'], '1/x': ['1/x', '1', 'oo'],
-      };
-      if (p.templateId === 'p-integral') {
-        // converges for p = 2 and p = 1.01, diverges for p = 1 and p = 1/2: consistent with the interval p > 1
-        return [
-          { type: 'definite', f: 'x**(-2)', x: 'x', a: '1', b: 'oo', value: '1' },
-          { type: 'definite', f: 'x**(-1)', x: 'x', a: '1', b: 'oo', value: 'oo' },
-          { type: 'definite', f: 'x**(-Rational(1, 2))', x: 'x', a: '1', b: 'oo', value: 'oo' },
-        ];
+      if (p.templateId === 'p-threshold') {
+        // sample exponents on both sides of the claimed boundary
+        const atInfinity = /int_1\^\{\\infty\}/.test(p.problemText);
+        const claim = (pw: string, a: string, b: string, value: string): Claim => ({ type: 'definite', f: `x**(-(${pw}))`, x: 'x', a, b, value });
+        const inSet = (v: number) => (p.answer.kind === 'interval' ? p.answer.set.some(iv => v > iv.lo && v < iv.hi) : false);
+        // [exponent for SymPy, its value, ∫ x^(−p) over the interval]
+        const rows: [string, number, string][] = atInfinity
+          ? [['2', 2, '1'], ['Rational(3, 2)', 1.5, '2'], ['1', 1, 'oo'], ['Rational(1, 2)', 0.5, 'oo']]
+          : [['Rational(1, 2)', 0.5, '2'], ['-1', -1, 'Rational(1, 2)'], ['1', 1, 'oo'], ['2', 2, 'oo']];
+        // each sample must be in the key's set exactly when its integral converges
+        return rows.map(([pw, v, value]) => (inSet(v) === (value !== 'oo')
+          ? claim(pw, atInfinity ? '1' : '0', atInfinity ? 'oo' : '1', value)
+          : { type: 'value', expr: '0', value: '1' }));
       }
-      const row = table[p.templateId];
-      if (!row) return null;
-      const v = verdict(p);
-      return [{ type: 'definite', f: row[0], x: 'x', a: row[1], b: row[2], value: v === 'diverges' ? 'oo' : num(p) }];
+      const [, lo, hi, integrand] = m(p, /\\int_(\d)\^\{(\\infty|1)\} (.+?)\\,dx\$ converge/);
+      const value = convergenceValue(p);
+      return [{ type: 'definite', f: texSym(integrand), x: 'x', a: lo, b: hi === '1' ? '1' : 'oo', value: value === null ? 'oo' : value }];
     }
     case 'partial-fractions': {
       if (p.templateId.startsWith('distinct-linear')) {
@@ -153,54 +172,70 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return [{ type: 'value', expr: `cancel((x - ${a})/((x - ${a})*(x**2 + 1))).subs(x, ${a})`, value: num(p) }];
     }
     case 'sequences': {
-      if (p.answer.kind !== 'multipart') return null;
-      const limit = p.answer.parts[1].spec;
-      const v = limit && limit.kind === 'number' ? String(limit.value) : 'none';
-      const table: [RegExp, string][] = [
-        [/a_n = \\frac\{1\}\{n\}\$/, '1/n'], [/a_n = \\frac\{n\+1\}\{n\}\$/, '(n+1)/n'], [/a_n = \(-1\)\^n\$/, '(-1)**n'],
-        [/a_n = n\^2\$/, 'n**2'], [/a_n = \\frac\{n\}\{n\+1\}\$/, 'n/(n+1)'], [/a_n = \\frac\{1\}\{n!\}\$/, '1/factorial(n)'],
-      ];
-      const row = table.find(([re]) => re.test(p.problemText));
-      return row ? [{ type: 'limit', expr: row[1], x: 'n', at: 'oo', value: v }] : null;
-    }
-    case 'series-convergence': {
-      const v = verdict(p);
-      const table: Record<string, [string, number]> = {
-        'geometric-sum-1/2': ['(1/2)**n', 0], 'geometric-sum-1/3': ['(1/3)**n', 0], harmonic: ['1/n', 1], 'p-series-2': ['1/n**2', 1],
-        'ratio-n!/2^n': ['factorial(n)/2**n', 0], 'alternating-harmonic': ['(-1)**(n+1)/n', 1], 'geometric-3/2': ['(3/2)**n', 0],
-        'nth-term-n/(n+1)': ['n/(n+1)', 1],
-      };
-      if (p.templateId === 'nth-term-inconclusive') {
-        // the n-th term tends to 0, so the n-th term test says nothing ("no")
-        return v === 'no' ? [{ type: 'limit', expr: '1/n**2', x: 'n', at: 'oo', value: '0' }] : [{ type: 'value', expr: '0', value: '1' }];
+      let r: RegExpMatchArray | null;
+      if ((r = p.problemText.match(/Does the sequence \$a_n = (.+)\$ converge or diverge/))) {
+        return [{ type: 'limit', expr: texSym(r[1]), x: 'n', at: 'oo', value: convergenceValue(p) ?? 'none' }];
       }
-      const row = table[p.templateId];
-      if (!row) return null;
-      return v === null
-        ? [{ type: 'sum', term: row[0], n: 'n', start: row[1], value: num(p) }]
-        : [{ type: 'converges', term: row[0], n: 'n', start: row[1], value: v === 'converges' }];
-    }
-    case 'power-series': {
-      const table: Record<string, string> = { 'x^n/n!': '1/factorial(n)', 'x^n': '1', 'nx^n': 'n', 'x^n/2^n': '1/2**n', 'x^n/n': '1/n' };
-      const c = table[p.templateId];
-      if (!c) return null;
-      return [{ type: 'radius', coef: c, n: 'n', value: p.answer.kind === 'text' ? 'oo' : num(p) }];
-    }
-    case 'taylor-maclaurin': {
-      const table: Record<string, [string, number]> = {
-        'maclaurin-e^x': ['exp(x)', 4], 'maclaurin-sin': ['sin(x)', 6], 'maclaurin-cos': ['cos(x)', 5], 'maclaurin-1/(1-x)': ['1/(1-x)', 4],
-      };
-      if (p.templateId === 'coefficient-x^2-e^x') return [{ type: 'value', expr: 'series(exp(x), x, 0, 3).removeO().coeff(x, 2)', value: num(p) }];
-      if (p.templateId === 'lagrange-e^x') {
-        // the bound is max|f''''| on [0, 0.5] · 0.5^4 / 4!, and it does bound the actual error
+      if ((r = p.problemText.match(/The sequence \$a_n = (.+)\$ is increasing and bounded above by \$(\d+)\$/))) {
         return [
-          { type: 'value', expr: 'exp(Rational(1, 2)) * Rational(1, 2)**4 / factorial(4)', value: num(p) },
-          { type: 'value', expr: `Piecewise((1, exp(Rational(1,2)) - series(exp(x), x, 0, 4).removeO().subs(x, Rational(1,2)) <= ${num(p)}), (0, True))`, value: '1' },
+          { type: 'monotonic', expr: texSym(r[1]), n: 'n', value: true },
+          { type: 'value', expr: `Piecewise((1, Max(*[(${texSym(r[1])}).subs(n, k) for k in range(1, 200)]) <= ${r[2]}), (0, True))`, value: '1' },
+          { type: 'limit', expr: texSym(r[1]), x: 'n', at: 'oo', value: convergenceValue(p) ?? 'none' },
         ];
       }
-      if (p.templateId === 'alternating-remainder') return [{ type: 'value', expr: 'Rational(1, 5)', value: num(p) }];
-      const row = table[p.templateId];
-      return row && p.answer.kind === 'expression' ? [{ type: 'maclaurin', f: row[0], x: 'x', order: row[1], poly: sym(p.answer.reference) }] : null;
+      if ((r = p.problemText.match(/Is the sequence \$a_n = (.+)\$ \(for \$n \\geq 1\$\) monotonic\?/))) {
+        return [{ type: 'monotonic', expr: texSym(r[1]), n: 'n', value: verdict(p) === 'yes' }];
+      }
+      return null; // n-th term questions: arithmetic, recomputed in mathCorrectness.test.ts
+    }
+    case 'series-convergence': {
+      const [, start, term] = m(p, /\\sum_\{n=(\d)\}\^\{\\infty\} (.+?)\$/);
+      const v = verdict(p);
+      if (v === null) {
+        const value = convergenceValue(p);
+        return value === null
+          ? [{ type: 'converges', term: texSym(term), n: 'n', start: Number(start), value: false }]
+          : [{ type: 'sum', term: texSym(term), n: 'n', start: Number(start), value }];
+      }
+      return [{ type: 'converges', term: texSym(term), n: 'n', start: Number(start), value: v === 'converges' }];
+    }
+    case 'power-series': {
+      const [, series] = m(p, /\\sum_\{n=0\}\^\{\\infty\} (.+)\$/);
+      const coefficient = texSym(series.replace(/\((x [+-] \d+)\)\^n/, '(1)').replace(/x\^n/, '(1)'));
+      return [{ type: 'radius', coef: coefficient, n: 'n', value: referenceNumber(p.answer) === Infinity ? 'oo' : num(p) }];
+    }
+    case 'taylor-maclaurin': {
+      let r: RegExpMatchArray | null;
+      if ((r = p.problemText.match(/Maclaurin polynomial of degree \$(\d)\$ for \$(.+)\$\./)) && p.answer.kind === 'expression') {
+        return [{ type: 'maclaurin', f: texSym(r[2]), x: 'x', order: Number(r[1]) + 1, poly: sym(p.answer.reference) }];
+      }
+      if ((r = p.problemText.match(/Maclaurin series for \$\\(sin|cos)\((.*?)\)\$\?/)) && p.answer.kind === 'expression') {
+        return [{ type: 'maclaurin', f: texSym(`\\${r[1]}(${r[2]})`), x: 'x', order: r[1] === 'sin' ? 6 : 5, poly: sym(p.answer.reference) }];
+      }
+      if ((r = p.problemText.match(/coefficient of \$x\^\{(\d)\}\$ in the Maclaurin series for \$(.+?)\$\?/))) {
+        return [{ type: 'value', expr: `series(${texSym(r[2])}, x, 0, ${Number(r[1]) + 1}).removeO().coeff(x, ${r[1]})`, value: num(p) }];
+      }
+      if ((r = p.problemText.match(/coefficient of \$\(x - (\d)\)\^\{(\d)\}\$ in the Taylor series of \$e\^x\$ centred at \$x = (\d)\$/))) {
+        return [
+          { type: 'value', expr: `diff(exp(x), x, ${r[2]}).subs(x, ${r[3]}) / factorial(${r[2]})`, value: num(p) },
+          { type: 'value', expr: `${r[1]} - ${r[3]}`, value: '0' },
+        ];
+      }
+      if ((r = p.problemText.match(/degree-\$(\d)\$ Maclaurin polynomial at \$x = (-?[\d.]+)\$/))) {
+        const [n, h] = [r[1], `Rational('${r[2]}')`];
+        return [
+          { type: 'value', expr: `exp(Max(${h}, 0)) * Abs(${h})**(${n}+1) / factorial(${n}+1)`, value: num(p) },
+          { type: 'value', expr: `Piecewise((1, Abs(exp(${h}) - series(exp(x), x, 0, ${n}+1).removeO().subs(x, ${h})) <= ${num(p)}), (0, True))`, value: '1' },
+        ];
+      }
+      if ((r = p.problemText.match(/\\frac\{\(-1\)\^\{n\+1\}\}\{(n|n\^\{2\})\}\$ is approximated by its first \$(\d+)\$ terms/))) {
+        const term = r[1] === 'n' ? '(-1)**(n+1)/n' : '(-1)**(n+1)/n**2';
+        return [
+          { type: 'value', expr: `(${term}).subs(n, ${Number(r[2]) + 1}) * (-1)**${Number(r[2])}`, value: num(p) },
+          { type: 'value', expr: `Piecewise((1, Abs(summation(${term}, (n, 1, oo)) - summation(${term}, (n, 1, ${r[2]}))) <= ${num(p)}), (0, True))`, value: '1' },
+        ];
+      }
+      return null;
     }
     case 'parametric-equations': {
       if (p.templateId === 'eliminate-shifted-parabola' && p.answer.kind === 'expression') {
@@ -223,10 +258,23 @@ const claimsFor = (p: Problem): Claim[] | null => {
       const row = table[p.templateId];
       return row && row[1] ? [{ type: 'definite', f: row[0], x: 'x', a: '0', b: row[1], value: num(p) }] : null;
     }
-    case 'trig-substitution':
-      return p.templateId === 'quarter-circle'
-        ? [{ type: 'definite', f: 'sqrt(1 - x**2)', x: 'x', a: '0', b: '1', value: num(p) }]
-        : null;
+    case 'trig-substitution': {
+      if (p.templateId === 'quarter-circle') {
+        const [, r, r2] = m(p, /\\int_0\^\{(\d+)\} \\sqrt\{(\d+) - x\^2\}/);
+        return [{ type: 'definite', f: `sqrt(${r2} - x**2)`, x: 'x', a: '0', b: r, value: num(p) }];
+      }
+      // with the key's substitution the displayed radicand becomes a perfect square
+      if (p.answer.kind !== 'anyOf') return null;
+      const primary = p.answer.options[0];
+      if (primary.kind !== 'equation') return null;
+      const x = sym(primary.rhs);
+      const k = x.match(/^(\d+)/)?.[1] ?? '1';
+      const [minus, plus, over] = [p.problemText.match(/\{(\d+) - x\^2\}/), p.problemText.match(/x\^2 \+ (\d+)/), p.problemText.match(/x\^2 - (\d+)/)];
+      if (minus) return [{ type: 'identity', a: `(${minus[1]} - x**2).subs(x, ${x})`, b: `(${k}*cos(theta))**2` }];
+      if (plus) return [{ type: 'identity', a: `(x**2 + ${plus[1]}).subs(x, ${x})`, b: `(${k}*sec(theta))**2` }];
+      if (over) return [{ type: 'identity', a: `(x**2 - ${over[1]}).subs(x, ${x})`, b: `(${k}*tan(theta))**2` }];
+      return null;
+    }
     case 'trig-identities': {
       const lhs: Record<string, string> = {
         pythagorean: 'sin(theta)**2 + cos(theta)**2', quotient: 'tan(theta)', 'pythagorean-tan': '1 + tan(theta)**2',
@@ -267,18 +315,17 @@ const claimsFor = (p: Problem): Claim[] | null => {
       return [{ type: 'value', expr: `log(${v}, ${b})`, value: num(p) }];
     }
     case 'polar-coordinates': {
-      if (p.templateId === 'cartesian-to-polar-r') {
-        const [, x, y] = m(p, /Convert \$\((\d+), (\d+)\)\$/);
-        return [{ type: 'value', expr: `sqrt(${x}**2 + ${y}**2)`, value: num(p) }];
+      let r: RegExpMatchArray | null;
+      if ((r = p.problemText.match(/Convert \$\((-?\d+), (-?\d+)\)\$ from Cartesian to polar.\nWhat is \$r\$/))) {
+        return [{ type: 'value', expr: `sqrt(${r[1]}**2 + ${r[2]}**2)`, value: num(p) }];
       }
-      if (p.templateId === 'cartesian-to-polar-theta') {
-        const [, x, y] = m(p, /Convert \$\((\d+), (\d+)\)\$/);
-        return [{ type: 'value', expr: `atan2(${y}, ${x})*180/pi`, value: num(p) }];
+      if ((r = p.problemText.match(/Convert \$\((-?\d+), (-?\d+)\)\$ from Cartesian to polar.\nWhat is \$\\theta\$/))) {
+        return [{ type: 'value', expr: `Mod(atan2(${r[2]}, ${r[1]})*180/pi, 360)`, value: num(p) }];
       }
-      const pc = p.problemText.match(/\(r=(\d+),\\; \\theta=(\d+)°\)/);
-      if (pc && p.templateId === 'polar-to-cartesian-x') return [{ type: 'value', expr: `${pc[1]}*cos(${pc[2]}*pi/180)`, value: num(p) }];
-      if (pc && p.templateId === 'polar-to-cartesian-y') return [{ type: 'value', expr: `${pc[1]}*sin(${pc[2]}*pi/180)`, value: num(p) }];
-      return null;
+      if ((r = p.problemText.match(/\(r=(\d+),\\; \\theta=(\d+)°\)\$ to Cartesian.\nWhat is \$(x|y)\$/))) {
+        return [{ type: 'value', expr: `${r[1]}*${r[3] === 'x' ? 'cos' : 'sin'}(${r[2]}*pi/180)`, value: num(p) }];
+      }
+      return null; // curve identification: recomputed in mathCorrectness.test.ts
     }
     default:
       return null; // families without a symbolic claim (arithmetic, geometry, word problems): covered by mathCorrectness.test.ts

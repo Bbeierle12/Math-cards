@@ -5,6 +5,7 @@ import { exact, latexLinearFactor, latexNum, latexPolynomial, ray } from './cont
 export const multiStepEquations: GeneratorDef = {
   topicId: 'multi-step-equations',
   version: 2,
+  templates: ['ax+b=cx+d'],
   generate: (ctx) => {
     // ax + b = cx + d with integer solution x
     const x = ctx.int(2, 10);
@@ -35,6 +36,7 @@ const flip = (op: Op): Op => ({ '<': '>', '>': '<', '≤': '≥', '≥': '≤' }
 export const inequalities: GeneratorDef = {
   topicId: 'inequalities',
   version: 3,
+  templates: ['positive-coefficient', 'negative-coefficient'],
   generate: (ctx) => {
     const negative = ctx.bool(0.4);
     const a = negative ? -ctx.int(2, 5) : ctx.int(2, 5);
@@ -59,6 +61,7 @@ export const inequalities: GeneratorDef = {
 export const systemsOfEquations: GeneratorDef = {
   topicId: 'systems-of-equations',
   version: 3,
+  templates: ['solve-for-x'],
   generate: (ctx) => {
     const x = ctx.int(2, 8);
     const y = ctx.int(2, 8);
@@ -83,6 +86,7 @@ export const systemsOfEquations: GeneratorDef = {
 export const exponents: GeneratorDef = {
   topicId: 'exponents',
   version: 2,
+  templates: ['product', 'quotient', 'power'],
   generate: (ctx) => {
     const base = ctx.int(2, 5);
     const exp1 = ctx.int(2, 4);
@@ -119,6 +123,7 @@ export const exponents: GeneratorDef = {
 export const polynomials: GeneratorDef = {
   topicId: 'polynomials',
   version: 2,
+  templates: ['add', 'subtract'],
   generate: (ctx) => {
     const p = [ctx.int(1, 5), ctx.int(-10, 10), ctx.int(-10, 10)];
     const q = [ctx.int(1, 5), ctx.int(-10, 10), ctx.int(-10, 10)];
@@ -139,6 +144,7 @@ export const polynomials: GeneratorDef = {
 export const factoring: GeneratorDef = {
   topicId: 'factoring',
   version: 2,
+  templates: ['monic-quadratic'],
   generate: (ctx) => {
     // (x + a)(x + b) = x² + (a+b)x + ab, with a, b nonzero
     const a = ctx.pick([-8, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8]);
@@ -157,6 +163,7 @@ export const factoring: GeneratorDef = {
 export const quadraticEquations: GeneratorDef = {
   topicId: 'quadratic-equations',
   version: 3,
+  templates: ['factorable-monic'],
   generate: (ctx) => {
     // (x − a)(x − b) = 0
     const a = ctx.pick([-8, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8]);

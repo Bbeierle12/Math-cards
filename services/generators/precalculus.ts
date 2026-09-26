@@ -5,6 +5,7 @@ import { exact, latexLinearFactor, latexNum, latexPolynomial } from './context';
 export const functions: GeneratorDef = {
   topicId: 'functions',
   version: 2,
+  templates: ['evaluate-linear'],
   generate: (ctx) => {
     const a = ctx.int(2, 5);
     const b = ctx.int(1, 8);
@@ -23,6 +24,7 @@ export const functions: GeneratorDef = {
 export const polynomialFunctions: GeneratorDef = {
   topicId: 'polynomial-functions',
   version: 3,
+  templates: ['two-roots', 'double-root'],
   generate: (ctx) => {
     // (x − a)(x − b) = 0: every real root must be given
     const a = ctx.int(-5, 5);
@@ -44,6 +46,7 @@ export const polynomialFunctions: GeneratorDef = {
 export const rationalFunctions: GeneratorDef = {
   topicId: 'rational-functions',
   version: 2,
+  templates: ['reciprocal-linear'],
   generate: (ctx) => {
     const a = ctx.int(-8, 8);
     const denominator = latexPolynomial([[1, 'x'], [-a, '']]);
@@ -61,6 +64,7 @@ export const rationalFunctions: GeneratorDef = {
 export const exponentialFunctions: GeneratorDef = {
   topicId: 'exponential-functions',
   version: 2,
+  templates: ['doubling'],
   generate: (ctx) => {
     const p0 = ctx.int(100, 500);
     const t = ctx.int(1, 4);
@@ -78,6 +82,7 @@ export const exponentialFunctions: GeneratorDef = {
 export const conicSections: GeneratorDef = {
   topicId: 'conic-sections',
   version: 2,
+  templates: ['circle-center-x', 'circle-radius'],
   generate: (ctx) => {
     const r = ctx.int(3, 10);
     const h = ctx.int(-5, 5);

@@ -59,6 +59,7 @@ export const toSubmission = (problem: Problem, values: string[]): string | strin
 const typedInput = (spec: AnswerSpec | null): { inputMode: 'decimal' | 'text'; placeholder: string } => {
   const s = spec === null ? null : controlSpec(spec);
   if (s === null || s.kind === 'number') {
+    if (s?.kind === 'number' && s.extended) return { inputMode: 'text', placeholder: 'A number, or ∞ (type "infinity")' };
     return s?.kind === 'number' && s.unit === 'degree'
       ? { inputMode: 'decimal', placeholder: 'Angle in degrees (e.g. 45)' }
       : { inputMode: 'decimal', placeholder: 'Your answer (e.g. 12, -3, 3/5, 0.75)' };

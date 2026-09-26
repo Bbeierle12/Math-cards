@@ -6,6 +6,7 @@ import { SPECIAL_TRIG, degrees, latexFrac, roundedTo, simplifyFraction } from '.
 export const trigRatios: GeneratorDef = {
   topicId: 'trig-ratios',
   version: 2,
+  templates: ['sin', 'cos', 'tan'],
   generate: (ctx) => {
     const [a, b, c] = ctx.pick(PYTHAGOREAN_TRIPLES);
     const ratio = ctx.pick(['sin', 'cos', 'tan'] as const);
@@ -34,6 +35,7 @@ const FNS: TrigFn[] = ['sin', 'cos', 'tan'];
 export const trigSpecialAngles: GeneratorDef = {
   topicId: 'trig-special-angles',
   version: 2,
+  templates: ['sin-special', 'cos-special', 'tan-special'],
   generate: (ctx) => {
     const angle = ctx.pick(ANGLES);
     const ratio = ctx.pick(FNS);
@@ -65,6 +67,7 @@ const IDENTITIES = [
 export const trigIdentities: GeneratorDef = {
   topicId: 'trig-identities',
   version: 2,
+  templates: ['pythagorean', 'quotient', 'pythagorean-tan', 'cofunction-sin', 'cofunction-cos'],
   generate: (ctx) => {
     const chosen = ctx.pick(IDENTITIES);
     return {
@@ -81,6 +84,7 @@ export const trigIdentities: GeneratorDef = {
 export const trigEquations: GeneratorDef = {
   topicId: 'trig-equations',
   version: 2,
+  templates: ['solve-sin', 'solve-cos', 'solve-tan'],
   generate: (ctx) => {
     const angle = ctx.pick(ANGLES);
     const ratio = ctx.pick(FNS);
@@ -111,6 +115,7 @@ const INVERSE_CASES: { func: TrigFn; angle: SpecialAngle; range: string }[] = [
 export const inverseTrig: GeneratorDef = {
   topicId: 'inverse-trig',
   version: 3,
+  templates: ['arcsin', 'arccos', 'arctan'],
   generate: (ctx) => {
     const chosen = ctx.pick(INVERSE_CASES);
     const v = SPECIAL_TRIG[chosen.angle][chosen.func];

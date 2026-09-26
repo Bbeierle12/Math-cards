@@ -6,6 +6,7 @@ import { degrees, exact, roundTo, roundedTo } from './context';
 export const angles: GeneratorDef = {
   topicId: 'angles',
   version: 2,
+  templates: ['complement', 'supplement'],
   generate: (ctx) => {
     const kind = ctx.pick(['complement', 'supplement'] as const);
     const total = kind === 'complement' ? 90 : 180;
@@ -24,6 +25,7 @@ export const angles: GeneratorDef = {
 export const triangles: GeneratorDef = {
   topicId: 'triangles',
   version: 2,
+  templates: ['angle-sum'],
   generate: (ctx) => {
     const angle1 = ctx.int(30, 80);
     const angle2 = ctx.int(30, 80);
@@ -42,6 +44,7 @@ export const triangles: GeneratorDef = {
 export const pythagoreanTheorem: GeneratorDef = {
   topicId: 'pythagorean-theorem',
   version: 2,
+  templates: ['find-hypotenuse', 'find-leg'],
   generate: (ctx) => {
     const [a, b, c] = ctx.pick(PYTHAGOREAN_TRIPLES);
     const missing = ctx.pick(['a', 'b', 'c'] as const);
@@ -74,6 +77,7 @@ const PI_NOTE = '(Use $\\pi \\approx 3.14$; round to 2 decimal places.)';
 export const areaPerimeter: GeneratorDef = {
   topicId: 'area-perimeter',
   version: 2,
+  templates: ['rectangle-area', 'rectangle-perimeter', 'square-area', 'square-perimeter', 'triangle-area', 'triangle-perimeter', 'circle-area', 'circle-circumference'],
   generate: (ctx) => {
     const shape = ctx.pick(['rectangle', 'square', 'triangle', 'circle'] as const);
     const area = ctx.bool();
@@ -120,6 +124,7 @@ export const areaPerimeter: GeneratorDef = {
 export const circles: GeneratorDef = {
   topicId: 'circles',
   version: 2,
+  templates: ['diameter', 'circumference', 'area'],
   generate: (ctx) => {
     const r = ctx.int(3, 10);
     const kind = ctx.pick(['circumference', 'area', 'diameter'] as const);
@@ -138,6 +143,7 @@ export const circles: GeneratorDef = {
 export const volumeSurfaceArea: GeneratorDef = {
   topicId: 'volume-surface-area',
   version: 2,
+  templates: ['cube-volume', 'cube-surface', 'prism-volume', 'prism-surface', 'cylinder-volume', 'cylinder-surface', 'sphere-volume', 'sphere-surface'],
   generate: (ctx) => {
     const shape = ctx.pick(['cube', 'rectangular-prism', 'cylinder', 'sphere'] as const);
     const volume = ctx.bool();

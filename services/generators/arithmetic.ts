@@ -5,6 +5,7 @@ import { exact, latexNum, resolveRange } from './context';
 export const addition: GeneratorDef = {
   topicId: 'addition',
   version: 2,
+  templates: ['sum'],
   generate: (ctx) => {
     const { min, max } = resolveRange(ctx.settings, -10, 10);
     const a = ctx.int(min, max);
@@ -22,6 +23,7 @@ export const addition: GeneratorDef = {
 export const subtraction: GeneratorDef = {
   topicId: 'subtraction',
   version: 2,
+  templates: ['difference'],
   generate: (ctx) => {
     const { min, max } = resolveRange(ctx.settings, -10, 10);
     let a = ctx.int(min, max);
@@ -43,6 +45,7 @@ export const subtraction: GeneratorDef = {
 export const multiplication: GeneratorDef = {
   topicId: 'multiplication',
   version: 2,
+  templates: ['product'],
   generate: (ctx) => {
     const { min, max } = resolveRange(ctx.settings, -10, 10);
     const a = ctx.int(min, max);
@@ -65,6 +68,7 @@ export const multiplication: GeneratorDef = {
 export const division: GeneratorDef = {
   topicId: 'division',
   version: 2,
+  templates: ['exact-quotient', 'zero-dividend'],
   generate: (ctx) => {
     const { min, max } = resolveRange(ctx.settings, -10, 10);
     // A range that can only produce 0 (e.g. [0, 0]) still yields a valid problem.

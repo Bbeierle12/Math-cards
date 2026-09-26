@@ -1,7 +1,7 @@
 /**
  * Grading engine public API. See README "Grading contract".
  */
-export { grade, partIsActive, toleranceFor } from './grade';
+export { grade, partIsActive, toleranceFor, parseInfinity } from './grade';
 export type { AnswerInput, GradeContext } from './grade';
 export { canonicalInput, wrongInputs, displayOf, referenceNumber } from './canonical';
 export { normalizeMathExpr, freeVariables, isWordAnswer, normalizeWord } from './normalize';

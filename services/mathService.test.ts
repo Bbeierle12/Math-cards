@@ -434,6 +434,7 @@ describe('generator invariants', () => {
     const picky: GeneratorDef = {
       topicId: 'addition',
       version: 1,
+      templates: ['t'],
       generate: (ctx) => {
         calls++;
         const n = ctx.int(1, 10);
@@ -453,6 +454,7 @@ describe('generator invariants', () => {
     const broken: GeneratorDef = {
       topicId: 'addition',
       version: 3,
+      templates: ['t'],
       generate: (ctx) => {
         ctx.require(false, 'answerNotTrivial');
         return { templateId: 't', problemText: '', answer: exact(0), explanation: '' };
@@ -465,6 +467,7 @@ describe('generator invariants', () => {
     const crashing: GeneratorDef = {
       topicId: 'addition',
       version: 1,
+      templates: ['t'],
       generate: () => { throw new TypeError('bug'); },
     };
     expect(() => instantiate(crashing, {}, 'x')).toThrow(TypeError);

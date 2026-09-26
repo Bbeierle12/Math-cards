@@ -113,8 +113,23 @@ def check(claim):
         value = summation(ev(claim['term']), (n, claim['start'], oo))
         return 'proved' if value.is_finite and close(value, ev(claim['value'])) else 'refuted'
     if kind == 'converges':
-        verdict = Sum(ev(claim['term']), (n, claim['start'], oo)).is_convergent()
+        try:
+            verdict = Sum(ev(claim['term']), (n, claim['start'], oo)).is_convergent()
+        except NotImplementedError:
+            return 'unproven'
+        if verdict not in (True, False, S.true, S.false):
+            return 'unproven'
         return 'proved' if bool(verdict) == claim['value'] else 'refuted'
+    if kind == 'monotonic':
+        a = S(ev(claim['expr']))
+        diffs = [a.subs(n, k + 1) - a.subs(n, k) for k in range(1, 80)]
+        numeric = all(d >= 0 for d in diffs) or all(d <= 0 for d in diffs)
+        if numeric != claim['value']:
+            return 'refuted'
+        if not claim['value']:
+            return 'proved'  # a single pair of opposite-sign steps is a proof of non-monotonicity
+        step = simplify(a.subs(n, n + 1) - a)
+        return 'proved' if step.is_positive or step.is_negative or step.is_nonnegative or step.is_nonpositive else 'unproven'
     if kind == 'radius':
         c = S(ev(claim['coef']))
         ratio = simplify(Abs(c / c.subs(n, n + 1)))

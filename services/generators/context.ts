@@ -25,6 +25,7 @@ export const INVARIANTS = {
   triangleInequality: 'the side lengths form a nondegenerate triangle',
   positiveAngles: 'every angle of the figure is positive',
   integerAnswer: 'the answer is an integer, as the prompt implies',
+  boundHolds: 'a claimed error bound is at least the actual error',
 } as const;
 
 export type InvariantName = keyof typeof INVARIANTS;
@@ -53,6 +54,12 @@ export interface GeneratorDef {
   topicId: TopicId;
   /** Bump when the generator's output for a given seed changes. */
   version: number;
+  /**
+   * Every structural template the generator can emit. Mastery requires
+   * evidence across templates and the scheduler targets them, so a draft
+   * with an undeclared templateId is a generator bug.
+   */
+  templates: readonly string[];
   generate: (ctx: GenContext) => Draft;
 }
 

@@ -28,7 +28,7 @@ export const checkSpec = (spec: AnswerSpec, path = 'answer'): string[] => {
   const bad = (msg: string) => out.push(`${path}: ${msg}`);
   switch (spec.kind) {
     case 'number': {
-      if (!Number.isFinite(spec.value)) bad(`value ${spec.value} is not a finite number`);
+      if (Number.isNaN(spec.value) || (!Number.isFinite(spec.value) && !spec.extended)) bad(`value ${spec.value} is not a finite number (set extended for ±∞)`);
       const t = spec.tolerance;
       if (t.kind === 'decimalPlaces' && !(Number.isInteger(t.places) && t.places >= 0)) bad('decimal places must be a nonnegative integer');
       if (t.kind === 'significantFigures' && !(Number.isInteger(t.figures) && t.figures >= 1)) bad('significant figures must be a positive integer');

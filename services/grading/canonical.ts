@@ -38,6 +38,7 @@ const firstVariable = (expr: string): string => {
 export const canonicalInput = (spec: AnswerSpec): string | string[] => {
   switch (spec.kind) {
     case 'number':
+      if (!Number.isFinite(spec.value)) return spec.value > 0 ? 'infinity' : '-infinity';
       return spec.tolerance.kind === 'decimalPlaces' ? spec.value.toFixed(spec.tolerance.places) : num(spec.value);
     case 'fraction': return `${spec.numerator}/${spec.denominator}`;
     case 'expression': return spec.reference;
@@ -59,7 +60,9 @@ export const canonicalInput = (spec: AnswerSpec): string | string[] => {
 export const wrongInputs = (spec: AnswerSpec): (string | string[])[] => {
   switch (spec.kind) {
     case 'number': {
+      if (!Number.isFinite(spec.value)) return [spec.value > 0 ? '-infinity' : 'infinity', '0', '1', '10^6', 'NaN'];
       const out = [num(spec.value + 1), num(spec.value - 1), 'NaN', '0/0'];
+      if (spec.extended) out.push('infinity');
       if (spec.tolerance.kind === 'decimalPlaces') {
         const unit = Math.pow(10, -spec.tolerance.places);
         out.push((Number(spec.value.toFixed(spec.tolerance.places)) + 2 * unit).toFixed(spec.tolerance.places));
@@ -150,6 +153,7 @@ const texInterval = (variable: string, set: Interval[]): string => {
 export const displayOf = (spec: AnswerSpec): string => {
   switch (spec.kind) {
     case 'number':
+      if (!Number.isFinite(spec.value)) return spec.value > 0 ? '$\\infty$' : '$-\\infty$';
       return spec.tolerance.kind === 'decimalPlaces'
         ? `$${spec.value.toFixed(spec.tolerance.places)}$`
         : `$${texNumber(spec.value)}$`;

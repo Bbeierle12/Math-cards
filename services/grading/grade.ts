@@ -36,6 +36,14 @@ export const toleranceFor = (tol: NumericTolerance, value: number): number => {
   }
 };
 
+/** "∞", "inf", "infinity", "+∞" → Infinity; "-∞" … → -Infinity; anything else → null. */
+export const parseInfinity = (raw: string): number | null => {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, '').replace(/[−–]/g, '-');
+  const m = s.match(/^([+-]?)(∞|inf|infinity|oo)$/);
+  if (!m) return null;
+  return m[1] === '-' ? -Infinity : Infinity;
+};
+
 const assertNever = (x: never): never => { throw new Error(`unhandled answer kind: ${JSON.stringify(x)}`); };
 
 const bigGcd = (a: bigint, b: bigint): bigint => {
@@ -89,6 +97,10 @@ export const grade = (spec: AnswerSpec, input: AnswerInput, ctx: GradeContext = 
   switch (spec.kind) {
     case 'number': {
       const typed = spec.unit === 'degree' ? input.trim().replace(/\s*(°|deg|degrees)$/i, '') : input;
+      if (spec.extended) {
+        const inf = parseInfinity(typed);
+        if (inf !== null || !Number.isFinite(spec.value)) return inf !== null && inf === spec.value;
+      }
       const v = parseNumericInput(typed, spec.form ?? 'any');
       return v !== null && Math.abs(v - spec.value) <= toleranceFor(spec.tolerance, spec.value);
     }

@@ -17,10 +17,25 @@ import * as path from 'node:path';
 import { GENERATORS, generateProblem } from './index';
 import { INVARIANTS } from './context';
 import { checkDraft } from './checks';
-import { canonicalInput, grade, wrongInputs } from '../grading';
+import katex from 'katex';
+import { canonicalInput, displayOf, grade, wrongInputs } from '../grading';
 import type { GeneratorSettings, Problem } from '../../types';
 
 const SEEDS = Number(process.env.SWEEP_SEEDS || 150);
+
+/** Every $…$ / $$…$$ segment of a text, split the way components/MathText.tsx splits it. */
+const mathSegments = (text: string): string[] =>
+  text.split('\n').flatMap(line => [...line.matchAll(/\$\$(.*?)\$\$|\$(.*?)\$/g)].map(m => m[1] ?? m[2]));
+
+/** KaTeX errors in a text the student sees (empty when it all renders). */
+const katexErrors = (text: string): string[] => mathSegments(text).flatMap(tex => {
+  try {
+    katex.renderToString(tex, { throwOnError: true, strict: 'ignore' });
+    return [];
+  } catch (e) {
+    return [`${tex}: ${(e as Error).message}`];
+  }
+});
 
 const sweep = (topic: Parameters<typeof generateProblem>[0], settings: GeneratorSettings = {}) => {
   const unique = new Map<string, Problem>();
@@ -38,10 +53,21 @@ describe(`seed sweep (${SEEDS} seeds per generator)`, () => {
   for (const topic of GENERATORS.keys()) {
     it(topic, () => {
       const { unique, templates } = sweep(topic);
-      expect(templates.size).toBeGreaterThan(0);
+      const declared = GENERATORS.get(topic)!.templates;
+      for (const t of templates) expect(declared, `${topic} emitted undeclared template ${t}`).toContain(t);
+      // at full sweep size every declared template must actually occur
+      if (SEEDS >= 1000) {
+        for (const t of declared) {
+          if (topic === 'division' && t === 'zero-dividend') continue; // reachable only with a range of {0}
+          expect([...templates], `${topic}: template ${t} never generated in ${SEEDS} seeds`).toContain(t);
+        }
+      }
       for (const p of unique) {
         const where = `${topic} seed ${p.seed}: ${p.problemText}`;
         expect(checkDraft({ ...p }), where).toEqual([]);
+        for (const text of [p.problemText, p.explanation, p.hint ?? '', p.displayAnswer ?? displayOf(p.answer)]) {
+          expect(katexErrors(text), where).toEqual([]);
+        }
         expect(generateProblem(p.generatorId, p.settings, p.seed), where).toEqual(p);
         const canonical = canonicalInput(p.answer);
         expect(grade(p.answer, canonical), `${where}\nrejected its own answer ${JSON.stringify(canonical)}`).toBe(true);
@@ -111,6 +137,12 @@ describe('structural checks', () => {
         { label: 'B', spec: null, when: { part: 0, equals: 'converges' } },
       ],
     })).not.toEqual([]);
+  });
+
+  it('the KaTeX check catches LaTeX that does not render', () => {
+    expect(katexErrors('fine: $\\sqrt[3]{x} + x^{3/2}$ and $\\left(-\\frac{1}{2}\\right)^n$')).toEqual([]);
+    expect(katexErrors('broken: $\\frac{1}{2$')).not.toEqual([]);
+    expect(katexErrors('broken: $\\notacommand x$')).not.toEqual([]);
   });
 
   it('every invariant a generator can name is documented', () => {

@@ -5,6 +5,7 @@ import { exact, fractionAnswer, gcd, latexNum, latexPolynomial, ordinalSuffix, s
 export const complexNumbers: GeneratorDef = {
   topicId: 'complex-numbers',
   version: 2,
+  templates: ['add', 'subtract'],
   generate: (ctx) => {
     const [a1, b1, a2, b2] = [ctx.int(-8, 8), ctx.int(-8, 8), ctx.int(-8, 8), ctx.int(-8, 8)];
     const operation = ctx.pick(['+', '-'] as const);
@@ -25,6 +26,7 @@ export const complexNumbers: GeneratorDef = {
 export const rationalExpressions: GeneratorDef = {
   topicId: 'rational-expressions',
   version: 3,
+  templates: ['cancel-common-factor'],
   generate: (ctx) => {
     // (ax)/(bx) = a/b for x ≠ 0, entered in lowest terms
     const a = ctx.int(2, 9);
@@ -45,6 +47,7 @@ export const rationalExpressions: GeneratorDef = {
 export const radicals: GeneratorDef = {
   topicId: 'radicals',
   version: 2,
+  templates: ['simplify-square-root'],
   generate: (ctx) => {
     const multiplier = ctx.pick([2, 3, 5, 7]);
     const perfect = ctx.pick([4, 9, 16, 25, 36, 49, 64, 81, 100]);
@@ -64,6 +67,7 @@ export const radicals: GeneratorDef = {
 export const logarithms: GeneratorDef = {
   topicId: 'logarithms',
   version: 2,
+  templates: ['evaluate-log'],
   generate: (ctx) => {
     const base = ctx.pick([2, 3, 10]);
     const exponent = ctx.int(2, 4);
@@ -81,6 +85,7 @@ export const logarithms: GeneratorDef = {
 export const sequencesSeries: GeneratorDef = {
   topicId: 'sequences-series',
   version: 2,
+  templates: ['arithmetic-nth-term', 'geometric-nth-term'],
   generate: (ctx) => {
     if (ctx.bool()) {
       const a1 = ctx.int(3, 15);

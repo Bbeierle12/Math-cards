@@ -25,3 +25,28 @@ export const terms = (latex: string): Record<string, number> => {
 
 /** Coefficient of `mono` (0 when absent). */
 export const coef = (t: Record<string, number>, mono: string): number => t[mono] ?? 0;
+
+/**
+ * The displayed LaTeX of a formula (an integrand, a term, a sequence) as a
+ * mathjs expression, for evaluating it independently of the generator:
+ *   "x^{2}\sin(3x)" → "x^(2) sin(3x)",  "\frac{n!}{2^n}" → "((n!)/(2^n))".
+ * Handles exactly the notation the generators print; anything else throws
+ * when mathjs parses the result.
+ */
+export const latexToExpr = (tex: string): string => {
+  let s = tex.replace(/\\displaystyle|\\,|\;|\\left|\\right/g, ' ');
+  // \sin^{3}(x), \sec^2(x) → (sin(x))^(3)
+  s = s.replace(/\\(sin|cos|tan|sec|csc|cot)\^\{?(\d+)\}?\(([^()]*)\)/g, ' ($1($3))^($2) ');
+  s = s.replace(/\\(sin|cos|tan|sec|csc|cot)\(/g, ' $1(').replace(/\\ln\(/g, ' log(');
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/\^\{([^{}]*)\}/g, '^($1)')
+      .replace(/\\sqrt\[3\]\{([^{}]*)\}/g, ' cbrt($1) ')
+      .replace(/\\sqrt\{([^{}]*)\}/g, ' sqrt($1) ')
+      .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, ' (($1)/($2)) ');
+  } while (s !== prev);
+  s = s.replace(/\\cdot/g, '*').replace(/\\pi/g, 'pi').replace(/\s+/g, ' ').trim();
+  // "n (…)" would parse as a call of n: make juxtaposition before a parenthesis explicit
+  return s.replace(/([a-zA-Z0-9)!])\s+\(/g, '$1 * (');
+};

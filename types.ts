@@ -144,8 +144,13 @@ export interface AnswerPartSpec {
 }
 
 export type AnswerSpec =
-  /** A real number. `unit: 'degree'` allows a typed ° after the number. */
-  | { kind: 'number'; value: number; tolerance: NumericTolerance; form?: NumberForm; unit?: 'degree' }
+  /**
+   * A real number. `unit: 'degree'` allows a typed ° after the number.
+   * `extended` admits the extended reals: `value` may be ±Infinity and "∞",
+   * "inf" or "infinity" are then answers (radius of convergence). The input
+   * control is the same whether or not the value is infinite.
+   */
+  | { kind: 'number'; value: number; tolerance: NumericTolerance; form?: NumberForm; unit?: 'degree'; extended?: boolean }
   /**
    * An exact rational entered as numerator/denominator. Any equivalent
    * fraction is accepted unless `lowestTerms` is set (for "simplify" tasks).

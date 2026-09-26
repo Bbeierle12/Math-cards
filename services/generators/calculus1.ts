@@ -5,6 +5,7 @@ import { exact, latexMonomial, latexPolynomial, latexPower, latexTerm } from './
 export const limits: GeneratorDef = {
   topicId: 'limits',
   version: 2,
+  templates: ['polynomial-substitution'],
   generate: (ctx) => {
     const a = ctx.int(2, 8);
     const b = ctx.int(-10, 10);
@@ -23,6 +24,7 @@ export const limits: GeneratorDef = {
 export const derivativesBasic: GeneratorDef = {
   topicId: 'derivatives-basic',
   version: 2,
+  templates: ['power-rule-coefficient'],
   generate: (ctx) => {
     const c = ctx.int(2, 10);
     const n = ctx.int(2, 5);
@@ -39,6 +41,7 @@ export const derivativesBasic: GeneratorDef = {
 export const derivativesProductQuotient: GeneratorDef = {
   topicId: 'derivatives-product-quotient',
   version: 3,
+  templates: ['product-of-powers', 'quotient-of-powers'],
   generate: (ctx) => {
     const a = ctx.int(2, 6);
     const b = ctx.int(2, 6);
@@ -66,6 +69,7 @@ export const derivativesProductQuotient: GeneratorDef = {
 export const chainRule: GeneratorDef = {
   topicId: 'chain-rule',
   version: 2,
+  templates: ['linear-inner'],
   generate: (ctx) => {
     const n = ctx.int(2, 5);
     const a = ctx.int(2, 4);
@@ -84,6 +88,7 @@ export const chainRule: GeneratorDef = {
 export const integralsBasic: GeneratorDef = {
   topicId: 'integrals-basic',
   version: 3,
+  templates: ['power-rule-exponent'],
   generate: (ctx) => {
     const c = ctx.int(2, 10);
     const n = ctx.int(1, 4);
@@ -101,6 +106,7 @@ export const integralsBasic: GeneratorDef = {
 export const integrationSubstitution: GeneratorDef = {
   topicId: 'integration-substitution',
   version: 2,
+  templates: ['inner-derivative-present'],
   generate: (ctx) => {
     const n = ctx.int(2, 4);
     const c = ctx.int(1, 5);
