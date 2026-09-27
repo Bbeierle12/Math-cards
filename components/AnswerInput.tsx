@@ -68,7 +68,7 @@ const typedInput = (spec: AnswerSpec | null): { inputMode: 'decimal' | 'text'; p
   }
   switch (s.kind) {
     case 'limit': return { inputMode: 'text', placeholder: 'A number, ∞, −∞, or DNE' };
-    case 'choice': return { inputMode: 'text', placeholder: `Type ${s.options.slice(0, -1).join(', ')}${s.options.length > 1 ? ' or ' : ''}${s.options[s.options.length - 1]}` };
+    case 'choice': return { inputMode: 'text', placeholder: 'Type your answer' };
     case 'interval': return { inputMode: 'text', placeholder: 'e.g. x < 3, or (-inf, 3]' };
     case 'finiteSet': return { inputMode: 'text', placeholder: 'e.g. 2, -3' };
     default: return { inputMode: 'text', placeholder: 'Your answer...' };
@@ -213,7 +213,9 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
                 placeholder={typed.placeholder} className={textInputClass(status, animate, 'w-72')} {...typedProps(i)}
                 autoFocus={i === 0}
               />
-              {partSpec?.kind !== 'choice' && <InputPreview spec={part.spec} value={values[i] ?? ''} />}
+              {partSpec?.kind === 'choice'
+                ? <p className="text-sm text-slate-400">One of: {partSpec.options.map(o => `“${o}”`).join(' · ')}</p>
+                : <InputPreview spec={part.spec} value={values[i] ?? ''} />}
             </div>
           );
         })}
@@ -241,7 +243,9 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
         className={textInputClass(status, animate)}
         {...typedProps(0)}
       />
-      <InputPreview spec={spec} value={values[0] ?? ''} />
+      {spec.kind === 'choice'
+        ? <p className="text-sm text-slate-400">One of: {spec.options.map(o => `“${o}”`).join(' · ')}</p>
+        : <InputPreview spec={spec} value={values[0] ?? ''} />}
       <SymbolKeys symbols={symbolsFor(spec)} onInsert={insert} disabled={disabled} />
     </div>
   );
