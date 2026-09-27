@@ -32,15 +32,18 @@ function useLocalStorage<T,>(
     }
   });
 
-  const setValue = (value: SetStateAction<T>) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  // Stable, and applied to the latest value: two updates in one event both land.
+  const setValue = useCallback((value: SetStateAction<T>) => {
+    setStoredValue(prev => {
+      const valueToStore = value instanceof Function ? value(prev) : value;
+      try {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore));
+      } catch (error) {
+        console.error(error);
+      }
+      return valueToStore;
+    });
+  }, [key]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {

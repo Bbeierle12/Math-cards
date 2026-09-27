@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { UserProgress } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { XIcon } from './Icons';
 
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  userProgress: UserProgress;
-  setUserProgress: (value: UserProgress | ((prev: UserProgress) => UserProgress)) => void;
+  onResetProgress: () => void;
 }
 
 function Toggle({ checked, onChange, label, description }: {
@@ -159,7 +157,7 @@ function Section({ title, children, defaultOpen = true }: { title: string; child
   );
 }
 
-export default function SettingsPanel({ isOpen, onClose, userProgress, setUserProgress }: SettingsPanelProps) {
+export default function SettingsPanel({ isOpen, onClose, onResetProgress }: SettingsPanelProps) {
   const { settings, updateSettings, resetSettings } = useSettings();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
@@ -180,13 +178,7 @@ export default function SettingsPanel({ isOpen, onClose, userProgress, setUserPr
       setShowResetConfirm(true);
       return;
     }
-    setUserProgress({
-      topicProgress: {},
-      totalProblemsAttempted: 0,
-      totalCorrect: 0,
-      currentStreak: 0,
-      longestStreak: 0,
-    });
+    onResetProgress();
     setShowResetConfirm(false);
   };
 
@@ -254,7 +246,7 @@ export default function SettingsPanel({ isOpen, onClose, userProgress, setUserPr
               min={3}
               max={50}
               label="Mastery Threshold"
-              description="Correct answers needed to master a topic"
+              description="Evidence needed for proficiency: a correct first try on a new problem counts 1, help and repeats count less, errors cost ½"
             />
             <RangeControl
               value={settings.numberRange}

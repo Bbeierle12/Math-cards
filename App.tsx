@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Topic, TopicId, UserProgress } from './types';
+import { Topic, TopicId } from './types';
 import { CURRICULUM } from './constants';
 import TopicSelector from './components/TopicSelector';
 import PracticeSession from './components/PracticeSession';
-import useLocalStorage from './hooks/useLocalStorage';
+import useLearning from './hooks/useLearning';
 import StatsDisplay from './components/StatsDisplay';
 import MultiplicationTableView from './components/MultiplicationTableView';
 import UnitCircleView from './components/UnitCircleView';
@@ -17,24 +17,12 @@ import PreCalculusFormulaSheet from './components/PreCalculusFormulaSheet';
 import SettingsPanel from './components/SettingsPanel';
 import { GearIcon } from './components/Icons';
 import { useSettings } from './contexts/SettingsContext';
-import { sanitizeProgress } from './services/storageValidation';
-import { isTopicMastered } from './services/mastery';
-
-const DEFAULT_PROGRESS: UserProgress = {
-  topicProgress: {},
-  totalProblemsAttempted: 0,
-  totalCorrect: 0,
-  currentStreak: 0,
-  longestStreak: 0,
-};
-
-const sanitizeStoredProgress = (raw: unknown): UserProgress => sanitizeProgress(raw, DEFAULT_PROGRESS);
 
 export default function App() {
   const [selectedTopicId, setSelectedTopicId] = useState<TopicId | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { settings } = useSettings();
-  const [userProgress, setUserProgress] = useLocalStorage<UserProgress>('userProgress', DEFAULT_PROGRESS, sanitizeStoredProgress);
+  const learning = useLearning(settings.masteryThreshold);
 
   const handleSelectTopic = (topicId: TopicId) => {
     setSelectedTopicId(topicId);
@@ -53,10 +41,12 @@ export default function App() {
     return undefined;
   }, [selectedTopicId]);
 
-  // Mastery has ONE definition (services/mastery.ts): correct >= current threshold.
-  const isMastered = useCallback((topicId: TopicId): boolean =>
-    isTopicMastered(userProgress.topicProgress[topicId], settings.masteryThreshold),
-  [userProgress, settings.masteryThreshold]);
+  // Unlocking follows proficiency (services/learning/mastery.ts), so the
+  // curriculum path does not wait on delayed reviews.
+  const isMastered = useCallback((topicId: TopicId): boolean => {
+    const status = learning.status(topicId);
+    return status === 'proficient' || status === 'mastered';
+  }, [learning]);
 
   const unlockedTopics = useMemo(() => {
     const unlocked = new Set<TopicId>();
@@ -92,13 +82,13 @@ export default function App() {
         unlocked.add(CURRICULUM[0].topics[0].id);
     }
     return unlocked;
-  }, [userProgress, settings.unlockMode, isMastered]);
+  }, [settings.unlockMode, isMastered]);
 
   const renderContent = () => {
     if (!selectedTopicId || !selectedTopic) {
         return <TopicSelector
             onSelectTopic={handleSelectTopic}
-            userProgress={userProgress}
+            learning={learning}
             unlockedTopics={unlockedTopics}
           />
     }
@@ -134,8 +124,7 @@ export default function App() {
     return <PracticeSession
             topicId={selectedTopicId}
             onComplete={handleSessionComplete}
-            userProgress={userProgress}
-            setUserProgress={setUserProgress}
+            learning={learning}
           />
   }
 
@@ -174,7 +163,7 @@ export default function App() {
           </button>
         </div>
       </header>
-       {!selectedTopicId && <StatsDisplay userProgress={userProgress} />}
+       {!selectedTopicId && <StatsDisplay totals={learning.totals} />}
       <main className="w-full max-w-4xl">
         {renderContent()}
       </main>
@@ -184,8 +173,7 @@ export default function App() {
       <SettingsPanel
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        userProgress={userProgress}
-        setUserProgress={setUserProgress}
+        onResetProgress={learning.reset}
       />
     </div>
   );

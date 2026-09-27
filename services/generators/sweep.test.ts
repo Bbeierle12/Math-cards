@@ -1,0 +1,209 @@
+/**
+ * Seed sweep: every generator × many seeds.
+ *
+ * For each generated problem: generation does not throw (named invariants
+ * are met, structural checks pass), the problem replays exactly from its
+ * provenance, the canonical answer passes the production grader, and every
+ * must-reject input fails. Identical problems (fixed banks repeat) are graded
+ * once.
+ *
+ * `npm test` runs a quick sweep; `npm run test:sweep` runs SWEEP_SEEDS=2000
+ * (and scales the independent recomputation in mathCorrectness.test.ts to the
+ * same seed count).
+ */
+import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { GENERATORS, generateProblem } from './index';
+import { INVARIANTS, stepsFromExplanation } from './context';
+import { checkDraft } from './checks';
+import katex from 'katex';
+import { canonicalInput, displayOf, grade, wrongInputs } from '../grading';
+import { instanceKey } from '../learning';
+import type { AnswerSpec, GeneratorSettings, Problem } from '../../types';
+import { previewInput } from '../grading/preview';
+
+const SEEDS = Number(process.env.SWEEP_SEEDS || 150);
+/** 1.5 × the default evidence threshold (10). */
+const MIN_DISTINCT = 15;
+
+/** Every $…$ / $$…$$ segment of a text, split the way components/MathText.tsx splits it. */
+const mathSegments = (text: string): string[] =>
+  text.split('\n').flatMap(line => [...line.matchAll(/\$\$(.*?)\$\$|\$(.*?)\$/g)].map(m => m[1] ?? m[2]));
+
+/** KaTeX errors in a text the student sees (empty when it all renders). */
+const katexErrors = (text: string): string[] => mathSegments(text).flatMap(tex => {
+  try {
+    katex.renderToString(tex, { throwOnError: true, strict: 'ignore' });
+    return [];
+  } catch (e) {
+    return [`${tex}: ${(e as Error).message}`];
+  }
+});
+
+/** Every text of a worked solution the student sees. */
+const solutionTexts = (p: Problem): string[] => p.solution.flatMap(st => (st.kind === 'step'
+  ? [st.text]
+  : [st.name, ...st.hypotheses.flatMap(h => [h.condition, h.check]), st.conclusion]));
+
+const sweep = (topic: Parameters<typeof generateProblem>[0], settings: GeneratorSettings = {}) => {
+  const unique = new Map<string, Problem>();
+  const templates = new Set<string>();
+  for (let i = 0; i < SEEDS; i++) {
+    const p = generateProblem(topic, settings, `sweep-${i}`);
+    templates.add(p.templateId);
+    const key = JSON.stringify([p.problemText, p.answer]);
+    if (!unique.has(key)) unique.set(key, p);
+  }
+  return { unique: [...unique.values()], templates };
+};
+
+describe(`seed sweep (${SEEDS} seeds per generator)`, () => {
+  for (const topic of GENERATORS.keys()) {
+    it(topic, () => {
+      const { unique, templates } = sweep(topic);
+      const declared = GENERATORS.get(topic)!.templates;
+      for (const t of templates) expect(declared, `${topic} emitted undeclared template ${t}`).toContain(t);
+      // at full sweep size every declared template must actually occur, and
+      // there are enough distinct problems that proficiency at the default
+      // threshold never has to rest on repeating one (exact repeats count ¼)
+      if (SEEDS >= 1000) {
+        const distinct = new Set(unique.map(instanceKey)).size;
+        expect(distinct, `${topic}: only ${distinct} distinct problems`).toBeGreaterThanOrEqual(MIN_DISTINCT);
+        for (const t of declared) {
+          expect([...templates], `${topic}: template ${t} never generated in ${SEEDS} seeds`).toContain(t);
+        }
+      }
+      for (const p of unique) {
+        const where = `${topic} seed ${p.seed}: ${p.problemText}`;
+        expect(checkDraft({ ...p }), where).toEqual([]);
+        expect(p.solution.length, `${where}: no worked solution`).toBeGreaterThan(0);
+        for (const text of [p.problemText, p.explanation, p.hint ?? '', p.displayAnswer ?? displayOf(p.answer), ...solutionTexts(p)]) {
+          expect(katexErrors(text), where).toEqual([]);
+        }
+        expect(generateProblem(p.generatorId, p.settings, p.seed), where).toEqual(p);
+        const canonical = canonicalInput(p.answer);
+        expect(grade(p.answer, canonical), `${where}\nrejected its own answer ${JSON.stringify(canonical)}`).toBe(true);
+        // the live preview reads the canonical answer, and what it shows renders
+        const slots: [AnswerSpec | null, string][] = p.answer.kind === 'multipart'
+          ? p.answer.parts.map((part, i) => [part.spec, (canonical as string[])[i]])
+          : [[p.answer, canonical as string]];
+        for (const [spec, input] of slots) {
+          const preview = previewInput(spec, input);
+          expect(preview === null || 'tex' in preview, `${where}\npreview of ${JSON.stringify(input)}: ${JSON.stringify(preview)}`).toBe(true);
+          if (preview && 'tex' in preview) expect(katexErrors(`$${preview.tex}$`), where).toEqual([]);
+        }
+        for (const wrong of wrongInputs(p.answer)) {
+          expect(grade(p.answer, wrong), `${where}\naccepted ${JSON.stringify(wrong)}`).toBe(false);
+        }
+      }
+    }, 120_000);
+  }
+
+  it('arithmetic under every settings combination', () => {
+    const ranges = [undefined, { min: 0, max: 10 }, { min: -10, max: -5 }, { min: 5, max: 1 }, { min: -50, max: 50 }];
+    for (const topic of ['addition', 'subtraction', 'multiplication', 'division'] as const) {
+      for (const numberRange of ranges) {
+        for (const allowNegatives of [undefined, true, false]) {
+          const settings: GeneratorSettings = {};
+          if (numberRange) settings.numberRange = numberRange;
+          if (allowNegatives !== undefined) settings.allowNegatives = allowNegatives;
+          for (const p of sweep(topic, settings).unique) {
+            expect(grade(p.answer, canonicalInput(p.answer))).toBe(true);
+            if (allowNegatives === false) {
+              expect(p.answer.kind === 'number' && p.answer.value >= 0, `${topic} ${JSON.stringify(settings)}: ${p.problemText}`).toBe(true);
+              expect(p.problemText, JSON.stringify(settings)).not.toMatch(/-\d/);
+            }
+          }
+        }
+      }
+    }
+  }, 120_000);
+});
+
+describe('structural checks', () => {
+  const base = { templateId: 't', problemText: 'What is $2 + 2$?', explanation: 'It is $4$.', answer: { kind: 'number', value: 4, tolerance: { kind: 'exact' } } } as const;
+
+  it('accept a well-formed draft', () => {
+    expect(checkDraft({ ...base })).toEqual([]);
+  });
+
+  it('reject leaked values, broken LaTeX and textbook-format slips', () => {
+    expect(checkDraft({ ...base, problemText: 'What is $NaN + 2$?' })).not.toEqual([]);
+    expect(checkDraft({ ...base, problemText: 'What is $undefined$?' })).not.toEqual([]);
+    expect(checkDraft({ ...base, explanation: 'ln(cos x) is undefined where cos x < 0.' })).toEqual([]); // the English word
+    expect(checkDraft({ ...base, problemText: 'What is $\\frac{1}{2$?' })).not.toEqual([]);
+    expect(checkDraft({ ...base, problemText: 'What is $2 + 2?' })).not.toEqual([]);
+    expect(checkDraft({ ...base, problemText: 'Solve $3x + -4 = 2$' })).not.toEqual([]);
+    expect(checkDraft({ ...base, problemText: 'Solve $1x = 2$' })).not.toEqual([]);
+    expect(checkDraft({ ...base, problemText: 'Solve $x - (-4) = 2$, then $11x = 22$ and $\\frac{1}{x}$' })).toEqual([]);
+  });
+
+  it('reject theorem steps that do not state and check their hypotheses', () => {
+    const withSolution = (solution: unknown) => checkDraft({ ...base, solution: solution as never });
+    expect(withSolution([{ kind: 'theorem', name: 'Ratio Test', hypotheses: [{ condition: '$L < 1$', check: '$L = 0$' }], conclusion: 'It converges.' }])).toEqual([]);
+    expect(withSolution([{ kind: 'theorem', name: 'Ratio Test', hypotheses: [], conclusion: 'It converges.' }])).not.toEqual([]);
+    expect(withSolution([{ kind: 'theorem', name: 'Ratio Test', hypotheses: [{ condition: '$L < 1$', check: '' }], conclusion: 'It converges.' }])).not.toEqual([]);
+    expect(withSolution([{ kind: 'step', text: '' }])).not.toEqual([]);
+    expect(withSolution([{ kind: 'step', text: 'So $x = \\frac{1}{2$.' }])).not.toEqual([]);
+  });
+
+  it('split a prose explanation into steps at sentence ends outside math', () => {
+    const steps = stepsFromExplanation('Let $u = x$. Then $du = dx$, so $x = 2.5$. (For $x > 0$.) Done: $x. Y$ stays whole.');
+    expect(steps.map(s => (s.kind === 'step' ? s.text : ''))).toEqual([
+      'Let $u = x$.', 'Then $du = dx$, so $x = 2.5$.', '(For $x > 0$.)', 'Done: $x. Y$ stays whole.',
+    ]);
+    expect(stepsFromExplanation('One sentence $a_n = 1$')).toEqual([{ kind: 'step', text: 'One sentence $a_n = 1$' }]);
+  });
+
+  it('reject malformed answer specs', () => {
+    const bad = (answer: unknown) => checkDraft({ ...base, answer: answer as never });
+    expect(bad({ kind: 'number', value: NaN, tolerance: { kind: 'exact' } })).not.toEqual([]);
+    expect(bad({ kind: 'number', value: Infinity, tolerance: { kind: 'exact' } })).not.toEqual([]);
+    expect(bad({ kind: 'fraction', numerator: 2, denominator: 4 })).not.toEqual([]);
+    expect(bad({ kind: 'fraction', numerator: 1, denominator: -2 })).not.toEqual([]);
+    expect(bad({ kind: 'choice', options: ['yes', 'Yes'], answer: 'yes' })).not.toEqual([]);
+    expect(bad({ kind: 'choice', options: ['yes', 'no'], answer: 'maybe' })).not.toEqual([]);
+    expect(bad({ kind: 'expression', reference: 'x^^2' })).not.toEqual([]);
+    expect(bad({ kind: 'finiteSet', elements: [1, 1] })).not.toEqual([]);
+    expect(bad({ kind: 'interval', variable: 'x', set: [{ lo: 3, hi: 1, loClosed: false, hiClosed: false }] })).not.toEqual([]);
+    expect(bad({ kind: 'interval', variable: 'x', set: [{ lo: -Infinity, hi: 1, loClosed: true, hiClosed: false }] })).not.toEqual([]);
+    expect(bad({ kind: 'anyOf', options: [{ kind: 'number', value: 1, tolerance: { kind: 'exact' } }, { kind: 'text', accepted: ['one'] }] })).not.toEqual([]);
+    expect(bad({
+      kind: 'multipart',
+      parts: [
+        { label: 'A', spec: { kind: 'number', value: 1, tolerance: { kind: 'exact' } } },
+        { label: 'B', spec: null, when: { part: 0, equals: 'converges' } },
+      ],
+    })).not.toEqual([]);
+  });
+
+  it('the KaTeX check catches LaTeX that does not render', () => {
+    expect(katexErrors('fine: $\\sqrt[3]{x} + x^{3/2}$ and $\\left(-\\frac{1}{2}\\right)^n$')).toEqual([]);
+    expect(katexErrors('broken: $\\frac{1}{2$')).not.toEqual([]);
+    expect(katexErrors('broken: $\\notacommand x$')).not.toEqual([]);
+  });
+
+  it('every invariant a generator can name is documented', () => {
+    for (const [name, description] of Object.entries(INVARIANTS)) {
+      expect(description.length, name).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe('no unseeded randomness in the app', () => {
+  it('Math.random is not used outside tests', () => {
+    const roots = ['services', 'components', 'contexts', 'App.tsx', 'index.tsx'];
+    const offenders: string[] = [];
+    const visit = (p: string) => {
+      if (!fs.existsSync(p)) return;
+      if (fs.statSync(p).isDirectory()) {
+        for (const f of fs.readdirSync(p)) visit(path.join(p, f));
+      } else if (/\.(ts|tsx)$/.test(p) && !/\.(test|eval)\.tsx?$/.test(p) && fs.readFileSync(p, 'utf8').includes('Math.random')) {
+        offenders.push(p);
+      }
+    };
+    roots.forEach(visit);
+    expect(offenders).toEqual([]);
+  });
+});

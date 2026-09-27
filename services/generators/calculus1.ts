@@ -1,0 +1,140 @@
+/** Calculus 1. */
+import type { GeneratorDef } from './context';
+import { exact, latexMonomial, latexPolynomial, latexPower, latexTerm } from './context';
+
+export const limits: GeneratorDef = {
+  topicId: 'limits',
+  version: 2,
+  templates: ['polynomial-substitution'],
+  generate: (ctx) => {
+    const a = ctx.int(2, 8);
+    const b = ctx.int(-10, 10);
+    const x = ctx.int(1, 5);
+    const answer = a * x + b;
+    return {
+      templateId: 'polynomial-substitution',
+      problemText: `Evaluate: $\\displaystyle\\lim_{x \\to ${x}} \\left[${latexPolynomial([[a, 'x'], [b, '']])}\\right]$`,
+      answer: exact(answer),
+      explanation: `Polynomials are continuous, so substitute $x = ${x}$: $${a} \\cdot ${x}${b === 0 ? '' : ` ${latexTerm(b)}`} = ${answer}$.`,
+      hint: 'For polynomial functions, just substitute the value!',
+    };
+  },
+};
+
+export const derivativesBasic: GeneratorDef = {
+  topicId: 'derivatives-basic',
+  version: 2,
+  templates: ['power-rule-coefficient'],
+  generate: (ctx) => {
+    const c = ctx.int(2, 10);
+    const n = ctx.int(2, 5);
+    return {
+      templateId: 'power-rule-coefficient',
+      problemText: `Find the derivative of $${c}x^{${n}}$. What is the coefficient?`,
+      answer: exact(c * n),
+      explanation: `Power rule: $\\frac{d}{dx}[${c}x^{${n}}] = ${c} \\cdot ${n} x^{${n} - 1} = ${c * n}${latexPower('x', n - 1)}$. The coefficient is $${c * n}$.`,
+      hint: 'Power rule: $\\frac{d}{dx}[x^n] = nx^{n-1}$',
+    };
+  },
+};
+
+export const derivativesProductQuotient: GeneratorDef = {
+  topicId: 'derivatives-product-quotient',
+  version: 3,
+  templates: ['product-of-powers', 'quotient-of-powers'],
+  generate: (ctx) => {
+    const a = ctx.int(2, 6);
+    const b = ctx.int(2, 6);
+    if (ctx.bool()) {
+      return {
+        templateId: 'product-of-powers',
+        problemText: `Find $\\frac{d}{dx}\\left[x^{${a}} \\cdot x^{${b}}\\right]$. What is the new exponent?`,
+        answer: exact(a + b - 1),
+        explanation: `$x^{${a}} \\cdot x^{${b}} = x^{${a + b}}$, and $\\frac{d}{dx}[x^{${a + b}}] = ${a + b}x^{${a + b - 1}}$. The new exponent is $${a + b - 1}$.`,
+        hint: 'Simplify first: $x^a \\cdot x^b = x^{a+b}$, then use power rule.',
+      };
+    }
+    // x^a / x^b with a ≠ b (x^a/x^a = 1 has derivative 0, which has no exponent to ask about)
+    ctx.require(a !== b, 'answerNotTrivial');
+    return {
+      templateId: 'quotient-of-powers',
+      problemText: `Simplify then find $\\frac{d}{dx}\\left[\\frac{x^{${a}}}{x^{${b}}}\\right]$ (for $x \\neq 0$). What is the new exponent?`,
+      answer: exact(a - b - 1),
+      explanation: `$\\frac{x^{${a}}}{x^{${b}}} = ${latexPower('x', a - b)}$ for $x \\neq 0$, and $\\frac{d}{dx}\\left[${latexPower('x', a - b)}\\right] = ${a - b === 1 ? '1 \\cdot x^{0} = 1' : latexMonomial(a - b, 'x', a - b - 1)}$. The new exponent is $${a - b - 1}$.`,
+      hint: 'Simplify first: $\\frac{x^a}{x^b} = x^{a-b}$, then use power rule.',
+    };
+  },
+};
+
+export const chainRule: GeneratorDef = {
+  topicId: 'chain-rule',
+  version: 2,
+  templates: ['linear-inner'],
+  generate: (ctx) => {
+    const n = ctx.int(2, 5);
+    const a = ctx.int(2, 4);
+    const b = ctx.int(1, 8);
+    const inner = `${a}x + ${b}`;
+    return {
+      templateId: 'linear-inner',
+      problemText: `Find $\\frac{d}{dx}\\left[(${inner})^{${n}}\\right]$.\nThe derivative has the form $K(${inner})^{${n - 1}}$. What is $K$?`,
+      answer: exact(n * a),
+      explanation: `Chain rule: $${n}(${inner})^{${n - 1}} \\cdot ${a} = ${n * a}(${inner})^{${n - 1}}$, so $K = ${n * a}$.`,
+      hint: `Chain rule: $\\frac{d}{dx}[f(g(x))] = f'(g(x)) \\cdot g'(x)$`,
+    };
+  },
+};
+
+export const integralsBasic: GeneratorDef = {
+  topicId: 'integrals-basic',
+  version: 3,
+  templates: ['power-rule-exponent'],
+  generate: (ctx) => {
+    const c = ctx.int(2, 10);
+    const n = ctx.int(1, 4);
+    const coeffs = c % (n + 1) !== 0 ? `\\frac{${c}}{${n + 1}}` : c / (n + 1) === 1 ? '' : `${c / (n + 1)}`;
+    return {
+      templateId: 'power-rule-exponent',
+      problemText: `$\\displaystyle\\int ${c}${latexPower('x', n)}\\,dx$. What is the new exponent?`,
+      answer: exact(n + 1),
+      explanation: `Power rule: $\\int ${c}${latexPower('x', n)}\\,dx = ${coeffs}x^{${n + 1}} + C$. The new exponent is $${n + 1}$.`,
+      hint: 'Power rule: $\\int x^n\\,dx = \\frac{x^{n+1}}{n+1} + C$ for $n \\neq -1$',
+    };
+  },
+};
+
+const SUB_FAMILIES = {
+  'inner-derivative-present': { inner: (c: number) => [`x^2+${c}`, 'x^2', `x^2 + ${c}`, 'x^2'], factor: '2x', du: '2x\\,dx' },
+  'cubic-inner': { inner: (c: number) => [`x^3+${c}`, 'x^3', `x^3 + ${c}`, 'x^3'], factor: '3x^2', du: '3x^2\\,dx' },
+  'trig-inner': { inner: (c: number) => [`sin(x)+${c}`, 'sin(x)', `\\sin(x) + ${c}`, '\\sin(x)'], factor: '\\cos(x)', du: '\\cos(x)\\,dx' },
+  'exp-inner': { inner: (c: number) => [`e^x+${c}`, 'e^x', `e^x + ${c}`, 'e^x'], factor: 'e^x', du: 'e^x\\,dx' },
+} as const;
+const SUB_TEMPLATES = Object.keys(SUB_FAMILIES) as (keyof typeof SUB_FAMILIES)[];
+
+export const integrationSubstitution: GeneratorDef = {
+  topicId: 'integration-substitution',
+  version: 3,
+  templates: SUB_TEMPLATES,
+  generate: (ctx) => {
+    const template = ctx.pick(SUB_TEMPLATES);
+    const family = SUB_FAMILIES[template];
+    const n = ctx.int(2, 4);
+    const c = ctx.int(1, 5);
+    const [inner, bare, innerTex, bareTex] = family.inner(c);
+    // u = g(x) + c and u = g(x) both reduce the integral to ∫(…)ⁿ du
+    return {
+      templateId: template,
+      problemText: `$\\displaystyle\\int ${family.factor}(${innerTex})^{${n}}\\,dx$\nWhat substitution $u$ should you use?`,
+      answer: {
+        kind: 'anyOf',
+        options: [
+          { kind: 'expression', reference: inner, assignable: ['u'] },
+          { kind: 'expression', reference: bare, assignable: ['u'] },
+        ],
+      },
+      displayAnswer: `$u = ${innerTex}$ (or $u = ${bareTex}$)`,
+      explanation: `Let $u = ${innerTex}$. Then $du = ${family.du}$, which is exactly the remaining factor, so the integral becomes $\\int u^{${n}}\\,du$. ($u = ${bareTex}$ works too: the integral becomes $\\int (u + ${c})^{${n}}\\,du$.)`,
+      hint: 'Look for a function whose derivative is also in the integrand.',
+    };
+  },
+};

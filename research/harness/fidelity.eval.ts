@@ -20,9 +20,14 @@
  * the key. Correctness is covered by the independent recomputation tests in
  * services/mathService.test.ts.
  *
- * Determinism: Math.random is replaced with a mulberry32 PRNG re-seeded per
- * (topic, index), so two runs against identical generator code produce an
- * identical corpus. Latency stats are also collected as a guardrail metric.
+ * Determinism: generators are seeded (generateProblem(topic, {}, seed)) with
+ * seed = `${SEED}:${index}`, so two runs against identical generator code
+ * produce an identical corpus. Latency stats are also collected as a
+ * guardrail metric.
+ *
+ * Probes are derived from the typed answer contract (AnswerSpec): the
+ * canonical input and wrongInputs() from services/grading/canonical.ts, plus
+ * kind-specific variants a student would plausibly type.
  *
  * Output: atomic JSON write to $RESEARCH_OUT (default research/out/metrics.json).
  * Run via:  npx vitest run --config research/harness/vitest.config.mts
@@ -32,171 +37,106 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execSync } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import { generateProblem, validateAnswer, simplifyFraction } from '../../services/mathService';
-import type { Problem, FractionAnswer, TopicId } from '../../types';
+import { generateProblem, validateAnswer } from '../../services/mathService';
+import { GENERATORS } from '../../services/generators';
+import { canonicalInput, wrongInputs } from '../../services/grading';
+import type { AnswerSpec, Interval, Problem, TopicId } from '../../types';
 
 const SEED = Number(process.env.RESEARCH_SEED ?? 20260716);
 const N_PER_TOPIC = Number(process.env.RESEARCH_N ?? 40);
 const OUT_FILE = process.env.RESEARCH_OUT ?? 'research/out/metrics.json';
 const LABEL = process.env.RESEARCH_LABEL ?? 'adhoc';
 
-const TOPICS: TopicId[] = [
-  'addition', 'subtraction', 'multiplication', 'division',
-  'simple-linear-equations', 'fractions-basic', 'decimals', 'order-of-operations', 'integers',
-  'multi-step-equations', 'inequalities', 'systems-of-equations', 'exponents',
-  'polynomials', 'factoring', 'quadratic-equations',
-  'angles', 'triangles', 'pythagorean-theorem', 'area-perimeter', 'circles', 'volume-surface-area',
-  'complex-numbers', 'rational-expressions', 'radicals', 'logarithms', 'sequences-series',
-  'trig-ratios', 'trig-special-angles', 'trig-identities', 'trig-equations', 'inverse-trig',
-  'functions', 'polynomial-functions', 'rational-functions', 'exponential-functions', 'conic-sections',
-  'limits', 'derivatives-basic', 'derivatives-product-quotient', 'chain-rule',
-  'integrals-basic', 'integration-substitution',
-  'integration-by-parts', 'trig-integrals', 'partial-fractions', 'improper-integrals',
-  'sequences', 'series-convergence', 'power-series', 'taylor-maclaurin',
-  'parametric-equations', 'polar-coordinates', 'integration-applications', 'trig-substitution',
-];
-
-// --- deterministic RNG -------------------------------------------------
-const mulberry32 = (seed: number) => {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-};
-const hashStr = (s: string): number => {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-};
+const TOPICS: TopicId[] = [...GENERATORS.keys()];
 
 // --- probe construction -------------------------------------------------
 interface Probe {
-  input: string;
+  input: string | string[]; // string[] for multipart answers (one entry per part)
   kind: 'accept' | 'reject';
   label: string; // stable identifier for aggregation, e.g. "expr-ascii-ineq"
 }
 
-const INEQ_RE = /^(.+?)(<=|>=|≤|≥|<|>)(.+)$/;
-const OPPOSITE: Record<string, string> = { '<': '>', '>': '<', '≤': '≥', '≥': '≤', '<=': '>=', '>=': '<=' };
+const endpoint = (v: number) => (v === Infinity ? 'inf' : v === -Infinity ? '-inf' : String(v));
+const intervalNotation = (set: Interval[]) =>
+  set.map(iv => `${iv.loClosed ? '[' : '('}${endpoint(iv.lo)}, ${endpoint(iv.hi)}${iv.hiClosed ? ']' : ')'}`).join(' U ');
+const FLIP: Record<string, string> = { '<': '>', '>': '<', '<=': '>=', '>=': '<=' };
 
-function buildProbes(p: Problem): Probe[] {
+/** Kind-specific probes for one (non-multipart) spec; `accept` is its canonical input. */
+function specProbes(spec: AnswerSpec, problem: Problem, accept: string): Probe[] {
   const probes: Probe[] = [];
-  switch (p.answerType) {
-    case 'numeric': {
-      const ans = p.correctAnswer as number;
-      probes.push({ input: String(ans), kind: 'accept', label: 'num-canonical' });
-      // a "wrong" probe must not collide with a legitimately acceptable
-      // alternate (e.g. the other root of a quadratic)
-      const acceptable = new Set<number>([ans, ...(p.acceptableAnswers ?? []).filter((a): a is number => typeof a === 'number')]);
-      const wrong = [ans + 1, ans - 1, ans + 2, ans + 3].find((w) => !acceptable.has(w));
-      if (wrong !== undefined) {
-        probes.push({ input: String(wrong), kind: 'reject', label: 'num-off-by-one' });
-      }
-      break;
-    }
-    case 'decimal-tolerance': {
-      const ans = p.correctAnswer as number;
-      probes.push({ input: String(ans), kind: 'accept', label: 'dec-canonical' });
-      if (p.roundTo !== undefined) {
-        // The correctly rounded value must be accepted; the neighbouring
-        // rounded value (one unit in the last requested place away) must not.
-        probes.push({ input: ans.toFixed(p.roundTo), kind: 'accept', label: 'dec-correctly-rounded' });
-        const unit = Math.pow(10, -p.roundTo);
-        // pick a misrounded neighbour that is not itself a legitimate alternate
-        // (e.g. the true-π value next to the "use 3.14" value)
-        const alternates = (p.acceptableAnswers ?? []).filter((a): a is number => typeof a === 'number');
-        const rounded = Number(ans.toFixed(p.roundTo));
-        const neighbour = [2, -2, 3, -3]
-          .map(k => rounded + k * unit)
-          .find(v => alternates.every(a => Math.abs(v - a) > unit));
-        if (neighbour !== undefined) {
-          probes.push({ input: neighbour.toFixed(p.roundTo), kind: 'reject', label: 'dec-misrounded' });
+  switch (spec.kind) {
+    case 'number': {
+      if (spec.tolerance.kind === 'decimalPlaces') {
+        const places = spec.tolerance.places;
+        const unit = Math.pow(10, -places);
+        probes.push({ input: String(spec.value), kind: 'accept', label: 'dec-unrounded' });
+        const rounded = Number(spec.value.toFixed(places));
+        probes.push({ input: (rounded + 2 * unit).toFixed(places), kind: 'reject', label: 'dec-misrounded' });
+        if (problem.problemText.includes('\\pi \\approx 3.14')) {
+          // told to use 3.14: the true-π value is a different answer
+          const truePi = spec.value * (Math.PI / 3.14);
+          if (Math.abs(truePi - spec.value) > unit) {
+            probes.push({ input: truePi.toFixed(places), kind: 'reject', label: 'dec-true-pi' });
+          }
         }
+      } else if (spec.unit === 'degree') {
+        probes.push({ input: `${spec.value}°`, kind: 'accept', label: 'num-degree-sign' });
       }
-      const usesPi = p.problemText.includes('\\pi');
-      const delta = usesPi ? 2.0 : 0.4;
-      probes.push({
-        input: String(Math.round((ans + delta) * 1000) / 1000),
-        kind: 'reject',
-        label: usesPi ? 'dec-wrong-pi' : 'dec-wrong-nearmiss',
-      });
       break;
     }
     case 'fraction': {
-      const f = p.correctAnswer as FractionAnswer;
-      probes.push({ input: `${f.numerator}/${f.denominator}`, kind: 'accept', label: 'frac-as-stored' });
-      probes.push({ input: `${f.numerator * 2}/${f.denominator * 2}`, kind: 'accept', label: 'frac-unsimplified' });
-      const s = simplifyFraction(f.numerator, f.denominator);
-      if (s.numerator !== f.numerator || s.denominator !== f.denominator) {
-        probes.push({ input: `${s.numerator}/${s.denominator}`, kind: 'accept', label: 'frac-simplified' });
-      }
-      // same denominator, numerator shifted by denominator => value off by exactly 1
-      probes.push({ input: `${f.numerator + f.denominator}/${f.denominator}`, kind: 'reject', label: 'frac-off-by-one' });
+      const doubled = `${spec.numerator * 2}/${spec.denominator * 2}`;
+      probes.push(spec.lowestTerms
+        ? { input: doubled, kind: 'reject', label: 'frac-not-lowest-terms' }
+        : { input: doubled, kind: 'accept', label: 'frac-unsimplified' });
       break;
     }
-    case 'expression': {
-      const stored = String(p.correctAnswer);
-      probes.push({ input: stored, kind: 'accept', label: 'expr-as-stored' });
-      const ascii = stored.replace(/≤/g, '<=').replace(/≥/g, '>=');
-      const m = stored.replace(/\s/g, '').match(INEQ_RE);
-      if (ascii !== stored) {
-        // H1 territory: the only keyboard-typeable form of a ≤/≥ answer
-        probes.push({ input: ascii, kind: 'accept', label: 'expr-ascii-ineq' });
-      }
+    case 'interval': {
+      probes.push({ input: intervalNotation(spec.set), kind: 'accept', label: 'set-interval-notation' });
+      const m = accept.match(/^(\w+) (<=|>=|<|>) (.+)$/);
       if (m) {
-        const [, lhs, op, rhs] = m;
-        probes.push({ input: `${rhs} ${OPPOSITE[op] ?? op} ${lhs}`, kind: 'accept', label: 'expr-flipped-sides' });
-        probes.push({ input: `${lhs} ${OPPOSITE[op] ?? op} ${rhs}`, kind: 'reject', label: 'expr-wrong-direction' });
-      } else {
-        if (p.topicId === 'integration-substitution') {
-          probes.push({ input: `u = ${stored}`, kind: 'accept', label: 'expr-u-equals-prefix' });
-        }
-        const bumped = stored.replace(/\d+/, (n) => String(Number(n) + 1));
-        if (bumped !== stored) {
-          probes.push({ input: bumped, kind: 'reject', label: 'expr-bumped-constant' });
-        }
-        if (/^[a-z]+$/i.test(stored)) {
-          // word answers: the opposite verdict / an unrelated word must fail
-          const wrongWord = /^diverge/i.test(stored) ? 'converges' : /^converge/i.test(stored) ? 'diverges' : 'diverges';
-          probes.push({ input: wrongWord, kind: 'reject', label: 'expr-wrong-word' });
-        } else if (stored.includes('=')) {
-          // equations (substitutions): a different coefficient is wrong
-          probes.push({ input: stored.replace(/=/, '=7*'), kind: 'reject', label: 'expr-wrong-coefficient' });
-        } else {
-          // algebraic answers: adding a non-constant term changes the function
-          // (and its derivative), so it is wrong under every equivalence mode
-          probes.push({ input: `(${stored})+x^7`, kind: 'reject', label: 'expr-plus-x7' });
-          // undefined mathematics must never earn credit
-          probes.push({ input: '0/0', kind: 'reject', label: 'expr-nan' });
-        }
+        const [, v, op, c] = m;
+        probes.push({ input: `${c} ${FLIP[op]} ${v}`, kind: 'accept', label: 'set-flipped-sides' });
+        probes.push({ input: `${v} ${FLIP[op]} ${c}`, kind: 'reject', label: 'set-wrong-direction' });
+        probes.push({ input: `${v} ${op.includes('=') ? op[0] : `${op}=`} ${c}`, kind: 'reject', label: 'set-wrong-closedness' });
       }
       break;
     }
-    case 'coordinate': {
-      const c = p.correctAnswer as { x: number; y: number };
-      probes.push({ input: `(${c.x}, ${c.y})`, kind: 'accept', label: 'coord-parens' });
-      probes.push({ input: `${c.x},${c.y}`, kind: 'accept', label: 'coord-bare' });
-      probes.push(
-        c.x !== c.y
-          ? { input: `(${c.y}, ${c.x})`, kind: 'reject', label: 'coord-swapped' }
-          : { input: `(${c.x + 1}, ${c.y})`, kind: 'reject', label: 'coord-shifted' },
-      );
+    case 'finiteSet':
+      if (spec.elements.length > 1) {
+        probes.push({ input: [...spec.elements].reverse().join(', '), kind: 'accept', label: 'roots-reordered' });
+        probes.push({ input: String(spec.elements[0]), kind: 'reject', label: 'roots-incomplete' });
+      }
       break;
-    }
-    case 'multiple-choice': {
-      const ans = String(p.correctAnswer);
-      probes.push({ input: ans, kind: 'accept', label: 'mc-correct' });
-      probes.push({ input: ans === 'A' ? 'B' : 'A', kind: 'reject', label: 'mc-wrong' });
+    case 'expression':
+      for (const name of spec.assignable ?? []) {
+        probes.push({ input: `${name} = ${spec.reference}`, kind: 'accept', label: 'expr-assigned' });
+      }
       break;
-    }
+    case 'antiderivative':
+      probes.push({ input: `${accept} + C`, kind: 'accept', label: 'anti-plus-c' });
+      probes.push({ input: `${accept} + 7`, kind: 'accept', label: 'anti-shifted' });
+      break;
+    case 'choice':
+      probes.push({ input: spec.answer.toUpperCase(), kind: 'accept', label: 'choice-case-insensitive' });
+      break;
     default:
       break;
+  }
+  return probes;
+}
+
+function buildProbes(p: Problem): Probe[] {
+  const canonical = canonicalInput(p.answer);
+  const probes: Probe[] = [{ input: canonical, kind: 'accept', label: `${p.answer.kind}-canonical` }];
+  for (const wrong of wrongInputs(p.answer)) probes.push({ input: wrong, kind: 'reject', label: `${p.answer.kind}-wrong` });
+  const spec = p.answer.kind === 'anyOf' ? p.answer.options[0] : p.answer;
+  if (spec.kind === 'multipart') {
+    // a single string is never a multipart answer
+    probes.push({ input: (canonical as string[]).join(' '), kind: 'reject', label: 'multipart-flattened' });
+  } else if (typeof canonical === 'string') {
+    probes.push(...specProbes(spec, p, canonical));
+    probes.push({ input: '0/0', kind: 'reject', label: 'undefined-input' });
   }
   return probes;
 }
@@ -216,7 +156,6 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 describe('grading fidelity evaluation', () => {
   it('measures GFS across the seeded corpus and writes metrics JSON', () => {
     const t0 = performance.now();
-    const realRandom = Math.random;
     const genTimes: number[] = [];
     const valTimes: number[] = [];
     let genErrors = 0;
@@ -226,21 +165,20 @@ describe('grading fidelity evaluation', () => {
       failByLabel: Record<string, number>;
     }> = {};
     const failures: Array<{
-      topic: string; kind: string; label: string; input: string;
-      problemText: string; correctAnswer: unknown;
+      topic: string; kind: string; label: string; input: string | string[];
+      problemText: string; answer: unknown; seed: string;
     }> = [];
     const totals = { accept: { pass: 0, total: 0 }, reject: { pass: 0, total: 0 } };
 
-    try {
+    {
       for (const topic of TOPICS) {
         const t = { accept: { pass: 0, total: 0 }, reject: { pass: 0, total: 0 }, failByLabel: {} as Record<string, number> };
         perTopic[topic] = t;
         for (let i = 0; i < N_PER_TOPIC; i++) {
-          Math.random = mulberry32(hashStr(topic) ^ (SEED + i * 7919));
           let problem: Problem;
           try {
             const g0 = performance.now();
-            problem = generateProblem(topic);
+            problem = generateProblem(topic, {}, `${SEED}:${i}`);
             genTimes.push(performance.now() - g0);
           } catch {
             genErrors++;
@@ -268,15 +206,13 @@ describe('grading fidelity evaluation', () => {
               if (failures.length < 120) {
                 failures.push({
                   topic, kind: probe.kind, label: probe.label, input: probe.input,
-                  problemText: problem.problemText, correctAnswer: problem.correctAnswer,
+                  problemText: problem.problemText, answer: problem.answer, seed: problem.seed,
                 });
               }
             }
           }
         }
       }
-    } finally {
-      Math.random = realRandom;
     }
 
     // Coverage guard: a topic with no reject (or no accept) probes would score

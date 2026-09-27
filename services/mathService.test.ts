@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { generateProblem, validateAnswer, gcd, simplifyFraction } from './mathService';
-import { TopicId, Problem, FractionAnswer } from '../types';
+import { generateProblem, validateAnswer, gcd, simplifyFraction, answerDisplay } from './mathService';
+import { GENERATORS, MAX_ATTEMPTS, instantiate } from './generators';
+import type { GeneratorDef } from './generators';
+import { exact } from './generators/context';
+import { referenceNumber } from './grading';
+import { CURRICULUM } from '../constants';
+import { AnswerSpec, Problem, TopicId } from '../types';
+import { coef, terms } from './testing/latex';
 
 // ===========================
 // UTILITY FUNCTIONS
@@ -39,198 +45,324 @@ describe('simplifyFraction', () => {
     expect(simplifyFraction(3, 7)).toEqual({ numerator: 3, denominator: 7 });
   });
 
-  it('handles negative fractions', () => {
-    const result = simplifyFraction(-4, 8);
-    expect(result.numerator).toBe(-1);
-    expect(result.denominator).toBe(2);
-  });
-
-  it('handles negative denominator by normalizing sign', () => {
-    const result = simplifyFraction(4, -8);
-    expect(result.numerator).toBe(-1);
-    expect(result.denominator).toBe(2);
-  });
-
-  it('handles double negative by normalizing to positive', () => {
-    const result = simplifyFraction(-4, -8);
-    expect(result.numerator).toBe(1);
-    expect(result.denominator).toBe(2);
+  it('normalizes the sign onto the numerator', () => {
+    expect(simplifyFraction(-4, 8)).toEqual({ numerator: -1, denominator: 2 });
+    expect(simplifyFraction(4, -8)).toEqual({ numerator: -1, denominator: 2 });
+    expect(simplifyFraction(-4, -8)).toEqual({ numerator: 1, denominator: 2 });
   });
 });
 
 // ===========================
-// ANSWER VALIDATION
+// ANSWER VALIDATION (one block per answer kind)
 // ===========================
 
+const problemWith = (answer: AnswerSpec, topicId: TopicId = 'addition'): Problem => ({
+  id: 'test',
+  topicId,
+  problemText: '',
+  answer,
+  explanation: '',
+  solution: [],
+  generatorId: topicId,
+  generatorVersion: 0,
+  seed: 'test',
+  templateId: 'test',
+});
+
 describe('validateAnswer', () => {
-  describe('numeric', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'addition',
-      problemText: '2 + 3 = ?',
-      answerType: 'numeric',
-      correctAnswer: 5,
-      explanationPrompt: '',
-    };
+  describe('number (exact)', () => {
+    const five = problemWith(exact(5));
 
-    it('accepts correct numeric answer', () => {
-      expect(validateAnswer(problem, '5')).toBe(true);
+    it('accepts the value and rejects anything else', () => {
+      expect(validateAnswer(five, '5')).toBe(true);
+      expect(validateAnswer(five, '6')).toBe(false);
+      expect(validateAnswer(five, '5.0000001')).toBe(false);
+      expect(validateAnswer(five, 'abc')).toBe(false);
+      expect(validateAnswer(five, '')).toBe(false);
     });
 
-    it('rejects incorrect numeric answer', () => {
-      expect(validateAnswer(problem, '6')).toBe(false);
+    it('accepts any exact expression for the value unless the evaluated form is required', () => {
+      const six = problemWith(exact(6));
+      expect(validateAnswer(six, '(7+5)/2')).toBe(true);
+      expect(validateAnswer(six, '12/2')).toBe(true);
+      const evaluated = problemWith(exact(6, 'evaluated'));
+      expect(validateAnswer(evaluated, '(7+5)/2')).toBe(false);
+      expect(validateAnswer(evaluated, '6')).toBe(true);
     });
 
-    it('rejects non-numeric input', () => {
-      expect(validateAnswer(problem, 'abc')).toBe(false);
+    it('handles negative answers', () => {
+      const neg = problemWith(exact(-3));
+      expect(validateAnswer(neg, '-3')).toBe(true);
+      expect(validateAnswer(neg, '−3')).toBe(true); // typographic minus
+      expect(validateAnswer(neg, '3')).toBe(false);
     });
 
-    it('accepts negative correct answers', () => {
-      const negProblem: Problem = { ...problem, correctAnswer: -3 };
-      expect(validateAnswer(negProblem, '-3')).toBe(true);
-      expect(validateAnswer(negProblem, '3')).toBe(false);
+    it('allows a typed degree sign only for degree answers', () => {
+      const deg = problemWith({ kind: 'number', value: 45, tolerance: { kind: 'exact' }, unit: 'degree' });
+      expect(validateAnswer(deg, '45')).toBe(true);
+      expect(validateAnswer(deg, '45°')).toBe(true);
+      expect(validateAnswer(deg, '45 degrees')).toBe(true);
+      expect(validateAnswer(deg, '46°')).toBe(false);
+      expect(validateAnswer(problemWith(exact(45)), '45°')).toBe(false);
     });
   });
 
-  describe('decimal-tolerance', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'decimals',
-      problemText: '1.1 + 2.2 = ?',
-      answerType: 'decimal-tolerance',
-      correctAnswer: 3.3,
-      tolerance: 0.01,
-      explanationPrompt: '',
-    };
+  describe('number (rounded)', () => {
+    const rounded = problemWith({ kind: 'number', value: 3.3, tolerance: { kind: 'decimalPlaces', places: 2 } });
 
-    it('accepts answer within tolerance', () => {
-      expect(validateAnswer(problem, '3.3')).toBe(true);
-      expect(validateAnswer(problem, '3.305')).toBe(true);
-      expect(validateAnswer(problem, '3.295')).toBe(true);
+    it('accepts anything within half a unit of the last requested place', () => {
+      expect(validateAnswer(rounded, '3.3')).toBe(true);
+      expect(validateAnswer(rounded, '3.30')).toBe(true);
+      expect(validateAnswer(rounded, '3.304')).toBe(true);
+      expect(validateAnswer(rounded, '3.296')).toBe(true);
     });
 
-    it('rejects answer outside tolerance', () => {
-      expect(validateAnswer(problem, '3.5')).toBe(false);
-      expect(validateAnswer(problem, '3.0')).toBe(false);
+    it('rejects values that round to a different answer', () => {
+      expect(validateAnswer(rounded, '3.31')).toBe(false);
+      expect(validateAnswer(rounded, '3.5')).toBe(false);
+      expect(validateAnswer(rounded, '3.0')).toBe(false);
+      expect(validateAnswer(rounded, 'abc')).toBe(false);
     });
 
-    it('uses default tolerance of 0.01 when not specified', () => {
-      const noTolProblem: Problem = { ...problem, tolerance: undefined };
-      expect(validateAnswer(noTolProblem, '3.3')).toBe(true);
-      expect(validateAnswer(noTolProblem, '3.305')).toBe(true);
-    });
-
-    it('rejects non-numeric input', () => {
-      expect(validateAnswer(problem, 'abc')).toBe(false);
+    it('explicit tolerances are honoured', () => {
+      const abs = problemWith({ kind: 'number', value: 10, tolerance: { kind: 'absolute', tol: 0.5 } });
+      expect(validateAnswer(abs, '10.4')).toBe(true);
+      expect(validateAnswer(abs, '10.6')).toBe(false);
+      const sig = problemWith({ kind: 'number', value: 12345, tolerance: { kind: 'significantFigures', figures: 3 } });
+      expect(validateAnswer(sig, '12300')).toBe(true);
+      expect(validateAnswer(sig, '12400')).toBe(false);
     });
   });
 
   describe('fraction', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'fractions-basic',
-      problemText: '1/2 + 1/4 = ?',
-      answerType: 'fraction',
-      correctAnswer: { numerator: 3, denominator: 4 } as FractionAnswer,
-      explanationPrompt: '',
-    };
+    const threeQuarters = problemWith({ kind: 'fraction', numerator: 3, denominator: 4 }, 'fractions-basic');
 
-    it('accepts correct fraction', () => {
-      expect(validateAnswer(problem, '3/4')).toBe(true);
+    it('accepts the fraction and equivalent fractions', () => {
+      expect(validateAnswer(threeQuarters, '3/4')).toBe(true);
+      expect(validateAnswer(threeQuarters, '6/8')).toBe(true);
+      expect(validateAnswer(threeQuarters, '-3/-4')).toBe(true);
     });
 
-    it('accepts equivalent fraction', () => {
-      expect(validateAnswer(problem, '6/8')).toBe(true);
+    it('rejects other values and malformed input', () => {
+      expect(validateAnswer(threeQuarters, '2/4')).toBe(false);
+      expect(validateAnswer(threeQuarters, '3')).toBe(false);
+      expect(validateAnswer(threeQuarters, '3/0')).toBe(false);
+      expect(validateAnswer(threeQuarters, 'abc')).toBe(false);
     });
 
-    it('rejects incorrect fraction', () => {
-      expect(validateAnswer(problem, '2/4')).toBe(false);
-    });
-
-    it('rejects malformed input', () => {
-      expect(validateAnswer(problem, '3')).toBe(false);
-      expect(validateAnswer(problem, 'abc')).toBe(false);
+    it('accepts a whole number only when the value is an integer', () => {
+      const two = problemWith({ kind: 'fraction', numerator: 2, denominator: 1 }, 'fractions-basic');
+      expect(validateAnswer(two, '2')).toBe(true);
+      expect(validateAnswer(two, '4/2')).toBe(true);
     });
 
     it('handles negative fractions', () => {
-      const negProblem: Problem = {
-        ...problem,
-        correctAnswer: { numerator: -1, denominator: 2 } as FractionAnswer,
-      };
-      expect(validateAnswer(negProblem, '-1/2')).toBe(true);
-      expect(validateAnswer(negProblem, '-2/4')).toBe(true);
-      expect(validateAnswer(negProblem, '1/2')).toBe(false);
+      const neg = problemWith({ kind: 'fraction', numerator: -1, denominator: 2 }, 'fractions-basic');
+      expect(validateAnswer(neg, '-1/2')).toBe(true);
+      expect(validateAnswer(neg, '1/-2')).toBe(true);
+      expect(validateAnswer(neg, '-2/4')).toBe(true);
+      expect(validateAnswer(neg, '1/2')).toBe(false);
+    });
+
+    it('requires lowest terms when the task is to simplify', () => {
+      const lowest = problemWith({ kind: 'fraction', numerator: 7, denominator: 6, lowestTerms: true }, 'rational-expressions');
+      expect(validateAnswer(lowest, '7/6')).toBe(true);
+      expect(validateAnswer(lowest, '14/12')).toBe(false);
+      expect(validateAnswer(lowest, '-7/-6')).toBe(false);
+    });
+
+    it('compares exactly, beyond floating-point precision', () => {
+      const tiny = problemWith({ kind: 'fraction', numerator: 1, denominator: 3 }, 'fractions-basic');
+      expect(validateAnswer(tiny, '333333333333333333/999999999999999999')).toBe(true);
+      expect(validateAnswer(tiny, '333333333333333333/999999999999999998')).toBe(false);
+    });
+  });
+
+  describe('interval (inequality solutions)', () => {
+    const lt2 = problemWith({ kind: 'interval', variable: 'x', set: [{ lo: -Infinity, hi: 2, loClosed: false, hiClosed: false }] }, 'inequalities');
+    const le4 = problemWith({ kind: 'interval', variable: 'x', set: [{ lo: -Infinity, hi: 4, loClosed: false, hiClosed: true }] }, 'inequalities');
+    const ge4 = problemWith({ kind: 'interval', variable: 'x', set: [{ lo: 4, hi: Infinity, loClosed: true, hiClosed: false }] }, 'inequalities');
+
+    it('accepts the inequality in any standard spelling', () => {
+      expect(validateAnswer(lt2, 'x < 2')).toBe(true);
+      expect(validateAnswer(lt2, 'x<2')).toBe(true);
+      expect(validateAnswer(lt2, ' x < 2 ')).toBe(true);
+      expect(validateAnswer(lt2, '2 > x')).toBe(true);
+      expect(validateAnswer(lt2, '(-inf, 2)')).toBe(true);
+      expect(validateAnswer(lt2, '(-∞, 2)')).toBe(true);
+      expect(validateAnswer(lt2, 'x ∈ (-∞, 2)')).toBe(true);
+    });
+
+    it('accepts ASCII <= and >= for ≤ and ≥ (regression H1)', () => {
+      expect(validateAnswer(le4, 'x <= 4')).toBe(true);
+      expect(validateAnswer(le4, 'x ≤ 4')).toBe(true);
+      expect(validateAnswer(le4, '4 >= x')).toBe(true);
+      expect(validateAnswer(ge4, 'x>=4')).toBe(true);
+      expect(validateAnswer(ge4, '4 <= x')).toBe(true);
+      expect(validateAnswer(ge4, '[4, inf)')).toBe(true);
+    });
+
+    it('rejects the wrong direction, the wrong endpoint, and the wrong closedness', () => {
+      expect(validateAnswer(lt2, 'x > 2')).toBe(false);
+      expect(validateAnswer(lt2, 'x <= 2')).toBe(false);
+      expect(validateAnswer(lt2, 'x < 3')).toBe(false);
+      expect(validateAnswer(lt2, '(-inf, 2]')).toBe(false);
+      expect(validateAnswer(lt2, '(2, inf)')).toBe(false);
+      expect(validateAnswer(le4, 'x < 4')).toBe(false);
+      expect(validateAnswer(le4, '4 <= x')).toBe(false);
+      expect(validateAnswer(ge4, 'x > 4')).toBe(false);
+      expect(validateAnswer(ge4, '4 >= x')).toBe(false);
+    });
+
+    it('rejects a different variable and non-sets', () => {
+      expect(validateAnswer(lt2, 'y < 2')).toBe(false);
+      expect(validateAnswer(lt2, '2')).toBe(false);
+      expect(validateAnswer(lt2, 'x = 2')).toBe(false);
+    });
+
+    it('never treats an infinite endpoint as equal to a finite one', () => {
+      expect(validateAnswer(ge4, 'x < 0')).toBe(false);
+      expect(validateAnswer(ge4, '(-inf, 0)')).toBe(false);
+      expect(validateAnswer(lt2, '(5, inf)')).toBe(false);
+    });
+  });
+
+  describe('finite sets (all roots)', () => {
+    const roots = problemWith({ kind: 'finiteSet', elements: [2, -3] }, 'polynomial-functions');
+
+    it('accepts the set in any order and notation', () => {
+      expect(validateAnswer(roots, '2, -3')).toBe(true);
+      expect(validateAnswer(roots, '-3, 2')).toBe(true);
+      expect(validateAnswer(roots, '{2, -3}')).toBe(true);
+      expect(validateAnswer(roots, 'x = 2 or x = -3')).toBe(true);
+    });
+
+    it('rejects incomplete, extra and wrong sets', () => {
+      expect(validateAnswer(roots, '2')).toBe(false);
+      expect(validateAnswer(roots, '2, -3, 4')).toBe(false);
+      expect(validateAnswer(roots, '2, 3')).toBe(false);
+      expect(validateAnswer(roots, '')).toBe(false);
     });
   });
 
   describe('expression', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'inequalities',
-      problemText: 'Solve: 2x + 1 < 5',
-      answerType: 'expression',
-      correctAnswer: 'x < 2',
-      explanationPrompt: '',
-    };
+    const inner = problemWith({ kind: 'expression', reference: 'x^2+5', assignable: ['u'] }, 'integration-substitution');
 
-    it('accepts correct expression', () => {
-      expect(validateAnswer(problem, 'x < 2')).toBe(true);
+    it('accepts equivalent expressions and a declared assignment', () => {
+      expect(validateAnswer(inner, 'x^2+5')).toBe(true);
+      expect(validateAnswer(inner, '5 + x²')).toBe(true);
+      expect(validateAnswer(inner, 'u = x^2 + 5')).toBe(true);
     });
 
-    it('ignores whitespace differences', () => {
-      expect(validateAnswer(problem, 'x<2')).toBe(true);
-      expect(validateAnswer(problem, ' x < 2 ')).toBe(true);
+    it('rejects other expressions, undeclared assignments and undefined input', () => {
+      expect(validateAnswer(inner, 'x^2+6')).toBe(false);
+      expect(validateAnswer(inner, 'v = x^2 + 5')).toBe(false);
+      expect(validateAnswer(inner, 'y^2+5')).toBe(false);
+      expect(validateAnswer(inner, '0/0')).toBe(false);
     });
 
-    it('rejects incorrect expression', () => {
-      expect(validateAnswer(problem, 'x > 2')).toBe(false);
+    it('same partial function by default: x/x is not 1', () => {
+      const one = problemWith({ kind: 'expression', reference: '1' }, 'trig-identities');
+      expect(validateAnswer(one, 'x/x')).toBe(false);
     });
   });
 
-  describe('multiple-choice', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'addition',
-      problemText: 'Which is correct?',
-      answerType: 'multiple-choice',
-      correctAnswer: 'B',
-      explanationPrompt: '',
-    };
+  describe('equation', () => {
+    const sub = problemWith({ kind: 'equation', lhs: 'x', rhs: '2sin(theta)', parameters: ['theta'] }, 'trig-substitution');
 
-    it('accepts correct choice', () => {
-      expect(validateAnswer(problem, 'B')).toBe(true);
+    it('accepts rearrangements, nonzero multiples and renamed parameters', () => {
+      expect(validateAnswer(sub, 'x = 2sin(theta)')).toBe(true);
+      expect(validateAnswer(sub, 'x/2 = sin(t)')).toBe(true);
+      expect(validateAnswer(sub, '2sin(θ) = x')).toBe(true);
     });
 
-    it('rejects incorrect choice', () => {
-      expect(validateAnswer(problem, 'A')).toBe(false);
+    it('requires an equation, and the right one', () => {
+      expect(validateAnswer(sub, '2sin(theta)')).toBe(false);
+      expect(validateAnswer(sub, 'x = 2cos(theta)')).toBe(false);
+      expect(validateAnswer(sub, 'y = 2sin(theta)')).toBe(false);
     });
   });
 
-  describe('coordinate', () => {
-    const problem: Problem = {
-      id: 'test',
-      topicId: 'conic-sections',
-      problemText: 'Find the center',
-      answerType: 'coordinate',
-      correctAnswer: { x: 2, y: 3 },
-      explanationPrompt: '',
-    };
+  describe('antiderivative', () => {
+    const ibp = problemWith({ kind: 'antiderivative', integrand: 'x*cos(x)', variable: 'x', reference: 'x*sin(x)+cos(x)' }, 'integration-by-parts');
 
-    it('accepts correct coordinate with parens', () => {
-      expect(validateAnswer(problem, '(2, 3)')).toBe(true);
+    it('accepts any antiderivative, with or without +C', () => {
+      expect(validateAnswer(ibp, 'x sin(x) + cos(x)')).toBe(true);
+      expect(validateAnswer(ibp, 'x*sin(x) + cos(x) + 7')).toBe(true);
+      expect(validateAnswer(ibp, 'x*sin(x) + cos(x) + C')).toBe(true);
     });
 
-    it('accepts correct coordinate without parens', () => {
-      expect(validateAnswer(problem, '2, 3')).toBe(true);
+    it('rejects the integrand and non-antiderivatives', () => {
+      expect(validateAnswer(ibp, 'x*cos(x)')).toBe(false);
+      expect(validateAnswer(ibp, 'x*sin(x) - cos(x)')).toBe(false);
+    });
+  });
+
+  describe('choice and text', () => {
+    const mc = problemWith({ kind: 'choice', options: ['A', 'B', 'C'], answer: 'B' });
+    const word = problemWith({ kind: 'text', accepted: ['circle', 'a circle'] }, 'polar-coordinates');
+
+    it('choice: only the listed correct option', () => {
+      expect(validateAnswer(mc, 'B')).toBe(true);
+      expect(validateAnswer(mc, 'b')).toBe(true);
+      expect(validateAnswer(mc, 'A')).toBe(false);
+      expect(validateAnswer(mc, 'D')).toBe(false);
     });
 
-    it('rejects incorrect coordinate', () => {
-      expect(validateAnswer(problem, '(3, 2)')).toBe(false);
+    it('text: a closed vocabulary', () => {
+      expect(validateAnswer(word, 'Circle')).toBe(true);
+      expect(validateAnswer(word, 'a circle.')).toBe(true);
+      expect(validateAnswer(word, 'ellipse')).toBe(false);
+    });
+  });
+
+  describe('multipart and anyOf', () => {
+    const converges = problemWith({
+      kind: 'multipart',
+      parts: [
+        { label: 'Verdict', spec: { kind: 'choice', options: ['converges', 'diverges'], answer: 'converges' } },
+        { label: 'Limit', spec: exact(0), when: { part: 0, equals: 'converges' } },
+      ],
+    }, 'sequences');
+    const diverges = problemWith({
+      kind: 'multipart',
+      parts: [
+        { label: 'Verdict', spec: { kind: 'choice', options: ['converges', 'diverges'], answer: 'diverges' } },
+        { label: 'Limit', spec: null, when: { part: 0, equals: 'converges' } },
+      ],
+    }, 'sequences');
+
+    it('grades all-or-nothing, and only the parts that apply', () => {
+      expect(validateAnswer(converges, ['converges', '0'])).toBe(true);
+      expect(validateAnswer(converges, ['converges', '1'])).toBe(false);
+      expect(validateAnswer(converges, ['converges', ''])).toBe(false);
+      expect(validateAnswer(converges, ['diverges', ''])).toBe(false);
+      expect(validateAnswer(diverges, ['diverges', ''])).toBe(true);
+      expect(validateAnswer(diverges, ['converges', '0'])).toBe(false);
     });
 
-    it('rejects malformed input', () => {
-      expect(validateAnswer(problem, 'abc')).toBe(false);
+    it('a single string is not a multipart answer', () => {
+      expect(validateAnswer(converges, 'converges')).toBe(false);
+      expect(validateAnswer(converges, '0')).toBe(false);
     });
+
+    it('anyOf accepts any option', () => {
+      const either = problemWith({ kind: 'anyOf', options: [exact(2), exact(-2)] });
+      expect(validateAnswer(either, '2')).toBe(true);
+      expect(validateAnswer(either, '-2')).toBe(true);
+      expect(validateAnswer(either, '0')).toBe(false);
+    });
+  });
+});
+
+describe('answerDisplay', () => {
+  it('prefers the authored display and otherwise derives one from the answer', () => {
+    expect(answerDisplay({ ...problemWith(exact(5)), displayAnswer: '$5$ apples' })).toBe('$5$ apples');
+    expect(answerDisplay(problemWith(exact(0.25)))).toBe('$0.25$');
+    expect(answerDisplay(problemWith({ kind: 'number', value: Math.PI, tolerance: { kind: 'decimalPlaces', places: 2 } }))).toBe('$3.14$');
+    expect(answerDisplay(problemWith({ kind: 'fraction', numerator: -3, denominator: 4 }))).toBe('$-\\frac{3}{4}$');
+    expect(answerDisplay(problemWith({ kind: 'interval', variable: 'x', set: [{ lo: -Infinity, hi: 2, loClosed: false, hiClosed: true }] }))).toBe('$x \\leq 2$');
+    expect(answerDisplay(problemWith({ kind: 'choice', options: ['yes', 'no'], answer: 'no' }))).toBe('No');
   });
 });
 
@@ -238,370 +370,260 @@ describe('validateAnswer', () => {
 // PROBLEM GENERATION
 // ===========================
 
-// All topics that have generators (excluding reference-only topics like unit-circle, calculus-formulas, multiplication-tables)
-const generatableTopics: TopicId[] = [
-  // Basic Arithmetic
-  'addition', 'subtraction', 'multiplication', 'division',
-  // Pre-Algebra
-  'simple-linear-equations', 'fractions-basic', 'decimals', 'order-of-operations', 'integers',
-  // Algebra 1
-  'multi-step-equations', 'inequalities', 'systems-of-equations', 'exponents',
-  'polynomials', 'factoring', 'quadratic-equations',
-  // Geometry
-  'angles', 'triangles', 'pythagorean-theorem', 'area-perimeter', 'circles', 'volume-surface-area',
-  // Algebra 2
-  'complex-numbers', 'rational-expressions', 'radicals', 'logarithms', 'sequences-series',
-  // Trigonometry
-  'trig-ratios', 'trig-special-angles', 'trig-identities', 'trig-equations', 'inverse-trig',
-  // Pre-Calculus
-  'functions', 'polynomial-functions', 'rational-functions', 'exponential-functions', 'conic-sections',
-  // Calculus 1
-  'limits', 'derivatives-basic', 'derivatives-product-quotient', 'chain-rule',
-  'integrals-basic', 'integration-substitution',
-  // Calculus 2
-  'integration-by-parts', 'trig-integrals', 'partial-fractions', 'improper-integrals',
-  'sequences', 'series-convergence', 'power-series', 'taylor-maclaurin',
-  'parametric-equations', 'polar-coordinates', 'integration-applications', 'trig-substitution',
-];
+const practiceTopics: TopicId[] = CURRICULUM.flatMap(level => level.topics)
+  .filter(topic => topic.type !== 'reference')
+  .map(topic => topic.id);
+
+describe('generator registry', () => {
+  it('has exactly one generator for every practice topic in the curriculum', () => {
+    expect([...GENERATORS.keys()].sort()).toEqual([...practiceTopics].sort());
+  });
+
+  it('throws for a topic without a generator', () => {
+    expect(() => generateProblem('nonexistent' as TopicId)).toThrow(/not yet implemented/);
+    expect(() => generateProblem('unit-circle')).toThrow();
+  });
+});
 
 describe('generateProblem', () => {
-  for (const topicId of generatableTopics) {
-    it(`generates a valid problem for "${topicId}"`, () => {
-      const problem = generateProblem(topicId);
-
-      expect(problem).toBeDefined();
-      expect(problem.id).toBeTruthy();
+  for (const topicId of practiceTopics) {
+    it(`"${topicId}": a complete problem with provenance`, () => {
+      const problem = generateProblem(topicId, {}, 'fixed-seed');
       expect(problem.topicId).toBe(topicId);
       expect(problem.problemText).toBeTruthy();
-      expect(problem.answerType).toBeTruthy();
-      expect(problem.correctAnswer !== undefined).toBe(true);
-      expect(problem.explanationPrompt).toBeTruthy();
+      expect(problem.explanation).toBeTruthy();
+      expect(problem.answer.kind).toBeTruthy();
+      expect(problem.generatorId).toBe(topicId);
+      expect(problem.generatorVersion).toBe(GENERATORS.get(topicId)!.version);
+      expect(problem.seed).toBe('fixed-seed');
+      expect(problem.templateId).toBeTruthy();
+      expect(problem.id).toBe(`${topicId}@${problem.generatorVersion}:fixed-seed`);
     });
   }
 
-  it('throws for unknown topic', () => {
-    expect(() => generateProblem('nonexistent' as TopicId)).toThrow();
+  it('is a pure function of (topic, settings, seed)', () => {
+    for (const topicId of practiceTopics) {
+      expect(generateProblem(topicId, {}, 's1')).toEqual(generateProblem(topicId, {}, 's1'));
+    }
+    const settings = { numberRange: { min: 0, max: 20 }, allowNegatives: false };
+    expect(generateProblem('addition', settings, 's2')).toEqual(generateProblem('addition', settings, 's2'));
   });
 
-  it('generates different problems on repeated calls (randomness)', () => {
-    // Run 10 times and check we get at least 2 different problems
-    const problems = Array.from({ length: 10 }, () => generateProblem('addition'));
-    const texts = new Set(problems.map(p => p.problemText));
-    expect(texts.size).toBeGreaterThan(1);
+  it('replays exactly from the provenance recorded on the problem', () => {
+    const original = generateProblem('subtraction', { numberRange: { min: -5, max: 5 } });
+    expect(original.settings).toEqual({ numberRange: { min: -5, max: 5 } });
+    const replay = generateProblem(original.generatorId, original.settings, original.seed);
+    expect(replay).toEqual(original);
+  });
+
+  it('different seeds give different problems', () => {
+    const texts = new Set(Array.from({ length: 20 }, (_, i) => generateProblem('addition', {}, `v${i}`).problemText));
+    expect(texts.size).toBeGreaterThan(5);
+  });
+
+  it('a fresh random seed is used and recorded when none is given', () => {
+    const a = generateProblem('limits');
+    const b = generateProblem('limits');
+    expect(a.seed).not.toBe(b.seed);
+    expect(generateProblem('limits', {}, a.seed)).toEqual(a);
+  });
+});
+
+describe('generator invariants', () => {
+  it('a violated invariant discards the draft and retries deterministically', () => {
+    let calls = 0;
+    const picky: GeneratorDef = {
+      topicId: 'addition',
+      version: 1,
+      templates: ['t'],
+      generate: (ctx) => {
+        calls++;
+        const n = ctx.int(1, 10);
+        ctx.require(n === 7, 'integerAnswer');
+        return { templateId: 't', problemText: `${n}`, answer: exact(n), explanation: 'e' };
+      },
+    };
+    const first = instantiate(picky, {}, 'seed');
+    const callsForFirst = calls;
+    expect(first.problemText).toBe('7');
+    expect(callsForFirst).toBeGreaterThan(0);
+    expect(instantiate(picky, {}, 'seed')).toEqual(first);
+    expect(calls).toBe(2 * callsForFirst);
+  });
+
+  it('a generator that cannot satisfy its invariants fails loudly', () => {
+    const broken: GeneratorDef = {
+      topicId: 'addition',
+      version: 3,
+      templates: ['t'],
+      generate: (ctx) => {
+        ctx.require(false, 'answerNotTrivial');
+        return { templateId: 't', problemText: '', answer: exact(0), explanation: '' };
+      },
+    };
+    expect(() => instantiate(broken, {}, 'x')).toThrow(new RegExp(`no valid instance in ${MAX_ATTEMPTS} attempts.*answerNotTrivial`));
+  });
+
+  it('other errors are not swallowed', () => {
+    const crashing: GeneratorDef = {
+      topicId: 'addition',
+      version: 1,
+      templates: ['t'],
+      generate: () => { throw new TypeError('bug'); },
+    };
+    expect(() => instantiate(crashing, {}, 'x')).toThrow(TypeError);
   });
 });
 
 // ===========================
-// EDGE CASES
+// EDGE CASES AND RECOMPUTATION FROM THE DISPLAYED TEXT
 // ===========================
 
+const seeds = (n: number, prefix = 'ms') => Array.from({ length: n }, (_, i) => `${prefix}-${i}`);
+const num = (p: Problem): number => {
+  const v = referenceNumber(p.answer);
+  if (v === null) throw new Error(`not numeric: ${p.problemText}`);
+  return v;
+};
+const must = (m: RegExpMatchArray | null, p: Problem): RegExpMatchArray => {
+  if (!m) throw new Error(`Could not parse: ${p.problemText}`);
+  return m;
+};
+
 describe('edge cases', () => {
-  it('division never divides by zero', () => {
-    for (let i = 0; i < 50; i++) {
-      const p = generateProblem('division');
-      // Generated text uses LaTeX \div; parse the divisor and check it is non-zero
-      const match = p.problemText.match(/\\div\s*\(?\s*(-?\d+)\s*\)?/);
-      if (!match) throw new Error(`Could not parse divisor: ${p.problemText}`);
-      expect(parseInt(match[1], 10)).not.toBe(0);
+  it('division never divides by zero and always has an integer quotient', () => {
+    for (const seed of seeds(80)) {
+      const p = generateProblem('division', {}, seed);
+      const m = must(p.problemText.match(/\$(-?\d+) \\div \(?(-?\d+)\)?/), p);
+      expect(Number(m[2])).not.toBe(0);
+      expect(Number.isInteger(Number(m[1]) / Number(m[2]))).toBe(true);
     }
   });
 
-  it('fraction problems produce valid fractions', () => {
-    for (let i = 0; i < 20; i++) {
-      const p = generateProblem('fractions-basic');
-      expect(p.answerType).toBe('fraction');
-      const answer = p.correctAnswer as FractionAnswer;
-      expect(answer.denominator).not.toBe(0);
-      expect(typeof answer.numerator).toBe('number');
-      expect(typeof answer.denominator).toBe('number');
+  it('fraction problems produce fractions in lowest terms with a positive denominator', () => {
+    for (const seed of seeds(40)) {
+      const p = generateProblem('fractions-basic', {}, seed);
+      expect(p.answer.kind).toBe('fraction');
+      if (p.answer.kind !== 'fraction') continue;
+      expect(p.answer.denominator).toBeGreaterThan(0);
+      expect(gcd(p.answer.numerator, p.answer.denominator)).toBe(p.answer.numerator === 0 ? p.answer.denominator : 1);
     }
   });
 
   it('decimal answers are exact values with at most 2 decimal places', () => {
-    for (let i = 0; i < 20; i++) {
-      const p = generateProblem('decimals');
-      const answer = p.correctAnswer as number;
-      expect(p.answerType).toBe('numeric');
-      // Should have at most 2 decimal places
-      const decimalPlaces = (answer.toString().split('.')[1] || '').length;
+    for (const seed of seeds(40)) {
+      const p = generateProblem('decimals', {}, seed);
+      const spec = p.answer;
+      expect(spec.kind === 'number' && spec.tolerance.kind).toBe('exact');
+      const decimalPlaces = (num(p).toString().split('.')[1] || '').length;
       expect(decimalPlaces).toBeLessThanOrEqual(2);
     }
   });
 });
 
-// ===========================
-// ARITHMETIC CORRECTNESS: verify answers match the actual math
-// ===========================
-
-describe('arithmetic correctness', () => {
-  it('multi-step equations: stored answer actually solves the displayed equation', () => {
-    for (let i = 0; i < 50; i++) {
-      const p = generateProblem('multi-step-equations');
-      // Parse "ax + b = cx + d" from problem text
-      // Format: "$${a}x + ${b} = ${c}x + ${d}$" (with latexTerm signs)
-      const match = p.problemText.match(/\$(\d+)x\s*([+-])\s*(\d+)\s*=\s*(\d+)x\s*([+-])\s*(\d+)\$/);
-      if (!match) throw new Error(`Could not parse multi-step equation: ${p.problemText}`);
-      const a = parseInt(match[1]);
-      const bSign = match[2] === '+' ? 1 : -1;
-      const b = bSign * parseInt(match[3]);
-      const c = parseInt(match[4]);
-      const dSign = match[5] === '+' ? 1 : -1;
-      const d = dSign * parseInt(match[6]);
-      // Solve: (a-c)x = d - b → x = (d - b) / (a - c)
-      const solved = (d - b) / (a - c);
-      expect(solved).toBe(p.correctAnswer as number);
+describe('arithmetic correctness: the answer solves the displayed problem', () => {
+  it('multi-step equations', () => {
+    for (const seed of seeds(60)) {
+      const p = generateProblem('multi-step-equations', {}, seed);
+      const m = must(p.problemText.match(/^\$(.+) = (.+)\$$/), p);
+      const [l, r] = [terms(m[1]), terms(m[2])];
+      const x = num(p);
+      expect(coef(l, 'x') * x + coef(l, '')).toBe(coef(r, 'x') * x + coef(r, ''));
+      expect(coef(l, 'x')).not.toBe(coef(r, 'x')); // exactly one solution
     }
   });
 
-  it('simple linear equations: stored answer actually solves the displayed equation', () => {
-    for (let i = 0; i < 50; i++) {
-      const p = generateProblem('simple-linear-equations');
-      // Parse "ax + b = c"
-      const match = p.problemText.match(/\$(\d+)x\s*\+\s*(\d+)\s*=\s*(\d+)\$/);
-      if (!match) throw new Error(`Could not parse linear equation: ${p.problemText}`);
-      const a = parseInt(match[1]);
-      const b = parseInt(match[2]);
-      const c = parseInt(match[3]);
-      const solved = (c - b) / a;
-      expect(solved).toBe(p.correctAnswer as number);
+  it('simple linear equations', () => {
+    for (const seed of seeds(60)) {
+      const p = generateProblem('simple-linear-equations', {}, seed);
+      const m = must(p.problemText.match(/^\$(.+) = (-?\d+)\$$/), p);
+      const t = terms(m[1]);
+      expect(coef(t, 'x') * num(p) + coef(t, '')).toBe(Number(m[2]));
     }
   });
 
-  it('addition: a + b = stored answer', () => {
-    for (let i = 0; i < 20; i++) {
-      const p = generateProblem('addition');
-      // Parse the two operands from the LaTeX
-      const match = p.problemText.match(/\$(-?\d+)\s*\+\s*\(?(-?\d+)\)?\s*=/);
-      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
-      expect(parseInt(match[1]) + parseInt(match[2])).toBe(p.correctAnswer as number);
+  const operands = (p: Problem, op: string): [number, number] => {
+    const m = must(p.problemText.match(new RegExp(`^\\$(-?\\d+) ${op} \\(?(-?\\d+)\\)? =`)), p);
+    return [Number(m[1]), Number(m[2])];
+  };
+
+  it('addition, subtraction, multiplication, division', () => {
+    for (const seed of seeds(30)) {
+      const [a1, b1] = operands(generateProblem('addition', {}, seed), '\\+');
+      expect(num(generateProblem('addition', {}, seed))).toBe(a1 + b1);
+      const [a2, b2] = operands(generateProblem('subtraction', {}, seed), '-');
+      expect(num(generateProblem('subtraction', {}, seed))).toBe(a2 - b2);
+      const [a3, b3] = operands(generateProblem('multiplication', {}, seed), '\\\\times');
+      expect(num(generateProblem('multiplication', {}, seed)) === a3 * b3).toBe(true); // == also for ±0
+      const [a4, b4] = operands(generateProblem('division', {}, seed), '\\\\div');
+      expect(num(generateProblem('division', {}, seed)) === a4 / b4).toBe(true);
     }
   });
 
-  it('subtraction: a - b = stored answer', () => {
-    for (let i = 0; i < 20; i++) {
-      const p = generateProblem('subtraction');
-      const match = p.problemText.match(/\$(-?\d+)\s*-\s*\(?(-?\d+)\)?\s*=/);
-      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
-      expect(parseInt(match[1]) - parseInt(match[2])).toBe(p.correctAnswer as number);
+  it('quadratic equations: the answer is the larger root', () => {
+    for (const seed of seeds(60)) {
+      const p = generateProblem('quadratic-equations', {}, seed);
+      const m = must(p.problemText.match(/Solve for \$x\$: \$(.+) = 0\$/), p);
+      const t = terms(m[1]);
+      const [a, b, c] = [coef(t, 'x^2'), coef(t, 'x'), coef(t, '')];
+      expect(a).toBe(1);
+      const x = num(p);
+      expect(x * x + b * x + c).toBe(0);
+      const other = -b - x; // Vieta
+      expect(x).toBeGreaterThanOrEqual(other);
     }
   });
 
-  it('multiplication: a * b = stored answer', () => {
-    for (let i = 0; i < 20; i++) {
-      const p = generateProblem('multiplication');
-      const match = p.problemText.match(/\$(-?\d+)\s*\\times\s*\(?(-?\d+)\)?\s*=/);
-      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
-      expect(parseInt(match[1]) * parseInt(match[2])).toBe(p.correctAnswer as number);
-    }
-  });
-
-  it('division: a / b = stored answer', () => {
-    for (let i = 0; i < 20; i++) {
-      const p = generateProblem('division');
-      const match = p.problemText.match(/\$(-?\d+)\s*\\div\s*\(?(-?\d+)\)?\s*=/);
-      if (!match) throw new Error(`Could not parse: ${p.problemText}`);
-      const quotient = parseInt(match[1]) / parseInt(match[2]);
-      // Use == to treat -0 and 0 as equal (Object.is distinguishes them)
-      expect(quotient == (p.correctAnswer as number) && Math.abs(quotient - (p.correctAnswer as number)) === 0).toBe(true);
-    }
-  });
-
-  it('quadratic equations: stored answer is a root of the displayed equation', () => {
-    for (let i = 0; i < 30; i++) {
-      const p = generateProblem('quadratic-equations');
-      // Parse "x^2 + sx + p = 0"
-      const match = p.problemText.match(/x\^2\s*([+-])\s*(\d+)x\s*([+-])\s*(\d+)\s*=\s*0/);
-      if (!match) throw new Error(`Could not parse quadratic: ${p.problemText}`);
-      const sSign = match[1] === '+' ? 1 : -1;
-      const s = sSign * parseInt(match[2]);
-      const pSign = match[3] === '+' ? 1 : -1;
-      const prod = pSign * parseInt(match[4]);
-      const x = p.correctAnswer as number;
-      // x should satisfy x² + s*x + prod = 0
-      expect(x * x + s * x + prod).toBe(0);
-    }
-  });
-
-  it('factoring: stored answer is a valid factor constant', () => {
-    for (let i = 0; i < 30; i++) {
-      const p = generateProblem('factoring');
-      // Parse "x^2 + sx + p"
-      const match = p.problemText.match(/x\^2\s*([+-])\s*(\d+)x\s*([+-])\s*(\d+)/);
-      if (!match) throw new Error(`Could not parse factoring: ${p.problemText}`);
-      const sSign = match[1] === '+' ? 1 : -1;
-      const sum = sSign * parseInt(match[2]);
-      const pSign = match[3] === '+' ? 1 : -1;
-      const product = pSign * parseInt(match[4]);
-      const k = p.correctAnswer as number;
-      // k should be one of the factors: k + other = sum, k * other = product
+  it('factoring: the answer is the smaller constant of the factors', () => {
+    for (const seed of seeds(60)) {
+      const p = generateProblem('factoring', {}, seed);
+      const m = must(p.problemText.match(/Factor: \$(.+)\$/), p);
+      const t = terms(m[1]);
+      const [sum, product] = [coef(t, 'x'), coef(t, '')];
+      const k = num(p);
       const other = sum - k;
       expect(k * other).toBe(product);
+      expect(k).toBeLessThanOrEqual(other);
     }
   });
 });
 
 // ===========================
-// SELF-VALIDATION: generated answers must pass validateAnswer
+// REGRESSIONS
 // ===========================
 
-// Helper to format a generated answer into a user-input string
-function formatAnswerForInput(problem: ReturnType<typeof generateProblem>): string {
-  const answer = problem.correctAnswer;
-  switch (problem.answerType) {
-    case 'numeric':
-    case 'decimal-tolerance':
-      return String(answer);
-    case 'fraction': {
-      const f = answer as FractionAnswer;
-      return `${f.numerator}/${f.denominator}`;
-    }
-    case 'expression':
-      return String(answer);
-    case 'coordinate': {
-      const c = answer as { x: number; y: number };
-      return `(${c.x}, ${c.y})`;
-    }
-    case 'multiple-choice':
-      return String(answer);
-    default:
-      return String(answer);
-  }
-}
-
-describe('self-validation: generated answers pass validateAnswer', () => {
-  for (const topicId of generatableTopics) {
-    it(`correct answer validates for "${topicId}" (10 runs)`, () => {
-      for (let i = 0; i < 10; i++) {
-        const problem = generateProblem(topicId);
-        const input = formatAnswerForInput(problem);
-        const result = validateAnswer(problem, input);
-        if (!result) {
-          // Provide helpful error message on failure
-          throw new Error(
-            `Self-validation failed for "${topicId}":\n` +
-            `  Problem: ${problem.problemText}\n` +
-            `  Answer type: ${problem.answerType}\n` +
-            `  Correct answer: ${JSON.stringify(problem.correctAnswer)}\n` +
-            `  Formatted input: "${input}"`
-          );
-        }
-      }
-    });
-  }
-});
-
-// ===========================
-// REGRESSION: H1 — ASCII inequality operators (<= / >=) must match stored ≤ / ≥
-// ===========================
-
-describe('regression H1: ASCII inequality operators', () => {
-  const leProblem: Problem = {
-    id: 'test-ascii-le',
-    topicId: 'inequalities',
-    problemText: 'Solve for x: 2x + 1 ≤ 9',
-    answerType: 'expression',
-    correctAnswer: 'x ≤ 4',
-    explanationPrompt: '',
-  };
-  const geProblem: Problem = {
-    ...leProblem,
-    id: 'test-ascii-ge',
-    problemText: 'Solve for x: 2x + 1 ≥ 9',
-    correctAnswer: 'x ≥ 4',
-  };
-
-  it('accepts ASCII <= for a stored ≤ answer', () => {
-    expect(validateAnswer(leProblem, 'x <= 4')).toBe(true);
-    expect(validateAnswer(leProblem, 'x<=4')).toBe(true);
-  });
-
-  it('accepts ASCII >= for a stored ≥ answer', () => {
-    expect(validateAnswer(geProblem, 'x >= 4')).toBe(true);
-    expect(validateAnswer(geProblem, 'x>=4')).toBe(true);
-  });
-
-  it('rejects wrong-direction ASCII operators', () => {
-    expect(validateAnswer(leProblem, 'x >= 4')).toBe(false);
-    expect(validateAnswer(geProblem, 'x <= 4')).toBe(false);
-  });
-
-  it('rejects strict ASCII operators for inclusive stored answers', () => {
-    expect(validateAnswer(leProblem, 'x < 4')).toBe(false);
-    expect(validateAnswer(geProblem, 'x > 4')).toBe(false);
-  });
-
-  it('accepts flipped ASCII forms ("4 >= x" for stored "x ≤ 4")', () => {
-    expect(validateAnswer(leProblem, '4 >= x')).toBe(true);
-    expect(validateAnswer(geProblem, '4 <= x')).toBe(true);
-  });
-
-  it('rejects flipped ASCII forms with the wrong direction', () => {
-    expect(validateAnswer(leProblem, '4 <= x')).toBe(false);
-    expect(validateAnswer(geProblem, '4 >= x')).toBe(false);
-  });
-
-  it('generated inequalities validate their ASCII-ized stored answer (40 runs)', () => {
-    for (let i = 0; i < 40; i++) {
-      const p = generateProblem('inequalities');
-      const stored = String(p.correctAnswer);
-      const ascii = stored.replace(/≤/g, '<=').replace(/≥/g, '>=');
-      expect(
-        validateAnswer(p, ascii),
-        `stored "${stored}" should accept ASCII input "${ascii}"`
-      ).toBe(true);
-    }
-  });
-});
-
-// ===========================
-// REGRESSION: M10 — tolerance scoped to π-based answers only
-// ===========================
-
-describe('regression M10: circles tolerance scoping', () => {
-  it('diameter grades exactly; circumference/area accept true-π answers (40 runs)', () => {
-    for (let i = 0; i < 40; i++) {
-      const p = generateProblem('circles');
-      const answer = p.correctAnswer as number;
-      const radiusMatch = p.problemText.match(/radius \$(\d+)\$/);
-      if (!radiusMatch) throw new Error(`Could not parse radius: ${p.problemText}`);
-      const r = parseInt(radiusMatch[1]);
-
+describe('regression M10: tolerance scoped to π-based answers only', () => {
+  it('diameter grades exactly; circumference/area demand the instructed π ≈ 3.14', () => {
+    for (const seed of seeds(40)) {
+      const p = generateProblem('circles', {}, seed);
+      const answer = num(p);
+      const r = Number(must(p.problemText.match(/radius \$(\d+)\$/), p)[1]);
       if (/diameter/.test(p.problemText)) {
-        // d = 2r is an exact integer: no tolerance, off-by-0.4 must be wrong
-        expect(p.answerType).toBe('numeric');
-        expect(answer).toBe(2 * r);
-        expect(validateAnswer(p, String(answer))).toBe(true);
+        expect(p.answer).toEqual(exact(2 * r));
         expect(validateAnswer(p, String(answer + 0.4))).toBe(false);
         expect(validateAnswer(p, String(answer - 0.4))).toBe(false);
       } else if (/circumference/.test(p.problemText)) {
-        // Stored answer uses 3.14; a user computing with true π must still pass
-        expect(validateAnswer(p, String(2 * Math.PI * r))).toBe(true);
-        expect(validateAnswer(p, String(answer))).toBe(true);
+        expect(validateAnswer(p, (2 * 3.14 * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * Math.PI * r).toFixed(2))).toBe(false);
       } else {
-        // area
-        expect(validateAnswer(p, String(Math.PI * r * r))).toBe(true);
-        expect(validateAnswer(p, String(answer))).toBe(true);
+        expect(validateAnswer(p, (3.14 * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r).toFixed(2))).toBe(false);
       }
     }
   });
-});
 
-describe('regression M10: integration-applications surface-area tolerance', () => {
-  it('surface-area grades exactly to the requested 2 decimal places', () => {
+  it('surface area grades to exactly the requested 2 decimal places', () => {
     let found = 0;
-    for (let i = 0; i < 300 && found < 10; i++) {
-      const p = generateProblem('integration-applications');
+    for (const seed of seeds(300, 'sa')) {
+      const p = generateProblem('integration-applications', {}, seed);
       if (!/surface area/.test(p.problemText)) continue;
       found++;
-      const answer = p.correctAnswer as number;
-      expect(p.roundTo).toBe(2);
-      expect(validateAnswer(p, String(answer))).toBe(true);
-      // The correctly rounded value is accepted
+      expect(p.answer).toMatchObject({ kind: 'number', tolerance: { kind: 'decimalPlaces', places: 2 } });
+      const answer = num(p);
       expect(validateAnswer(p, answer.toFixed(2))).toBe(true);
-      // Anything that does not round to it is wrong: 0.03 off is a different 2-dp value
       expect(validateAnswer(p, String(answer + 0.03))).toBe(false);
-      expect(validateAnswer(p, String(answer + 0.4))).toBe(false);
       expect(validateAnswer(p, String(answer - 0.4))).toBe(false);
+      if (found >= 10) break;
     }
     expect(found).toBeGreaterThan(0);
   });

@@ -8,17 +8,23 @@
  * same answer key it is testing.
  */
 import { describe, it, expect } from 'vitest';
-import { derivative, evaluate } from 'mathjs';
+import { compile, derivative, evaluate } from 'mathjs';
 import { generateProblem, validateAnswer, simplifyFraction, resolveRange } from './mathService';
-import { normalizeMathExpr } from './expressionGrader';
-import { Problem, TopicId, FractionAnswer } from '../types';
+import { GENERATORS } from './generators';
+import { canonicalInput, normalizeMathExpr, referenceNumber, wrongInputs } from './grading';
+import { AnswerSpec, Problem, TopicId } from '../types';
+import { coef, latexToExpr, terms } from './testing/latex';
 
 const N = 40;
-const sample = (topic: TopicId, n = N): Problem[] => Array.from({ length: n }, () => generateProblem(topic));
+/** `npm run test:sweep` raises every family's sample to the sweep's seed count. */
+const SWEEP = Number(process.env.SWEEP_SEEDS || 0);
+// Deterministic seeds: every run checks the same problems, and a failure names a replayable seed.
+const sample = (topic: TopicId, n = N): Problem[] =>
+  Array.from({ length: Math.max(n, SWEEP) }, (_, i) => generateProblem(topic, {}, `mc-${i}`));
 const sampleWhere = (topic: TopicId, pred: (p: Problem) => boolean, want = 8): Problem[] => {
   const out: Problem[] = [];
   for (let i = 0; i < 600 && out.length < want; i++) {
-    const p = generateProblem(topic);
+    const p = generateProblem(topic, {}, `mcw-${i}`);
     if (pred(p)) out.push(p);
   }
   if (out.length === 0) throw new Error(`no ${topic} problem matched the predicate`);
@@ -29,7 +35,26 @@ const must = (m: RegExpMatchArray | null, p: Problem): RegExpMatchArray => {
   if (!m) throw new Error(`Could not parse problem text: ${p.problemText}`);
   return m;
 };
-const num = (p: Problem) => p.correctAnswer as number;
+const num = (p: Problem): number => {
+  const v = referenceNumber(p.answer);
+  if (v === null) throw new Error(`not a numeric answer: ${JSON.stringify(p.answer)}`);
+  return v;
+};
+/** The reference answer as text: the chosen option, the first accepted word, the reference expression. */
+const ref = (p: Problem): string => {
+  const a = p.answer;
+  switch (a.kind) {
+    case 'choice': return a.answer;
+    case 'text': return a.accepted[0];
+    case 'expression': return a.reference;
+    case 'antiderivative': return a.reference!;
+    default: return String(canonicalInput(a));
+  }
+};
+const numberSpec = (p: Problem): Extract<AnswerSpec, { kind: 'number' }> => {
+  if (p.answer.kind !== 'number') throw new Error(`not a number answer: ${p.problemText}`);
+  return p.answer;
+};
 /** Simpson's rule, independent of any antiderivative. */
 const integrate = (f: (x: number) => number, a: number, b: number, n = 2000): number => {
   const h = (b - a) / n;
@@ -47,6 +72,12 @@ const EXACT_LATEX: Record<string, number> = {
   '\\sqrt{3}': Math.sqrt(3),
   '1': 1,
 };
+/** Value of a displayed exact LaTeX value, sign included ("-\\frac{\\sqrt{3}}{2}"). */
+const exactValue = (latex: string): number | undefined => {
+  const neg = latex.startsWith('-');
+  const v = ({ ...EXACT_LATEX, '0': 0 } as Record<string, number>)[neg ? latex.slice(1) : latex];
+  return v === undefined ? undefined : neg ? -v : v;
+};
 const trig = (fn: string, deg: number) => (Math as unknown as Record<string, (x: number) => number>)[fn](deg * Math.PI / 180);
 
 // ===========================================================================
@@ -55,47 +86,58 @@ const trig = (fn: string, deg: number) => (Math as unknown as Record<string, (x:
 
 describe('audit reproductions', () => {
   it('Lagrange bound for e^0.5 with P_3: 0.0043 accepted, 0.0026 (below the true error) rejected', () => {
-    const [p] = sampleWhere('taylor-maclaurin', q => /Lagrange/.test(q.problemText), 1);
+    const [p] = sampleWhere('taylor-maclaurin', q => /Lagrange/.test(q.problemText) && /degree-\$3\$/.test(q.problemText) && /x = 0\.5\$/.test(q.problemText), 1);
     const trueBound = Math.exp(0.5) * Math.pow(0.5, 4) / 24; // 0.004293...
     const actualError = Math.exp(0.5) - 79 / 48;           // 0.002887...
     expect(num(p)).toBeCloseTo(trueBound, 12);
     expect(num(p)).toBeGreaterThan(actualError);           // a bound must bound the error
     expect(validateAnswer(p, '0.0043')).toBe(true);
     expect(validateAnswer(p, 'e^0.5/384')).toBe(true);
+    expect(validateAnswer(p, 'e^0.5*0.5^4/24')).toBe(true);
     expect(validateAnswer(p, '0.0026')).toBe(false);
     expect(validateAnswer(p, '0.003')).toBe(false);
-    expect(p.explanationPrompt).not.toMatch(/crude/);
-    expect(p.explanationPrompt).toMatch(/NOT be a valid bound/);
+    expect(p.explanation).not.toMatch(/crude/);
+    expect(p.explanation).toMatch(/NOT be a valid bound/);
   });
 
+  it('Lagrange bound to the left of 0 uses M = 1, not e^x at the endpoint', () => {
+    const [p] = sampleWhere('taylor-maclaurin', q => /Lagrange/.test(q.problemText) && /x = -1\$/.test(q.problemText) && /degree-\$2\$/.test(q.problemText), 1);
+    expect(num(p)).toBeCloseTo(1 / 6, 12); // |−1|³/3!
+    expect(validateAnswer(p, '0.17')).toBe(true);
+    expect(validateAnswer(p, String(Math.exp(-1) / 6))).toBe(false); // e^{-1} is the minimum, not a bound
+    expect(p.explanation).toMatch(/M = e\^0 = 1/);
+  });
   it('undefined mathematics never earns credit on a substitution question', () => {
     for (const p of sample('integration-substitution', 5)) {
       expect(validateAnswer(p, '0/0')).toBe(false);
       expect(validateAnswer(p, 'NaN+0')).toBe(false);
       expect(validateAnswer(p, 'NaN')).toBe(false);
       expect(validateAnswer(p, 'Infinity')).toBe(false);
-      expect(validateAnswer(p, String(p.correctAnswer))).toBe(true);
-      expect(validateAnswer(p, `u = ${p.correctAnswer}`)).toBe(true);
+      expect(validateAnswer(p, ref(p))).toBe(true);
+      expect(validateAnswer(p, `u = ${ref(p)}`)).toBe(true);
+      // "u" may be named, but no other variable
+      expect(validateAnswer(p, `v = ${ref(p)}`)).toBe(false);
     }
   });
 
   it('trig equations and inverse trig display exact values, never rounded decimals', () => {
     for (const p of [...sample('trig-equations'), ...sample('inverse-trig')]) {
       expect(p.problemText).not.toMatch(/0\.\d{3}/);
-      expect(p.problemText).toMatch(/\\frac|\\sqrt|\\left\(1\\right\)|= 1\$$/);
+      const shown = p.problemText.match(/\\left\((.+)\\right\)\$$/)?.[1] ?? p.problemText.match(/= (.+)\$(\n|$)/)?.[1];
+      expect(exactValue(shown ?? ''), p.problemText).toBeDefined();
     }
   });
-
   it('integration by parts accepts the audit\'s valid spellings', () => {
     const byText = (re: RegExp) => sampleWhere('integration-by-parts', q => re.test(q.problemText), 1)[0];
-    expect(validateAnswer(byText(/x \\cdot \\cos/), 'cos(x)+x*sin(x)')).toBe(true);
-    expect(validateAnswer(byText(/x \\cdot e\^x/), 'exp(x)*(x-1)')).toBe(true);
-    expect(validateAnswer(byText(/x \\cdot e\^x/), 'xe^x - e^x')).toBe(true);
-    expect(validateAnswer(byText(/\\ln\(x\)/), 'x(ln(x)-1)')).toBe(true);
-    expect(validateAnswer(byText(/x \\cdot \\sin/), 'sin(x) - xcos(x)')).toBe(true);
-    expect(validateAnswer(byText(/x \\cdot \\sin/), 'x*cos(x)')).toBe(false);
+    expect(validateAnswer(byText(/\\int x\\cos\(x\)\\,dx/), 'cos(x)+x*sin(x)')).toBe(true);
+    expect(validateAnswer(byText(/\\int x e\^\{x\}\\,dx/), 'exp(x)*(x-1)')).toBe(true);
+    expect(validateAnswer(byText(/\\int x e\^\{x\}\\,dx/), 'xe^x - e^x')).toBe(true);
+    expect(validateAnswer(byText(/\\int \\ln\(x\)\\,dx/), 'x(ln(x)-1)')).toBe(true);
+    expect(validateAnswer(byText(/\\int x\\sin\(x\)\\,dx/), 'sin(x) - xcos(x)')).toBe(true);
+    expect(validateAnswer(byText(/\\int x\\sin\(x\)\\,dx/), 'x*cos(x)')).toBe(false);
+    expect(validateAnswer(byText(/\\int x e\^\{2x\}\\,dx/), '(2x - 1)e^(2x)/4')).toBe(true);
+    expect(validateAnswer(byText(/\\int x e\^\{2x\}\\,dx/), '(2x - 1)e^(2x)/2')).toBe(false);
   });
-
   it('trig integrals accept equivalent antiderivatives and require |cos x|', () => {
     const byText = (re: RegExp) => sampleWhere('trig-integrals', q => re.test(q.problemText), 1)[0];
     expect(validateAnswer(byText(/\\sin\(x\)\\cos\(x\)/), '-cos(x)^2/2')).toBe(true);
@@ -116,22 +158,29 @@ describe('audit reproductions', () => {
     expect(validateAnswer(p, '0.501')).toBe(false);
   });
 
-  it('requested rounding is enforced: arc length of y = x on [0, 4] to 2 places', () => {
-    const [p] = sampleWhere('integration-applications', q => /arc length/.test(q.problemText) && /x = 4\$/.test(q.problemText), 1);
-    expect(validateAnswer(p, '5.66')).toBe(true);
-    expect(validateAnswer(p, '4*sqrt(2)')).toBe(true);
-    expect(validateAnswer(p, '5.70')).toBe(false);
-    expect(validateAnswer(p, '5.65')).toBe(false);
+  it('requested rounding is enforced: arc lengths to 2 places', () => {
+    for (const p of sampleWhere('integration-applications', q => /arc length/.test(q.problemText), 5)) {
+      const m = must(p.problemText.match(/arc length of \$y = (.+)\$ from \$x = 0\$ to \$x = (\d+)\$/), p);
+      const slope = coef(terms(m[1]), 'x');
+      const L = int(m[2]) * Math.sqrt(1 + slope * slope);
+      expect(validateAnswer(p, L.toFixed(2))).toBe(true);
+      expect(validateAnswer(p, `${m[2]}*sqrt(${1 + slope * slope})`)).toBe(true);
+      expect(validateAnswer(p, (Number(L.toFixed(2)) + 0.04).toFixed(2))).toBe(false);
+      expect(validateAnswer(p, (Number(L.toFixed(2)) - 0.01).toFixed(2))).toBe(false);
+    }
   });
-
-  it('exact answers are exact: coefficient of x^2 in e^x', () => {
-    const [p] = sampleWhere('taylor-maclaurin', q => /coefficient of \$x\^2\$/.test(q.problemText), 1);
-    expect(validateAnswer(p, '0.5')).toBe(true);
-    expect(validateAnswer(p, '1/2')).toBe(true);
-    expect(validateAnswer(p, '1/2!')).toBe(true);
-    expect(validateAnswer(p, '0.5005')).toBe(false);
+  it('exact answers are exact: Taylor coefficients', () => {
+    const [p] = sampleWhere('taylor-maclaurin', q => /coefficient of \$x\^\{2\}\$ in the Maclaurin series for \$e\^\{2x\}\$/.test(q.problemText), 1);
+    expect(validateAnswer(p, '2')).toBe(true);
+    expect(validateAnswer(p, '4/2')).toBe(true);
+    expect(validateAnswer(p, '2^2/2!')).toBe(true);
+    expect(validateAnswer(p, '2.001')).toBe(false);
+    const [t] = sampleWhere('taylor-maclaurin', q => /coefficient of \$\(x - 2\)\^\{3\}\$ in the Taylor series of \$e\^x\$/.test(q.problemText), 1);
+    expect(validateAnswer(t, 'e^2/6')).toBe(true);
+    expect(validateAnswer(t, 'e^2/3!')).toBe(true);
+    expect(validateAnswer(t, '1.2315')).toBe(false); // a rounded decimal is not the exact value
+    expect(validateAnswer(t, 'e^3/6')).toBe(false);
   });
-
   it('fractions are accepted for trig ratios (3/5 for sin θ in a 3-4-5 triangle)', () => {
     const [p] = sampleWhere('trig-ratios', q => /\$3\$, \$4\$, \$5\$/.test(q.problemText) && /\\sin/.test(q.problemText) && /opposite to side \$3\$/.test(q.problemText), 1);
     expect(num(p)).toBeCloseTo(0.6, 12);
@@ -142,12 +191,19 @@ describe('audit reproductions', () => {
   });
 
   it('trig substitution accepts either valid substitution and any parameter name', () => {
-    const [p] = sampleWhere('trig-substitution', q => /4 - x\^2/.test(q.problemText), 1);
+    const [p] = sampleWhere('trig-substitution', q => /substitution should you use/.test(q.problemText) && /\{4 - x\^2\}/.test(q.problemText), 1);
     expect(validateAnswer(p, 'x=2sin(theta)')).toBe(true);
     expect(validateAnswer(p, 'x = 2sin(t)')).toBe(true);
     expect(validateAnswer(p, 'x=2cos(θ)')).toBe(true);
     expect(validateAnswer(p, 'x=2tan(θ)')).toBe(false);
     expect(validateAnswer(p, 'x=3sin(θ)')).toBe(false);
+    // θ is a declared parameter; x is not, so renaming x changes the answer
+    expect(p.answer.kind).toBe('anyOf');
+    if (p.answer.kind === 'anyOf') {
+      for (const option of p.answer.options) expect(option).toMatchObject({ kind: 'equation', lhs: 'x', parameters: ['theta'] });
+    }
+    expect(validateAnswer(p, 'y = 2sin(θ)')).toBe(false);
+    expect(validateAnswer(p, 'y = 2sin(t)')).toBe(false);
   });
 
   it('chain-rule question names the requested form K(ax+b)^(n-1)', () => {
@@ -156,29 +212,63 @@ describe('audit reproductions', () => {
     }
   });
 
-  it('alternating sequence explanation lists the terms with the correct signs', () => {
-    const [p] = sampleWhere('sequences', q => /\(-1\)\^n \\cdot \\frac\{1\}\{n\}/.test(q.problemText), 1);
-    expect(p.explanationPrompt).toMatch(/-1, \\frac\{1\}\{2\}, -\\frac\{1\}\{3\}, \\frac\{1\}\{4\}/);
+  it('alternating sequences are never called monotonic', () => {
+    for (const p of sampleWhere('sequences', q => /monotonic\?/.test(q.problemText) && /\(-1\)\^n/.test(q.problemText), 6)) {
+      expect(ref(p)).toBe('no');
+      expect(p.explanation).toMatch(/alternate|up and down/);
+    }
   });
-
   it('polar θ questions fix an interval and never divide by zero in the explanation', () => {
     for (const p of sampleWhere('polar-coordinates', q => /What is \$\\theta\$/.test(q.problemText), 6)) {
       expect(p.problemText).toMatch(/0° \\leq \\theta < 360°/);
-      expect(p.explanationPrompt).not.toMatch(/\\frac\{\d+\}\{0\}/);
-      expect(p.explanationPrompt).not.toMatch(/arctan\\left\(\\frac\{5\}\{0\}/);
+      expect(p.explanation).not.toMatch(/\\frac\{\d+\}\{0\}/);
+      expect(p.explanation).not.toMatch(/arctan\\left\(\\frac\{5\}\{0\}/);
     }
   });
 
-  it('partial-fraction and p-series prompts do not leak their answers', () => {
+  it('partial-fraction and p-integral prompts do not leak their answers', () => {
     for (const p of sampleWhere('partial-fractions', q => /What is \$A\$/.test(q.problemText) && /x \+ /.test(q.problemText), 6)) {
       expect(p.problemText).not.toMatch(/like \$\\frac/);
     }
-    const [ps] = sampleWhere('improper-integrals', q => /\$p\$-series/.test(q.problemText), 1);
+    const [ps] = sampleWhere('improper-integrals', q => /For which real \$p\$/.test(q.problemText) && /int_1\^\{\\infty\}/.test(q.problemText), 1);
     expect(ps.problemText).not.toMatch(/p > 1|p>1/);
     expect(validateAnswer(ps, 'p > 1')).toBe(true);
+    expect(validateAnswer(ps, '1 < p')).toBe(true);
+    expect(validateAnswer(ps, '(1, inf)')).toBe(true);
+    expect(validateAnswer(ps, 'p >= 1')).toBe(false);  // p = 1 diverges
     expect(validateAnswer(ps, 'p < 0')).toBe(false);
+    expect(validateAnswer(ps, 'x > 1')).toBe(false);   // wrong variable
+    // on (0, 1] the condition reverses, and p ≤ 0 gives a proper (convergent) integral
+    const [pz] = sampleWhere('improper-integrals', q => /For which real \$p\$/.test(q.problemText) && /int_0\^\{1\}/.test(q.problemText), 1);
+    expect(validateAnswer(pz, 'p < 1')).toBe(true);
+    expect(validateAnswer(pz, '(-inf, 1)')).toBe(true);
+    expect(validateAnswer(pz, '0 < p < 1')).toBe(false);
+    expect(validateAnswer(pz, 'p > 1')).toBe(false);
   });
-
+  it('identity answers reject domain-invalid rewrites and restatements of the prompt', () => {
+    const byId = (id: string) => sampleWhere('trig-identities', q => q.templateId === id, 1)[0];
+    const pyth = byId('pythagorean');
+    expect(validateAnswer(pyth, '1')).toBe(true);
+    expect(validateAnswer(pyth, 'theta/theta')).toBe(false);                 // undefined at θ = 0
+    expect(validateAnswer(pyth, 'sin(theta)^2+cos(theta)^2')).toBe(false);   // the prompt, not an answer
+    const quotient = byId('quotient');
+    expect(validateAnswer(quotient, 'sin(θ)/cos(θ)')).toBe(true);
+    expect(validateAnswer(quotient, 'tan(theta)')).toBe(false);
+    const double = byId('double-angle-sin');
+    expect(validateAnswer(double, '2sin(θ)cos(θ)')).toBe(true);
+    expect(validateAnswer(double, 'sin(2θ)')).toBe(false);
+    const cos2 = byId('double-angle-cos');
+    for (const form of ['cos(θ)^2 - sin(θ)^2', '1 - 2sin(θ)^2', '2cos(θ)^2 - 1']) expect(validateAnswer(cos2, form)).toBe(true);
+    expect(validateAnswer(cos2, 'cos(2θ)')).toBe(false);
+    const cof = byId('cofunction-sin');
+    expect(validateAnswer(cof, 'cos(theta)')).toBe(true);
+    expect(validateAnswer(cof, 'sin(pi/2 - theta)')).toBe(false);
+  });
+  it('tangent explanations do not claim a value at 90°', () => {
+    for (const p of sampleWhere('trig-equations', q => /\\tan/.test(q.problemText) && /0° \\leq \\theta \\leq 90°/.test(q.problemText), 3)) {
+      expect(p.explanation).toMatch(/\[0°, 90°\)/);
+    }
+  });
   it('arithmetic answers cannot be restated as the problem itself', () => {
     const [p] = sampleWhere('addition', q => !/-/.test(q.problemText), 1);
     const m = p.problemText.match(/\$(\d+) \+ (\d+) =/)!;
@@ -186,11 +276,25 @@ describe('audit reproductions', () => {
     expect(validateAnswer(p, String(Number(m[1]) + Number(m[2])))).toBe(true);
   });
 
+  it("the 'evaluated' form is a per-problem requirement, set only on arithmetic-fluency topics", () => {
+    const fluency: TopicId[] = ['addition', 'subtraction', 'multiplication', 'division', 'integers', 'order-of-operations', 'decimals'];
+    for (const topic of fluency) {
+      for (const p of sample(topic, 5)) expect(numberSpec(p).form, topic).toBe('evaluated');
+    }
+    // elsewhere any exact expression for the value is an answer
+    for (const p of sample('limits', 10)) {
+      expect(numberSpec(p).form).toBeUndefined();
+      const m = must(p.problemText.match(/\\lim_\{x \\to (\d+)\} \\left\[(.+)\\right\]/), p);
+      const t = terms(m[2]);
+      expect(validateAnswer(p, `${coef(t, 'x')}*${m[1]} + (${coef(t, '')})`)).toBe(true);
+    }
+  });
+
   it('no-negatives setting applies to operands and answers', () => {
     for (const topic of ['addition', 'subtraction', 'multiplication', 'division'] as TopicId[]) {
       for (const range of [{ min: -10, max: -5 }, { min: 0, max: 10 }, { min: -10, max: 10 }]) {
         for (let i = 0; i < 100; i++) {
-          const p = generateProblem(topic, range, false);
+          const p = generateProblem(topic, { numberRange: range, allowNegatives: false }, `nn-${i}`);
           const operands = [...p.problemText.matchAll(/-?\d+/g)].map(m => Number(m[0]));
           expect(operands.every(o => o >= 0), `${topic} ${JSON.stringify(range)}: ${p.problemText}`).toBe(true);
           expect(num(p) >= 0, `${topic} ${JSON.stringify(range)} answer ${num(p)}`).toBe(true);
@@ -220,9 +324,9 @@ describe('independent recomputation: pre-algebra', () => {
         : op === '-' ? [n1 * d2 - n2 * d1, d1 * d2]
         : op === '\\times' ? [n1 * n2, d1 * d2]
         : [n1 * d2, d1 * n2];
-      expect(p.correctAnswer).toEqual(simplifyFraction(an, ad));
+      expect(p.answer).toEqual({ kind: 'fraction', ...simplifyFraction(an, ad) });
       expect(validateAnswer(p, `${an}/${ad}`)).toBe(true);
-      const f = p.correctAnswer as FractionAnswer;
+      const f = simplifyFraction(an, ad);
       expect(validateAnswer(p, `${f.numerator + f.denominator}/${f.denominator}`)).toBe(false);
     }
   });
@@ -255,25 +359,44 @@ describe('independent recomputation: pre-algebra', () => {
 });
 
 describe('independent recomputation: algebra 1', () => {
-  it('inequalities', () => {
-    for (const p of sample('inequalities')) {
-      const m = must(p.problemText.match(/\$(\d+)x \+ (\d+) (<|>|\\leq|\\geq) (\d+)\$/), p);
-      const [a, b, c] = [int(m[1]), int(m[2]), int(m[4])];
-      const op = { '<': '<', '>': '>', '\\leq': '≤', '\\geq': '≥' }[m[3]];
-      expect((c - b) % a).toBe(0);
-      expect(String(p.correctAnswer).replace(/\s/g, '')).toBe(`x${op}${(c - b) / a}`);
-      const ascii = { '<': '<', '>': '>', '≤': '<=', '≥': '>=' }[op!];
-      expect(validateAnswer(p, `x ${ascii} ${(c - b) / a}`)).toBe(true);
-      expect(validateAnswer(p, `x ${ascii} ${(c - b) / a + 1}`)).toBe(false);
+  it('inequalities: the solution set, with the direction reversed exactly when dividing by a negative', () => {
+    let negatives = 0;
+    for (const p of sample('inequalities', 60)) {
+      const m = must(p.problemText.match(/Solve for \$x\$: \$(.+) (<|>|\\leq|\\geq) (-?\d+)\$/), p);
+      const t = terms(m[1]);
+      const [a, b, c] = [coef(t, 'x'), coef(t, ''), int(m[3])];
+      expect(a).not.toBe(0);
+      expect(Math.abs((c - b) % a)).toBe(0);
+      const bound = (c - b) / a;
+      const shown = ({ '<': '<', '>': '>', '\\leq': '<=', '\\geq': '>=' } as Record<string, string>)[m[2]];
+      const reverse = ({ '<': '>', '>': '<', '<=': '>=', '>=': '<=' } as Record<string, string>);
+      const solution = a < 0 ? reverse[shown] : shown;
+      if (a < 0) negatives++;
+      expect(validateAnswer(p, `x ${solution} ${bound}`)).toBe(true);
+      expect(validateAnswer(p, `${bound} ${reverse[solution]} x`)).toBe(true);
+      expect(validateAnswer(p, `x ${reverse[solution]} ${bound}`)).toBe(false);   // direction not reversed / wrongly reversed
+      expect(validateAnswer(p, `x ${solution} ${bound + 1}`)).toBe(false);
+      const closed = solution.includes('=');
+      const interval = solution.startsWith('<') ? `(-inf, ${bound}${closed ? ']' : ')'}` : `${closed ? '[' : '('}${bound}, inf)`;
+      expect(validateAnswer(p, interval)).toBe(true);
+      // every x in the claimed set satisfies the displayed inequality, and a point outside does not
+      const holds = (x: number) => ({ '<': a * x + b < c, '>': a * x + b > c, '<=': a * x + b <= c, '>=': a * x + b >= c } as Record<string, boolean>)[shown];
+      const inside = solution.startsWith('<') ? bound - 0.5 : bound + 0.5;
+      const outside = solution.startsWith('<') ? bound + 0.5 : bound - 0.5;
+      expect(holds(inside)).toBe(true);
+      expect(holds(outside)).toBe(false);
+      expect(holds(bound)).toBe(closed);
     }
+    expect(negatives).toBeGreaterThan(0);
   });
 
   it('systems-of-equations (Cramer\'s rule)', () => {
     for (const p of sample('systems-of-equations')) {
       const lines = p.problemText.split('\n');
-      const e1 = must(lines[0].match(/\$(\d+)x \+ (\d+)y = (-?\d+)\$/), p);
-      const e2 = must(lines[1].match(/\$(\d+)x \+ (\d+)y = (-?\d+)\$/), p);
-      const [a1, b1, c1, a2, b2, c2] = [e1[1], e1[2], e1[3], e2[1], e2[2], e2[3]].map(int);
+      const e1 = must(lines[0].match(/^\$(.+) = (-?\d+)\$$/), p);
+      const e2 = must(lines[1].match(/^\$(.+) = (-?\d+)\$$/), p);
+      const [t1, t2] = [terms(e1[1]), terms(e2[1])];
+      const [a1, b1, c1, a2, b2, c2] = [coef(t1, 'x'), coef(t1, 'y'), int(e1[2]), coef(t2, 'x'), coef(t2, 'y'), int(e2[2])];
       const det = a1 * b2 - a2 * b1;
       expect(det).not.toBe(0);
       expect(num(p)).toBe((c1 * b2 - c2 * b1) / det);
@@ -297,10 +420,10 @@ describe('independent recomputation: algebra 1', () => {
 
   it('polynomials: coefficient of x', () => {
     for (const p of sample('polynomials')) {
-      const m = must(p.problemText.match(/\$\(\d+x\^2 ([+-]) (\d+)x [+-] \d+\) ([+-]) \(\d+x\^2 ([+-]) (\d+)x [+-] \d+\)\$/), p);
-      const b1 = (m[1] === '-' ? -1 : 1) * int(m[2]);
-      const b2 = (m[4] === '-' ? -1 : 1) * int(m[5]);
-      expect(num(p)).toBe(m[3] === '+' ? b1 + b2 : b1 - b2);
+      const m = must(p.problemText.match(/^\$\((.+)\) ([+-]) \((.+)\)\$/), p);
+      const b1 = coef(terms(m[1]), 'x');
+      const b2 = coef(terms(m[3]), 'x');
+      expect(num(p)).toBe(m[2] === '+' ? b1 + b2 : b1 - b2);
     }
   });
 });
@@ -350,12 +473,14 @@ describe('independent recomputation: geometry', () => {
       } else if ((m = t.match(/area of a circle with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(3.14 * r * r, 9);
-        expect(validateAnswer(p, (Math.PI * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (3.14 * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r).toFixed(2))).toBe(false); // instructed to use 3.14
         expect(validateAnswer(p, (3.14 * r * r + 0.4).toFixed(2))).toBe(false);
       } else if ((m = t.match(/circumference of a circle with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(2 * 3.14 * r, 9);
-        expect(validateAnswer(p, (2 * Math.PI * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * 3.14 * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * Math.PI * r).toFixed(2))).toBe(false);
         expect(validateAnswer(p, (2 * 3.14 * r + 0.4).toFixed(2))).toBe(false);
       } else throw new Error(`Could not parse: ${t}`);
     }
@@ -374,38 +499,78 @@ describe('independent recomputation: geometry', () => {
       } else if ((m = t.match(/volume of a cylinder with \$r=(\d+)\$, \$h=(\d+)\$/))) {
         const [r, h] = [int(m[1]), int(m[2])];
         expect(num(p)).toBeCloseTo(Math.round(3.14 * r * r * h * 100) / 100, 9);
-        expect(validateAnswer(p, (Math.PI * r * r * h).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (3.14 * r * r * h).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r * h).toFixed(2))).toBe(false);
       } else if ((m = t.match(/surface area of a cylinder with \$r=(\d+)\$, \$h=(\d+)\$/))) {
         const [r, h] = [int(m[1]), int(m[2])];
         expect(num(p)).toBeCloseTo(Math.round(2 * 3.14 * r * (r + h) * 100) / 100, 9);
-        expect(validateAnswer(p, (2 * Math.PI * r * (r + h)).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * 3.14 * r * (r + h)).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (2 * Math.PI * r * (r + h)).toFixed(2))).toBe(false);
       } else if ((m = t.match(/volume of a sphere with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(Math.round((4 / 3) * 3.14 * r ** 3 * 100) / 100, 9);
-        expect(validateAnswer(p, ((4 / 3) * Math.PI * r ** 3).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, ((4 / 3) * 3.14 * r ** 3).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, ((4 / 3) * Math.PI * r ** 3).toFixed(2))).toBe(false);
       } else if ((m = t.match(/surface area of a sphere with radius \$(\d+)\$/))) {
         const r = int(m[1]);
         expect(num(p)).toBeCloseTo(Math.round(4 * 3.14 * r * r * 100) / 100, 9);
-        expect(validateAnswer(p, (4 * Math.PI * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (4 * 3.14 * r * r).toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (4 * Math.PI * r * r).toFixed(2))).toBe(false);
       } else throw new Error(`Could not parse: ${t}`);
     }
   });
 });
 
+// "Does it converge? If so, to what?" is a two-part answer: the verdict and,
+// when it converges, the limit. Omitting either part earns no credit, and
+// every such question has the same shape, so the shape reveals nothing.
+const expectConvergence = (p: Problem, limit: number | null) => {
+  expect(p.answer.kind).toBe('multipart');
+  if (p.answer.kind === 'multipart') expect(p.answer.parts[0].label).toBe('Verdict');
+  if (limit === null) {
+    expect(validateAnswer(p, ['diverges', ''])).toBe(true);
+    expect(validateAnswer(p, ['converges', '0'])).toBe(false);
+    expect(validateAnswer(p, ['converges', '1'])).toBe(false);
+  } else {
+    expect(validateAnswer(p, ['converges', String(limit)])).toBe(true);
+    expect(validateAnswer(p, ['converges', ''])).toBe(false);          // limit omitted
+    expect(validateAnswer(p, ['converges', String(limit + 1)])).toBe(false);
+    expect(validateAnswer(p, ['diverges', ''])).toBe(false);
+    expect(validateAnswer(p, ['diverges', String(limit)])).toBe(false);
+  }
+  // single free-text answers are not accepted for a two-part question
+  expect(validateAnswer(p, 'yes')).toBe(false);
+  expect(validateAnswer(p, 'converges')).toBe(false);
+  expect(validateAnswer(p, String(limit ?? 'diverges'))).toBe(false);
+};
+/** The key's verdict and value of a convergence question. */
+const convergenceKey = (p: Problem): number | null => {
+  if (p.answer.kind !== 'multipart') throw new Error(`not a convergence question: ${p.problemText}`);
+  const [verdict, value] = p.answer.parts;
+  if (verdict.spec?.kind !== 'choice') throw new Error('no verdict');
+  if (verdict.spec.answer === 'diverges') return null;
+  return value.spec && value.spec.kind === 'number' ? value.spec.value : NaN;
+};
+
 describe('independent recomputation: algebra 2', () => {
   it('complex-numbers: imaginary coefficient', () => {
     for (const p of sample('complex-numbers')) {
-      const m = must(p.problemText.match(/\$\((-?\d+) ([+-]) (\d+)i\) ([+-]) \((-?\d+) ([+-]) (\d+)i\)\$/), p);
-      const b1 = (m[2] === '-' ? -1 : 1) * int(m[3]);
-      const b2 = (m[6] === '-' ? -1 : 1) * int(m[7]);
-      expect(num(p)).toBe(m[4] === '+' ? b1 + b2 : b1 - b2);
+      const m = must(p.problemText.match(/^\$\((.+)\) ([+-]) \((.+)\)\$/), p);
+      const b1 = coef(terms(m[1]), 'i');
+      const b2 = coef(terms(m[3]), 'i');
+      expect(num(p)).toBe(m[2] === '+' ? b1 + b2 : b1 - b2);
     }
   });
 
-  it('rational-expressions', () => {
+  it('rational-expressions: lowest terms are required, as the prompt says', () => {
     for (const p of sample('rational-expressions')) {
       const m = must(p.problemText.match(/\\frac\{(\d+)x\}\{(\d+)x\}/), p);
-      expect(num(p)).toBe(simplifyFraction(int(m[1]), int(m[2])).numerator);
+      expect(p.problemText).toMatch(/lowest terms/);
+      const [a, b] = [int(m[1]), int(m[2])];
+      const f = simplifyFraction(a, b);
+      expect(p.answer).toEqual({ kind: 'fraction', ...f, lowestTerms: true });
+      expect(validateAnswer(p, `${f.numerator}/${f.denominator}`)).toBe(true);
+      expect(validateAnswer(p, `${2 * f.numerator}/${2 * f.denominator}`)).toBe(false);
     }
   });
 
@@ -420,26 +585,62 @@ describe('independent recomputation: algebra 2', () => {
   });
 
   it('logarithms', () => {
-    for (const p of sample('logarithms')) {
-      const m = must(p.problemText.match(/\\log_\{(\d+)\}\((\d+)\)/), p);
-      expect(num(p)).toBeCloseTo(Math.log(int(m[2])) / Math.log(int(m[1])), 9);
+    for (const p of sample('logarithms', 60)) {
+      const t = p.problemText;
+      const base = int(must(t.match(/\\log_\{(\d+)\}/), p)[1]);
+      let arg: number;
+      let m: RegExpMatchArray | null;
+      if ((m = t.match(/\\left\(\\frac\{1\}\{(\d+)\}\\right\)/))) arg = 1 / int(m[1]);
+      else if ((m = t.match(/\\sqrt\[3\]\{(\d+)\}/))) arg = Math.cbrt(int(m[1]));
+      else if ((m = t.match(/\\sqrt\{(\d+)\}/))) arg = Math.sqrt(int(m[1]));
+      else arg = int(must(t.match(/\\log_\{\d+\}\((\d+)\)/), p)[1]);
+      expect(num(p)).toBeCloseTo(Math.log(arg) / Math.log(base), 9);
+      expect(validateAnswer(p, String(num(p) + 1))).toBe(false);
     }
   });
-
-  it('sequences-series and sequences (nth terms)', () => {
-    for (const p of [...sample('sequences-series'), ...sample('sequences', 80)]) {
+  it('sequences-series and sequences', () => {
+    for (const p of [...sample('sequences-series'), ...sample('sequences', 140)]) {
       const t = p.problemText;
       let m: RegExpMatchArray | null;
-      if ((m = t.match(/starts at \$(\d+)\$ with common difference \$d = (\d+)\$. Find the \$(\d+)\$th term/))) expect(num(p)).toBe(int(m[1]) + (int(m[3]) - 1) * int(m[2]));
-      else if ((m = t.match(/starts at \$(\d+)\$ with common ratio \$r = (\d+)\$. Find the \$(\d+)\$th term/))) expect(num(p)).toBe(int(m[1]) * int(m[2]) ** (int(m[3]) - 1));
-      else if ((m = t.match(/Find the \$(\d+)\$th term of the arithmetic sequence:\n\$a_1 = (\d+)\$, \$d = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) + (int(m[1]) - 1) * int(m[3]));
-      else if ((m = t.match(/Find the \$(\d+)\$th term of the geometric sequence:\n\$a_1 = (\d+)\$, \$r = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) * int(m[3]) ** (int(m[1]) - 1));
-      else if (/\\frac\{1\}\{n\}\$ converge/.test(t)) expect(p.correctAnswer).toBe('0');
-      else if (/\\frac\{n\+1\}\{n\}\$ converge/.test(t)) expect(p.correctAnswer).toBe('1');
-      else if (/\\frac\{n\}\{n\+1\}\$ is increasing/.test(t)) expect(p.correctAnswer).toBe('1');
-      else if (/\\frac\{1\}\{n!\}\$ is decreasing/.test(t)) expect(p.correctAnswer).toBe('0');
-      else if (/\(-1\)\^n\$ converge/.test(t) || /n\^2\$ converge/.test(t)) expect(p.correctAnswer).toBe('diverges');
-      else if (/monotonic\?/.test(t)) expect(p.correctAnswer).toBe('no');
+      const ordinal = /\$(\d+)\$(st|nd|rd|th) term/.exec(t);
+      if (ordinal) {
+        const n = int(ordinal[1]);
+        const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+        expect(ordinal[2], t).toBe(suffix);
+      }
+      if ((m = t.match(/starts at \$(\d+)\$ with common difference \$d = (\d+)\$. Find the \$(\d+)\$\w\w term/))) expect(num(p)).toBe(int(m[1]) + (int(m[3]) - 1) * int(m[2]));
+      else if ((m = t.match(/starts at \$(\d+)\$ with common ratio \$r = (\d+)\$. Find the \$(\d+)\$\w\w term/))) expect(num(p)).toBe(int(m[1]) * int(m[2]) ** (int(m[3]) - 1));
+      else if ((m = t.match(/Find the \$(\d+)\$\w\w term of the arithmetic sequence:\n\$a_1 = (\d+)\$, \$d = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) + (int(m[1]) - 1) * int(m[3]));
+      else if ((m = t.match(/Find the \$(\d+)\$\w\w term of the geometric sequence:\n\$a_1 = (\d+)\$, \$r = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) * int(m[3]) ** (int(m[1]) - 1));
+      else if ((m = t.match(/Does the sequence \$a_n = (.+)\$ converge or diverge/))) {
+        // numerically: does a_n settle, and to what?
+        const expr = compile(latexToExpr(m[1]));
+        const a = (n: number) => expr.evaluate({ n }) as number;
+        const [x1, x2, x3] = [a(1e12), a(1e12 + 1), a(2e12)];
+        const settles = Number.isFinite(x1) && Math.abs(x1 - x2) < 1e-4 && Math.abs(x1 - x3) < 1e-4;
+        const key = convergenceKey(p);
+        expect(key === null, `${t}: numerically ${settles ? `settles at ${x1}` : 'does not settle'}`).toBe(!settles);
+        if (key !== null) expect(Math.abs(key - x1)).toBeLessThan(1e-4);
+        expectConvergence(p, key);
+      } else if ((m = t.match(/The sequence \$a_n = (.+)\$ is increasing and bounded above by \$(\d+)\$/))) {
+        // the stated hypotheses hold, and the key is the limit
+        const a = (n: number) => evaluate(latexToExpr(m![1]), { n }) as number;
+        for (let n = 1; n < 200; n++) {
+          expect(a(n + 1)).toBeGreaterThan(a(n));
+          expect(a(n)).toBeLessThanOrEqual(int(m[2]));
+        }
+        const key = convergenceKey(p);
+        expect(key).not.toBeNull();
+        expect(Math.abs(key! - a(1e8))).toBeLessThan(1e-6);
+        expectConvergence(p, key);
+      } else if ((m = t.match(/Is the sequence \$a_n = (.+)\$ \(for \$n \\geq 1\$\) monotonic\?/))) {
+        const a = (n: number) => evaluate(latexToExpr(m![1]), { n }) as number;
+        const diffs = Array.from({ length: 60 }, (_, i) => a(i + 2) - a(i + 1));
+        const monotonic = diffs.every(d => d >= 0) || diffs.every(d => d <= 0);
+        expect(p.answer.kind).toBe('choice');
+        expect(ref(p), t).toBe(monotonic ? 'yes' : 'no');
+        expect(validateAnswer(p, monotonic ? 'no' : 'yes')).toBe(false);
+      }
       else throw new Error(`Unrecognised sequence problem: ${t}`);
     }
   });
@@ -469,72 +670,126 @@ describe('independent recomputation: trigonometry', () => {
     }
   });
 
-  it('trig-equations: the displayed exact value is the ratio of the stored angle', () => {
-    for (const p of sample('trig-equations')) {
-      const m = must(p.problemText.match(/\$\\(sin|cos|tan)\(\\theta\) = (.+)\$$/), p);
-      const value = EXACT_LATEX[m[2]];
+  it('trig-equations: every solution, and only solutions', () => {
+    for (const p of sample('trig-equations', 80)) {
+      const m = must(p.problemText.match(/\$\\(sin|cos|tan)\(\\theta\) = (.+?)\$/), p);
+      const value = exactValue(m[2]);
       expect(value, `unknown exact value ${m[2]}`).toBeDefined();
-      expect(trig(m[1], num(p))).toBeCloseTo(value, 12);
-      expect(num(p)).toBeGreaterThanOrEqual(0);
-      expect(num(p)).toBeLessThanOrEqual(90);
+      if (/0° \\leq \\theta \\leq 90°/.test(p.problemText)) {
+        expect(trig(m[1], num(p))).toBeCloseTo(value!, 12);
+        expect(num(p)).toBeGreaterThanOrEqual(0);
+        expect(num(p)).toBeLessThanOrEqual(90);
+        continue;
+      }
+      // all solutions in [0°, 360°), found by scanning every whole degree
+      const found: number[] = [];
+      for (let d = 0; d < 360; d++) {
+        const v = trig(m[1], d);
+        if (Number.isFinite(v) && Math.abs(v) < 1e6 && Math.abs(v - value!) < 1e-9) found.push(d);
+      }
+      expect(p.answer.kind).toBe('finiteSet');
+      if (p.answer.kind === 'finiteSet') expect([...p.answer.elements].sort((a, b) => a - b)).toEqual(found);
+      expect(validateAnswer(p, found.map(d => `${d}°`).join(', '))).toBe(true);
+      if (found.length > 1) expect(validateAnswer(p, String(found[0]))).toBe(false);
     }
   });
-
   it('inverse-trig: the stored angle is the principal value', () => {
-    for (const p of sample('inverse-trig')) {
+    for (const p of sample('inverse-trig', 60)) {
       const m = must(p.problemText.match(/\$\\(sin|cos|tan)\^\{-1\}\\left\((.+)\\right\)\$$/), p);
-      const value = EXACT_LATEX[m[2]];
+      const value = exactValue(m[2]);
       expect(value, `unknown exact value ${m[2]}`).toBeDefined();
       const inverse = { sin: Math.asin, cos: Math.acos, tan: Math.atan }[m[1]]!;
-      expect(inverse(value) * 180 / Math.PI).toBeCloseTo(num(p), 9);
+      expect(inverse(value!) * 180 / Math.PI).toBeCloseTo(num(p), 9);
+      if (num(p) < 0) expect(validateAnswer(p, String(num(p) + 360))).toBe(false); // coterminal, but not the principal value
     }
   });
-
   it('trig-identities: the canonical answer equals the left-hand side numerically', () => {
+    const rad = Math.PI / 180;
     const lhs: Record<string, (t: number) => number> = {
       '\\sin^2\\theta + \\cos^2\\theta': t => Math.sin(t) ** 2 + Math.cos(t) ** 2,
       '\\tan\\theta': Math.tan,
+      '\\cot\\theta': t => 1 / Math.tan(t),
+      '\\sec\\theta': t => 1 / Math.cos(t),
+      '\\csc\\theta': t => 1 / Math.sin(t),
       '1 + \\tan^2\\theta': t => 1 + Math.tan(t) ** 2,
-      '\\sin(90° - \\theta)': t => Math.sin(Math.PI / 2 - t),
-      '\\cos(90° - \\theta)': t => Math.cos(Math.PI / 2 - t),
+      '1 + \\cot^2\\theta': t => 1 + 1 / Math.tan(t) ** 2,
+      '\\sin(90° - \\theta)': t => Math.sin(90 * rad - t),
+      '\\cos(90° - \\theta)': t => Math.cos(90 * rad - t),
+      '\\tan(90° - \\theta)': t => Math.tan(90 * rad - t),
+      '\\sin(-\\theta)': t => Math.sin(-t),
+      '\\cos(-\\theta)': t => Math.cos(-t),
+      '\\sin(180° - \\theta)': t => Math.sin(180 * rad - t),
+      '\\cos(\\theta + 180°)': t => Math.cos(t + 180 * rad),
+      '\\sin(2\\theta)': t => Math.sin(2 * t),
+      '\\cos(2\\theta)': t => Math.cos(2 * t),
     };
-    for (const p of sample('trig-identities')) {
+    const seen = new Set<string>();
+    for (const p of sample('trig-identities', 120)) {
       const m = must(p.problemText.match(/identity: \$(.+) = \\;\?\$/), p);
       const f = lhs[m[1]];
       expect(f, `unknown identity ${m[1]}`).toBeDefined();
+      seen.add(m[1]);
       for (const t of [0.3, 0.8, 1.2, 2.4]) {
-        expect(evalAt(String(p.correctAnswer), { theta: t })).toBeCloseTo(f(t), 9);
+        expect(evalAt(ref(p), { theta: t })).toBeCloseTo(f(t), 9);
       }
+      // restating the left side is never accepted
+      const restated = m[1].replace(/\\(sin|cos|tan|cot|sec|csc)/g, '$1').replace(/°/g, '*pi/180').replace(/\\theta/g, '(theta)').replace(/(\d+)\*pi\/180/g, '($1*pi/180)');
+      expect(validateAnswer(p, restated), `accepted the prompt ${restated}`).toBe(false);
     }
+    expect(seen.size).toBe(Object.keys(lhs).length);
   });
 });
 
 describe('independent recomputation: pre-calculus', () => {
   it('functions', () => {
     for (const p of sample('functions')) {
-      const m = must(p.problemText.match(/\$f\(x\) = (\d+)x \+ (\d+)\$, find \$f\((-?\d+)\)\$/), p);
-      expect(num(p)).toBe(int(m[1]) * int(m[3]) + int(m[2]));
+      const m = must(p.problemText.match(/\$f\(x\) = (.+)\$, find \$f\((-?\d+)\)\$/), p);
+      const t = terms(m[1]);
+      expect(num(p)).toBe(coef(t, 'x') * int(m[2]) + coef(t, ''));
     }
   });
 
-  it('polynomial-functions: every accepted answer is a root', () => {
+  it('polynomial-functions: the answer is exactly the set of real roots', () => {
     for (const p of sample('polynomial-functions')) {
-      const m = must(p.problemText.match(/\$x\^2 ([+-]) (\d+)x ([+-]) (\d+) = 0\$/), p);
-      const s = (m[1] === '-' ? -1 : 1) * int(m[2]);
-      const c = (m[3] === '-' ? -1 : 1) * int(m[4]);
-      for (const root of [num(p), ...((p.acceptableAnswers ?? []) as number[])]) {
-        expect(root * root + s * root + c).toBe(0);
+      const m = must(p.problemText.match(/roots of \$(.+) = 0\$/), p);
+      const t = terms(m[1]);
+      expect(coef(t, 'x^2')).toBe(1);
+      const [s, c] = [coef(t, 'x'), coef(t, '')];
+      expect(p.answer.kind).toBe('finiteSet');
+      if (p.answer.kind !== 'finiteSet') continue;
+      const roots = p.answer.elements;
+      for (const root of roots) expect(root * root + s * root + c).toBe(0);
+      const disc = s * s - 4 * c;
+      expect(roots.length).toBe(disc > 0 ? 2 : disc === 0 ? 1 : 0);
+      expect(validateAnswer(p, roots.join(', '))).toBe(true);
+      expect(validateAnswer(p, [...roots].reverse().join(' and '))).toBe(true);
+      if (roots.length === 2) {
+        expect(validateAnswer(p, String(roots[0]))).toBe(false);  // incomplete
+        expect(validateAnswer(p, String(roots[1]))).toBe(false);
       }
+      expect(validateAnswer(p, [...roots, 99].join(', '))).toBe(false); // extra root
     }
   });
 
   it('rational-functions', () => {
-    for (const p of sample('rational-functions')) {
-      const m = must(p.problemText.match(/\\frac\{1\}\{x ([+-])(\d+)\}/), p);
-      expect(num(p)).toBe((m[1] === '-' ? 1 : -1) * int(m[2]));
+    for (const p of sample('rational-functions', 60)) {
+      const t = p.problemText;
+      const m = must(t.match(/\\frac\{(.+?)\}\{(.+?)\}\$/), p);
+      const [top, bottom] = [terms(m[1]), terms(m[2])];
+      const [a, b, c, d] = [coef(top, 'x'), coef(top, ''), coef(bottom, 'x'), coef(bottom, '')];
+      if (/vertical asymptote/.test(t)) {
+        const x = -d / c;
+        expect(num(p)).toBeCloseTo(x, 12);
+        expect(Math.abs(a * x + b)).toBeGreaterThan(1e-9); // the numerator does not cancel the pole
+      } else {
+        expect(/horizontal asymptote/.test(t)).toBe(true);
+        expect(a * d - b * c).not.toBe(0); // not a constant function
+        expect(num(p)).toBeCloseTo(a / c, 12);
+        const f = (x: number) => (a * x + b) / (c * x + d);
+        expect(f(1e9)).toBeCloseTo(num(p), 6);
+      }
     }
   });
-
   it('exponential-functions', () => {
     for (const p of sample('exponential-functions')) {
       const m = must(p.problemText.match(/starts at \$(\d+)\$ and doubles every period. What is the population after \$(\d+)\$/), p);
@@ -544,8 +799,8 @@ describe('independent recomputation: pre-calculus', () => {
 
   it('conic-sections', () => {
     for (const p of sample('conic-sections')) {
-      const m = must(p.problemText.match(/\$\(x([+-])(\d+)\)\^2 \+ \(y([+-])(\d+)\)\^2 = (\d+)\$/), p);
-      const h = (m[1] === '-' ? 1 : -1) * int(m[2]);
+      const m = must(p.problemText.match(/\$(?:\(x ([+-]) (\d+)\)|x)\^2 \+ (?:\(y ([+-]) (\d+)\)|y)\^2 = (\d+)\$/), p);
+      const h = m[1] === undefined ? 0 : (m[1] === '-' ? 1 : -1) * int(m[2]);
       const r2 = int(m[5]);
       if (/radius/.test(p.problemText)) expect(num(p) ** 2).toBe(r2);
       else expect(num(p)).toBe(h);
@@ -556,8 +811,9 @@ describe('independent recomputation: pre-calculus', () => {
 describe('independent recomputation: calculus 1', () => {
   it('limits', () => {
     for (const p of sample('limits')) {
-      const m = must(p.problemText.match(/\\lim_\{x \\to (\d+)\} \\left\[(\d+)x ([+-]) (\d+)\\right\]/), p);
-      expect(num(p)).toBe(int(m[2]) * int(m[1]) + (m[3] === '-' ? -1 : 1) * int(m[4]));
+      const m = must(p.problemText.match(/\\lim_\{x \\to (\d+)\} \\left\[(.+)\\right\]/), p);
+      const t = terms(m[2]);
+      expect(num(p)).toBe(coef(t, 'x') * int(m[1]) + coef(t, ''));
     }
   });
 
@@ -592,46 +848,51 @@ describe('independent recomputation: calculus 1', () => {
 
   it('integrals-basic: exponent', () => {
     for (const p of sample('integrals-basic')) {
-      const m = must(p.problemText.match(/\\int (\d+)x\^\{(\d+)\}/), p);
-      expect(num(p)).toBe(int(m[2]) + 1);
+      const m = must(p.problemText.match(/\\int (\d+)x(?:\^\{(\d+)\})?\\,dx/), p);
+      expect(num(p)).toBe((m[2] === undefined ? 1 : int(m[2])) + 1);
     }
   });
 
-  it('integration-substitution: u is the inner function', () => {
-    for (const p of sample('integration-substitution')) {
-      const m = must(p.problemText.match(/\\int 2x\(x\^2 \+ (\d+)\)\^\{(\d+)\}/), p);
-      expect(String(p.correctAnswer)).toBe(`x^2+${m[1]}`);
-      expect(validateAnswer(p, `x² + ${m[1]}`)).toBe(true);
-      expect(validateAnswer(p, `x^2+${int(m[1]) + 1}`)).toBe(false);
+  it('integration-substitution: du is exactly the remaining factor', () => {
+    for (const p of sample('integration-substitution', 60)) {
+      const m = must(p.problemText.match(/\\int (.+?)\(((?:\\sin\(x\)|e\^x|x\^\d) \+ \d+)\)\^\{(\d+)\}\\,dx/), p);
+      const [factor, inner] = [latexToExpr(m[1]), latexToExpr(m[2])];
+      // the reference u, and its derivative equals the displayed factor
+      const u = ref(p.answer.kind === 'anyOf' ? { ...p, answer: p.answer.options[0] } : p);
+      const du = derivative(u, 'x');
+      for (const x of [0.3, 0.9, 1.7]) {
+        expect(evalAt(u, { x })).toBeCloseTo(evaluate(inner, { x }) as number, 9);
+        expect(du.evaluate({ x })).toBeCloseTo(evaluate(factor, { x }) as number, 9);
+      }
+      expect(validateAnswer(p, `u = ${u}`)).toBe(true);
+      expect(validateAnswer(p, `u = (${u})^2`)).toBe(false);
     }
   });
 });
 
-describe('independent recomputation: calculus 2 — antiderivatives differentiate back to the integrand', () => {
-  const INTEGRANDS: [RegExp, string][] = [
-    [/\\int x \\cdot e\^x/, 'x*e^x'],
-    [/\\int x \\cdot \\cos\(x\)/, 'x*cos(x)'],
-    [/\\int x \\cdot \\sin\(x\)/, 'x*sin(x)'],
-    [/\\int \\ln\(x\)/, 'log(x)'],
-    [/\\int \\sin\^2\(x\)/, 'sin(x)^2'],
-    [/\\int \\cos\^2\(x\)/, 'cos(x)^2'],
-    [/\\int \\sin\(x\)\\cos\(x\)/, 'sin(x)*cos(x)'],
-    [/\\int \\tan\(x\)/, 'tan(x)'],
-    [/\\int \\sec\^2\(x\)\\tan\(x\)/, 'sec(x)^2*tan(x)'],
-  ];
+/** ∫_0^U g(u) du by Simpson's rule (for improper integrals after a change of variable). */
+const simpson = (g: (u: number) => number, U: number, n = 4000) => integrate(g, 0, U, n);
+
+describe('independent recomputation: calculus 2 — antiderivatives differentiate back to the displayed integrand', () => {
   it('integration-by-parts and trig-integrals', () => {
-    for (const p of [...sample('integration-by-parts', 20), ...sample('trig-integrals', 25)]) {
-      const entry = INTEGRANDS.find(([re]) => re.test(p.problemText));
-      if (!entry) throw new Error(`Unrecognised integral: ${p.problemText}`);
-      expect(p.equivalence).toBe('up-to-constant');
-      const d = derivative(String(p.correctAnswer), 'x');
-      for (const x of [0.4, 0.9, 1.3, 2.2]) {
-        expect(d.evaluate({ x })).toBeCloseTo(evaluate(entry[1], { x }), 8);
+    for (const p of [...sample('integration-by-parts', 80), ...sample('trig-integrals', 80)]) {
+      const m = must(p.problemText.match(/\\int (.+?)\\,dx\$/), p);
+      const shown = latexToExpr(m[1]);
+      if (p.answer.kind !== 'antiderivative') throw new Error(`not an antiderivative: ${p.problemText}`);
+      const d = derivative(ref(p), 'x');
+      let checked = 0;
+      for (const x of [0.3, 0.7, 1.1, 1.4, 2.3]) {
+        const want = evaluate(shown, { x }) as number;
+        if (!Number.isFinite(want) || Math.abs(want) > 1e6) continue;
+        // the integrand the grader differentiates against is the one displayed
+        expect(evaluate(p.answer.integrand, { x }), p.problemText).toBeCloseTo(want, 9);
+        expect(d.evaluate({ x }), p.problemText).toBeCloseTo(want, 6);
+        checked++;
       }
-      // grader: the stored form and a shifted copy pass; the integrand fails
-      expect(validateAnswer(p, String(p.correctAnswer))).toBe(true);
-      expect(validateAnswer(p, `${p.correctAnswer} + 5`)).toBe(true);
-      expect(validateAnswer(p, entry[1])).toBe(false);
+      expect(checked).toBeGreaterThanOrEqual(3);
+      expect(validateAnswer(p, ref(p))).toBe(true);
+      expect(validateAnswer(p, `${ref(p)} + 5`)).toBe(true);
+      expect(validateAnswer(p, `${ref(p)} + x`)).toBe(false);
     }
   });
 });
@@ -657,82 +918,172 @@ describe('independent recomputation: calculus 2 — values', () => {
     }
   });
 
-  it('improper integrals by numeric integration to a large bound', () => {
-    for (const p of sample('improper-integrals', 30)) {
+  it('improper integrals: verdict and value by numerical integration of the displayed integrand', () => {
+    for (const p of sample('improper-integrals', 120)) {
       const t = p.problemText;
-      if (/\\frac\{1\}\{x\^2\}/.test(t)) expect(num(p)).toBeCloseTo(integrate(x => 1 / (x * x), 1, 2000, 400000), 3);
-      else if (/\\frac\{1\}\{x\^3\}/.test(t)) expect(num(p)).toBeCloseTo(integrate(x => 1 / (x ** 3), 1, 500, 200000), 4);
-      else if (/e\^\{-x\}/.test(t)) expect(num(p)).toBeCloseTo(integrate(x => Math.exp(-x), 0, 60), 6);
-      else if (/\\frac\{1\}\{x\}\\,dx\$\nDoes/.test(t)) expect(p.correctAnswer).toBe('diverges');
-      else if (/\$p\$-series/.test(t)) expect(validateAnswer(p, 'p > 1')).toBe(true);
-      else throw new Error(`Unrecognised: ${t}`);
-    }
-  });
-
-  it('series sums by partial summation; verdicts by known tests', () => {
-    for (const p of sample('series-convergence', 40)) {
-      const t = p.problemText;
-      const geometric = t.match(/\\left\(\\frac\{(\d+)\}\{(\d+)\}\\right\)\^n/);
-      if (geometric && /What is the sum/.test(t)) {
-        const r = int(geometric[1]) / int(geometric[2]);
-        let s = 0; for (let n = 0; n < 200; n++) s += r ** n;
-        expect(num(p)).toBeCloseTo(s, 9);
-      } else if (geometric) {
-        expect(p.correctAnswer).toBe(int(geometric[1]) > int(geometric[2]) ? 'diverges' : 'converges');
-      } else if (/\\frac\{1\}\{n\}\$ converge/.test(t)) expect(p.correctAnswer).toBe('diverges');
-      else if (/\\frac\{1\}\{n\^2\}\$ converge or diverge/.test(t)) expect(p.correctAnswer).toBe('converges');
-      else if (/\\frac\{n!\}\{2\^n\}/.test(t) || /\\frac\{n\}\{n\+1\}/.test(t)) expect(p.correctAnswer).toBe('diverges');
-      else if (/\\frac\{\(-1\)\^\{n\+1\}\}\{n\}/.test(t)) expect(p.correctAnswer).toBe('converges');
-      else if (/Nth-Term Test tell us it converges/.test(t)) expect(p.correctAnswer).toBe('no');
-      else throw new Error(`Unrecognised: ${t}`);
-    }
-  });
-
-  it('power series radii by the ratio test on coefficients', () => {
-    const radius: [RegExp, number | string][] = [
-      [/\\frac\{x\^n\}\{n!\}/, 'infinity'],
-      [/\\sum_\{n=0\}\^\{\\infty\} x\^n\$/, 1],
-      [/nx\^n/, 1],
-      [/\\frac\{x\^n\}\{2\^n\}/, 2],
-      [/\\frac\{x\^n\}\{n\}\$/, 1],
-    ];
-    for (const p of sample('power-series', 25)) {
-      const entry = radius.find(([re]) => re.test(p.problemText));
-      if (!entry) throw new Error(`Unrecognised: ${p.problemText}`);
-      expect(p.correctAnswer).toBe(entry[1]);
-    }
-  });
-
-  it('Maclaurin polynomials approximate their functions with the expected error order', () => {
-    const targets: [RegExp, (x: number) => number, number][] = [
-      [/for \$e\^x\$\?/, Math.exp, 4],
-      [/\\sin\(x\)\$\?/, Math.sin, 7],
-      [/\\cos\(x\)\$\?/, Math.cos, 6],
-      [/\\frac\{1\}\{1-x\}/, x => 1 / (1 - x), 4],
-    ];
-    for (const p of sampleWhere('taylor-maclaurin', q => q.answerType === 'expression', 12)) {
-      const entry = targets.find(([re]) => re.test(p.problemText));
-      if (!entry) throw new Error(`Unrecognised: ${p.problemText}`);
-      const [, f, order] = entry;
-      for (const x of [0.05, 0.1]) {
-        const err = Math.abs(evalAt(String(p.correctAnswer), { x }) - f(x));
-        expect(err).toBeLessThan(2 * Math.pow(x, order)); // truncation error is O(x^order)
+      if (/For which real \$p\$/.test(t)) {
+        const atInfinity = /int_1\^\{\\infty\}/.test(t);
+        expect(validateAnswer(p, atInfinity ? 'p > 1' : 'p < 1')).toBe(true);
+        expect(validateAnswer(p, atInfinity ? 'p >= 1' : 'p <= 1')).toBe(false);
+        continue;
       }
+      const m = must(t.match(/\\int_(\d)\^\{(\\infty|1)\} (.+?)\\,dx\$ converge/), p);
+      const integrand = compile(latexToExpr(m[3]));
+      const f = (x: number) => integrand.evaluate({ x }) as number;
+      // change of variable so the improper end is at u = ∞, then integrate to two cutoffs
+      const g = m[1] === '1' ? (u: number) => f(Math.exp(u)) * Math.exp(u)      // ∫_1^∞ f(x) dx, x = e^u
+        : m[2] === '1' ? (u: number) => f(Math.exp(-u)) * Math.exp(-u)           // ∫_0^1 f(x) dx, x = e^{-u}
+          : (u: number) => f(u);                                                  // ∫_0^∞ f(x) dx
+      const [I1, I2] = [simpson(g, 20), simpson(g, 40, 8000)];
+      const key = convergenceKey(p);
+      if (key === null) expect(I2 - I1, t).toBeGreaterThan(1);
+      else {
+        expect(Math.abs(I2 - key), t).toBeLessThan(2e-3 * Math.max(1, key));
+        expect(Math.abs(I2 - I1), t).toBeLessThan(0.05 * Math.max(1, key));
+      }
+      expectConvergence(p, key);
     }
-    const [alt] = sampleWhere('taylor-maclaurin', q => /Alternating Series Remainder/.test(q.problemText), 1);
-    expect(num(alt)).toBe(0.2);
-    expect(validateAnswer(alt, '1/5')).toBe(true);
+  });
+
+  it('series: verdicts and sums recomputed from the displayed terms', () => {
+    for (const p of sample('series-convergence', 150)) {
+      const t = p.problemText;
+      const m = must(t.match(/\\sum_\{n=(\d)\}\^\{\\infty\} (.+?)\$/), p);
+      const start = int(m[1]);
+      const expr = compile(latexToExpr(m[2]));
+      const a = (n: number) => expr.evaluate({ n }) as number;
+      if (/give its sum/.test(t)) {
+        // geometric: r from consecutive terms
+        const r = a(start + 1) / a(start);
+        const key = convergenceKey(p);
+        if (Math.abs(r) < 1) {
+          let sum = 0;
+          for (let n = start; n < start + 3000; n++) sum += a(n);
+          expect(key, t).not.toBeNull();
+          expect(key!).toBeCloseTo(sum, 9);
+        } else {
+          expect(key, t).toBeNull();
+          expect(Math.abs(a(start + 100))).toBeGreaterThanOrEqual(Math.abs(a(start)));
+        }
+        expectConvergence(p, key);
+        continue;
+      }
+      const verdict = ref(p);
+      if (/Ratio Test/.test(t)) {
+        const L = Math.abs(a(61) / a(60));
+        expect(Math.abs(L - 1), t).toBeGreaterThan(0.05);
+        expect(verdict, t).toBe(L < 1 ? 'converges' : 'diverges');
+      } else if (/Integral Test/.test(t)) {
+        // Σ 1/(n (ln n)^p): p read back from the displayed terms at two points (so the
+        // terms really have that form); the series converges exactly when p > 1
+        expect(start, t).toBe(2);
+        const pAt = (n: number) => -Math.log(n * a(n)) / Math.log(Math.log(n));
+        const pEstimate = pAt(1e6);
+        expect(pAt(1e3), t).toBeCloseTo(pEstimate, 9);
+        expect(Math.abs(pEstimate - 1) < 1e-9 || Math.abs(pEstimate - 1) > 0.1, t).toBe(true);
+        expect(verdict, t).toBe(pEstimate > 1 + 1e-9 ? 'converges' : 'diverges');
+      } else if (/nth\$-term test/.test(t)) {
+        expect(Math.abs(a(1e7)), t).toBeGreaterThan(0.05);
+        expect(verdict).toBe('diverges');
+      } else if (/alternating series/.test(t)) {
+        const b = (n: number) => Math.abs(a(n));
+        const toZero = b(1e7) < 1e-2;
+        const decreasing = Array.from({ length: 50 }, (_, i) => b(i + 2) <= b(i + 1)).every(Boolean);
+        expect(verdict, t).toBe(toZero && decreasing ? 'converges' : 'diverges');
+      } else {
+        // p-series: p from the decay rate of the terms
+        const pEstimate = Math.log(a(1e6) / a(2e6)) / Math.log(2);
+        expect(Math.abs(pEstimate - 1) < 1e-6 || Math.abs(pEstimate - 1) > 0.1, t).toBe(true);
+        expect(verdict, t).toBe(pEstimate > 1 + 1e-6 ? 'converges' : 'diverges');
+      }
+      expect(validateAnswer(p, verdict === 'converges' ? 'diverges' : 'converges')).toBe(false);
+    }
+  });
+
+  it('power series radii by the ratio test on the displayed coefficients', () => {
+    for (const p of sample('power-series', 100)) {
+      const m = must(p.problemText.match(/\\sum_\{n=0\}\^\{\\infty\} (.+)\$/), p);
+      const coefficientTex = m[1].replace(/\((x [+-] \d+)\)\^n/, '(1)').replace(/x\^n/, '(1)');
+      const coefficient = compile(latexToExpr(coefficientTex));
+      const c = (n: number) => coefficient.evaluate({ n }) as number;
+      const n = coefficientTex.includes('!') ? 60 : 200;
+      const L = Math.abs(c(n + 1) / c(n));
+      const R = num(p);
+      if (R === Infinity) expect(L, p.problemText).toBeLessThan(0.1);
+      else if (R === 0) expect(L, p.problemText).toBeGreaterThan(30);
+      else expect(1 / L, p.problemText).toBeCloseTo(R, 1);
+      expect(validateAnswer(p, 'infinity')).toBe(R === Infinity);
+      expect(validateAnswer(p, '∞')).toBe(R === Infinity);
+    }
+  });
+
+  it('Taylor: polynomials, coefficients and error bounds recomputed from the prompt', () => {
+    for (const p of sample('taylor-maclaurin', 150)) {
+      const t = p.problemText;
+      let m: RegExpMatchArray | null;
+      if ((m = t.match(/Maclaurin polynomial of degree \$(\d)\$ for \$(.+)\$\./)) || (m = t.match(/Maclaurin series for \$\\(sin|cos)\((.*?)\)\$\?/))) {
+        // the remainder is the first omitted term to leading order
+        let f: (x: number) => number;
+        let next: (x: number) => number;
+        if (m[1] === 'sin' || m[1] === 'cos') {
+          const c = m[2] === 'x' ? 1 : int(m[2].replace('x', ''));
+          f = m[1] === 'sin' ? x => Math.sin(c * x) : x => Math.cos(c * x);
+          next = m[1] === 'sin' ? x => (c * x) ** 7 / 5040 : x => (c * x) ** 6 / 720;
+        } else {
+          const d = int(m[1]);
+          const fx = latexToExpr(m[2]);
+          f = x => evaluate(fx, { x }) as number;
+          const e = m[2].match(/^e\^\{(-?\d*)x\}$/);
+          const g = m[2].match(/^\\frac\{1\}\{1 ([+-]) (\d*)x\}$/);
+          if (e) { const c = e[1] === '' ? 1 : e[1] === '-' ? -1 : int(e[1]); next = x => Math.abs(c * x) ** (d + 1) / [1, 1, 2, 6, 24, 120][d + 1]; }
+          else if (g) { const c = (g[1] === '-' ? 1 : -1) * (g[2] === '' ? 1 : int(g[2])); next = x => Math.abs(c * x) ** (d + 1); }
+          else throw new Error(`Unrecognised function: ${t}`);
+        }
+        const P = (x: number) => evalAt(ref(p), { x });
+        for (const x of [0.01, -0.01]) {
+          const ratio = Math.abs(P(x) - f(x)) / Math.abs(next(x));
+          expect(ratio, `${t}: error/next term = ${ratio}`).toBeGreaterThan(0.5);
+          expect(ratio, `${t}: error/next term = ${ratio}`).toBeLessThan(2);
+        }
+      } else if ((m = t.match(/coefficient of \$x\^\{(\d)\}\$ in the Maclaurin series for \$e\^\{(-?\d*)x\}\$/))) {
+        const [k, c] = [int(m[1]), m[2] === '' ? 1 : m[2] === '-' ? -1 : int(m[2])];
+        expect(num(p)).toBeCloseTo(c ** k / [1, 1, 2, 6, 24][k], 12);
+      } else if ((m = t.match(/coefficient of \$\(x - (\d)\)\^\{(\d)\}\$ in the Taylor series of \$e\^x\$/))) {
+        expect(num(p)).toBeCloseTo(Math.exp(int(m[1])) / [1, 1, 2, 6, 24][int(m[2])], 12);
+      } else if ((m = t.match(/coefficient of \$x\^\{(\d)\}\$ in the Maclaurin series for \$\\frac\{1\}\{1 ([+-]) (\d*)x\}\$/))) {
+        const c = (m[2] === '-' ? 1 : -1) * (m[3] === '' ? 1 : int(m[3]));
+        expect(num(p)).toBe(c ** int(m[1]));
+      } else if ((m = t.match(/degree-\$(\d)\$ Maclaurin polynomial at \$x = (-?[\d.]+)\$/))) {
+        const [n, h] = [int(m[1]), Number(m[2])];
+        const bound = Math.exp(Math.max(h, 0)) * Math.abs(h) ** (n + 1) / [1, 1, 2, 6, 24, 120][n + 1];
+        let taylor = 0;
+        for (let k = 0; k <= n; k++) taylor += h ** k / [1, 1, 2, 6, 24][k];
+        expect(num(p)).toBeCloseTo(bound, 12);
+        expect(Math.abs(Math.exp(h) - taylor)).toBeLessThanOrEqual(bound);
+        expect(validateAnswer(p, bound.toPrecision(2))).toBe(true);
+        expect(validateAnswer(p, (Number(bound.toPrecision(2)) * 1.1).toPrecision(2))).toBe(false);
+      } else if ((m = t.match(/\\frac\{\(-1\)\^\{n\+1\}\}\{(n|n\^\{2\})\}\$ is approximated by its first \$(\d+)\$ terms/))) {
+        const [pw, N] = [m[1] === 'n' ? 1 : 2, int(m[2])];
+        const S = pw === 1 ? Math.LN2 : Math.PI ** 2 / 12;
+        let SN = 0;
+        for (let n = 1; n <= N; n++) SN += (-1) ** (n + 1) / n ** pw;
+        expect(num(p)).toBeCloseTo(1 / (N + 1) ** pw, 12);
+        expect(Math.abs(S - SN)).toBeLessThanOrEqual(num(p));
+      } else throw new Error(`Unrecognised: ${t}`);
+    }
   });
 
   it('parametric equations', () => {
     for (const p of sample('parametric-equations', 60)) {
       const t = p.problemText;
       let m: RegExpMatchArray | null;
-      if ((m = t.match(/\$x = t \+ (\d+)\$, \$y = t\^2 ([+-]) (\d+)\$/))) {
-        const a = int(m[1]); const b = (m[2] === '-' ? -1 : 1) * int(m[3]);
+      if ((m = t.match(/\$x = t \+ (\d+)\$, \$y = t\^2(?: ([+-]) (\d+))?\$/))) {
+        const a = int(m[1]); const b = m[2] === undefined ? 0 : (m[2] === '-' ? -1 : 1) * int(m[3]);
         for (const tt of [0.3, 1.7, -2.1]) {
-          expect(evalAt(String(p.correctAnswer), { x: tt + a })).toBeCloseTo(tt * tt + b, 9);
+          expect(evalAt(ref(p), { x: tt + a })).toBeCloseTo(tt * tt + b, 9);
         }
+        expect(validateAnswer(p, `y = ${ref(p)}`)).toBe(true);
+        expect(validateAnswer(p, `x = ${ref(p)}`)).toBe(false);
       } else if ((m = t.match(/\$x = t\^2\$, \$y = t\^3\$\nFind \$\\frac\{dy\}\{dx\}\$ at \$t = (\d+)\$/))) {
         const tt = int(m[1]);
         expect(num(p)).toBeCloseTo(3 * tt * tt / (2 * tt), 12);
@@ -744,69 +1095,88 @@ describe('independent recomputation: calculus 2 — values', () => {
   });
 
   it('polar coordinates with atan2 / sqrt / cos / sin', () => {
-    for (const p of sample('polar-coordinates', 80)) {
+    for (const p of sample('polar-coordinates', 120)) {
       const t = p.problemText;
       let m: RegExpMatchArray | null;
-      if ((m = t.match(/Convert \$\((\d+), (\d+)\)\$ from Cartesian to polar.\nWhat is \$r\$/))) {
+      if ((m = t.match(/Convert \$\((-?\d+), (-?\d+)\)\$ from Cartesian to polar.\nWhat is \$r\$/))) {
         const r = Math.hypot(int(m[1]), int(m[2]));
         expect(num(p)).toBeCloseTo(r, 12);
         expect(validateAnswer(p, r.toFixed(2))).toBe(true);
         expect(validateAnswer(p, (Number(r.toFixed(2)) + 0.02).toFixed(2))).toBe(false);
-      } else if ((m = t.match(/Convert \$\((\d+), (\d+)\)\$ from Cartesian to polar.\nWhat is \$\\theta\$/))) {
+      } else if ((m = t.match(/Convert \$\((-?\d+), (-?\d+)\)\$ from Cartesian to polar.\nWhat is \$\\theta\$/))) {
         const deg = ((Math.atan2(int(m[2]), int(m[1])) * 180 / Math.PI) + 360) % 360;
         expect(num(p)).toBeCloseTo(deg, 9);
-      } else if ((m = t.match(/\$\(r=(\d+),\\; \\theta=(\d+)°\)\$ to Cartesian.\nWhat is \$x\$/))) {
-        const x = int(m[1]) * Math.cos(int(m[2]) * Math.PI / 180);
-        expect(num(p)).toBeCloseTo(x, 9);
-        expect(validateAnswer(p, x.toFixed(2))).toBe(true);
-      } else if ((m = t.match(/\$\(r=(\d+),\\; \\theta=(\d+)°\)\$ to Cartesian.\nWhat is \$y\$/))) {
-        expect(num(p)).toBeCloseTo(int(m[1]) * Math.sin(int(m[2]) * Math.PI / 180), 9);
-      } else if (/What type of curve/.test(t)) {
-        expect(/\\theta = /.test(t) ? 'line' : 'circle').toBe(p.correctAnswer);
+        expect(validateAnswer(p, `${Math.round(deg)}°`)).toBe(true);
+        expect(validateAnswer(p, `${Math.round(deg) + 180}`)).toBe(false);
+      } else if ((m = t.match(/\$\(r=(\d+),\\; \\theta=(\d+)°\)\$ to Cartesian.\nWhat is \$(x|y)\$/))) {
+        const angle = int(m[2]) * Math.PI / 180;
+        const v = int(m[1]) * (m[3] === 'x' ? Math.cos(angle) : Math.sin(angle));
+        expect(num(p)).toBeCloseTo(v, 9);
+        expect(validateAnswer(p, v.toFixed(2))).toBe(true);
+        expect(validateAnswer(p, (v + 0.05).toFixed(2))).toBe(false);
+      } else if ((m = t.match(/What type of curve is (.+)\?$/))) {
+        const eq = m[1];
+        const line = /\\theta = /.test(eq) || /r\\(cos|sin)\(\\theta\) = /.test(eq);
+        expect(ref(p), eq).toBe(line ? 'line' : 'circle');
+        if (/\\theta = /.test(eq)) expect(eq).toMatch(/allowed to be negative/); // the convention that makes "line" the unique answer
       } else throw new Error(`Could not parse: ${t}`);
     }
   });
 
   it('integration applications by Simpson\'s rule', () => {
-    for (const p of sample('integration-applications', 60)) {
+    for (const p of sample('integration-applications', 80)) {
       const t = p.problemText;
       let m: RegExpMatchArray | null;
       let expected: number;
-      if ((m = t.match(/revolving \$y = x\$ around the x-axis from \$x = 0\$ to \$x = (\d+)\$/))) {
-        const a = int(m[1]); expected = Math.PI * integrate(x => x * x, 0, a);
-      } else if (/between \$y = x\$ and \$y = x\^2\$/.test(t)) {
-        expected = Math.PI * integrate(x => x * x - x ** 4, 0, 1);
-      } else if ((m = t.match(/shell method[\s\S]*from \$x=0\$ to \$x=(\d+)\$/))) {
-        const a = int(m[1]); expected = 2 * Math.PI * integrate(x => x * x * x, 0, a);
-      } else if ((m = t.match(/arc length of \$y = x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
-        const a = int(m[1]); expected = integrate(() => Math.SQRT2, 0, a);
-      } else if ((m = t.match(/surface area when \$y = x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
-        const a = int(m[1]); expected = 2 * Math.PI * integrate(x => x * Math.SQRT2, 0, a);
+      if ((m = t.match(/revolving \$y = (\d*)x\$ around the x-axis from \$x = 0\$ to \$x = (\d+)\$/))) {
+        const [k, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])]; expected = Math.PI * integrate(x => (k * x) ** 2, 0, a);
+      } else if ((m = t.match(/between \$y = (\d*)x\$ and \$y = x\^2\$ \(from \$x=0\$ to \$x=(\d+)\$\)/))) {
+        const [c, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])];
+        expect(a).toBe(c); // the curves meet at x = 0 and x = c
+        expected = Math.PI * integrate(x => (c * x) ** 2 - x ** 4, 0, c);
+      } else if ((m = t.match(/shell method[\s\S]*\$y = (\d*)x\^2\$ \(from \$x=0\$ to \$x=(\d+)\$\)/))) {
+        const [k, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])]; expected = 2 * Math.PI * integrate(x => x * k * x * x, 0, a);
+      } else if ((m = t.match(/arc length of \$y = (.+)\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
+        const slope = coef(terms(m[1]), 'x');
+        expected = integrate(() => Math.sqrt(1 + slope * slope), 0, int(m[2]));
+      } else if ((m = t.match(/surface area when \$y = (\d*)x\$ from \$x = 0\$ to \$x = (\d+)\$/))) {
+        const [k, a] = [m[1] === '' ? 1 : int(m[1]), int(m[2])];
+        expected = 2 * Math.PI * integrate(x => k * x * Math.sqrt(1 + k * k), 0, a);
       } else throw new Error(`Could not parse: ${t}`);
       expect(num(p)).toBeCloseTo(expected, 6);
-      const places = p.roundTo!;
+      const tolerance = numberSpec(p).tolerance;
+      if (tolerance.kind !== 'decimalPlaces') throw new Error(`expected a rounding tolerance: ${t}`);
+      const places = tolerance.places;
       expect(validateAnswer(p, expected.toFixed(places))).toBe(true);
       expect(validateAnswer(p, (Number(expected.toFixed(places)) + 2 * Math.pow(10, -places)).toFixed(places))).toBe(false);
     }
   });
-
-  it('trig substitutions turn the radicand into a perfect square; quarter circle integrates to π/4', () => {
-    for (const p of sample('trig-substitution', 30)) {
+  it('trig substitutions turn the displayed radicand into a perfect square; quarter circles integrate to πr²/4', () => {
+    for (const p of sample('trig-substitution', 80)) {
       const t = p.problemText;
-      if (/4 - x\^2/.test(t)) {
-        for (const th of [0.3, 1.1]) expect(Math.sqrt(4 - (2 * Math.sin(th)) ** 2)).toBeCloseTo(2 * Math.cos(th), 12);
-        expect(validateAnswer(p, 'x = 2 sin(theta)')).toBe(true);
-      } else if (/x\^2 \+ 9/.test(t)) {
-        for (const th of [0.3, 1.1]) expect(Math.sqrt((3 * Math.tan(th)) ** 2 + 9)).toBeCloseTo(3 / Math.cos(th), 12);
-        expect(validateAnswer(p, 'x = 3tan(θ)')).toBe(true);
-      } else if (/x\^2 - 16/.test(t)) {
-        for (const th of [0.3, 1.1]) expect(Math.sqrt((4 / Math.cos(th)) ** 2 - 16)).toBeCloseTo(4 * Math.tan(th), 12);
-        expect(validateAnswer(p, 'x = 4sec(θ)')).toBe(true);
-      } else if (/quarter-circle/.test(t)) {
-        expect(num(p)).toBeCloseTo(integrate(x => Math.sqrt(1 - x * x), 0, 1, 20000), 3);
-        expect(validateAnswer(p, 'pi/4')).toBe(true);
-        expect(validateAnswer(p, '0.79')).toBe(false);
-      } else throw new Error(`Unrecognised: ${t}`);
+      let m: RegExpMatchArray | null;
+      if ((m = t.match(/\\int_0\^\{(\d+)\} \\sqrt\{(\d+) - x\^2\}/))) {
+        const r = int(m[1]);
+        expect(int(m[2])).toBe(r * r);
+        expect(num(p)).toBeCloseTo(integrate(x => Math.sqrt(Math.max(0, r * r - x * x)), 0, r, 20000), 2);
+        expect(validateAnswer(p, `${r * r}*pi/4`)).toBe(true);
+        expect(validateAnswer(p, (Math.PI * r * r / 4).toFixed(2))).toBe(false);
+        continue;
+      }
+      const [minus, plus, over] = [t.match(/\{(\d+) - x\^2\}/), t.match(/x\^2 \+ (\d+)/), t.match(/x\^2 - (\d+)/)];
+      const a2 = int((minus ?? plus ?? over ?? must(null, p))[1]);
+      const a = Math.sqrt(a2);
+      expect(Number.isInteger(a)).toBe(true);
+      const [sub, check] = minus ? ['sin', (th: number) => [Math.sqrt(a2 - (a * Math.sin(th)) ** 2), a * Math.cos(th)]]
+        : plus ? ['tan', (th: number) => [Math.sqrt((a * Math.tan(th)) ** 2 + a2), a / Math.cos(th)]]
+          : ['sec', (th: number) => [Math.sqrt((a / Math.cos(th)) ** 2 - a2), a * Math.tan(th)]];
+      for (const th of [0.3, 1.1]) {
+        const [radical, simplified] = check(th);
+        expect(radical).toBeCloseTo(simplified, 9);
+      }
+      expect(validateAnswer(p, `x = ${a} ${sub}(theta)`), t).toBe(true);
+      expect(validateAnswer(p, `x = ${a + 1} ${sub}(theta)`), t).toBe(false);
+      expect(validateAnswer(p, `x = ${a} ${sub === 'sin' ? 'tan' : 'sin'}(theta)`), t).toBe(false);
     }
   });
 });
@@ -816,38 +1186,19 @@ describe('independent recomputation: calculus 2 — values', () => {
 // ===========================================================================
 
 describe('every family rejects a perturbed answer', () => {
-  const topics: TopicId[] = [
-    'addition', 'subtraction', 'multiplication', 'division', 'simple-linear-equations', 'fractions-basic', 'decimals',
-    'order-of-operations', 'integers', 'multi-step-equations', 'inequalities', 'systems-of-equations', 'exponents',
-    'polynomials', 'factoring', 'quadratic-equations', 'angles', 'triangles', 'pythagorean-theorem', 'area-perimeter',
-    'circles', 'volume-surface-area', 'complex-numbers', 'rational-expressions', 'radicals', 'logarithms',
-    'sequences-series', 'trig-ratios', 'trig-special-angles', 'trig-identities', 'trig-equations', 'inverse-trig',
-    'functions', 'polynomial-functions', 'rational-functions', 'exponential-functions', 'conic-sections', 'limits',
-    'derivatives-basic', 'derivatives-product-quotient', 'chain-rule', 'integrals-basic', 'integration-substitution',
-    'integration-by-parts', 'trig-integrals', 'partial-fractions', 'improper-integrals', 'sequences', 'series-convergence',
-    'power-series', 'taylor-maclaurin', 'parametric-equations', 'polar-coordinates', 'integration-applications', 'trig-substitution',
-  ];
-  for (const topic of topics) {
+  for (const topic of GENERATORS.keys()) {
     it(topic, () => {
       for (const p of sample(topic, 15)) {
-        if (typeof p.correctAnswer === 'number') {
-          expect(validateAnswer(p, String(p.correctAnswer)), p.problemText).toBe(true);
-          const alts = new Set([p.correctAnswer, ...((p.acceptableAnswers ?? []).filter((a): a is number => typeof a === 'number'))]);
-          const wrong = [p.correctAnswer + 1, p.correctAnswer - 1, p.correctAnswer + 2].find(w => !alts.has(w))!;
-          expect(validateAnswer(p, String(wrong)), `${p.problemText} accepted ${wrong}`).toBe(false);
-          expect(validateAnswer(p, 'NaN')).toBe(false);
-          expect(validateAnswer(p, '0/0')).toBe(false);
-        } else if (typeof p.correctAnswer === 'string') {
-          expect(validateAnswer(p, p.correctAnswer), p.problemText).toBe(true);
-          const s = p.correctAnswer;
-          const wrong = /^[a-z]+$/i.test(s) ? 'wronganswer' : /[<>≤≥]/.test(s) ? s.replace(/[<>≤≥]/, c => ({ '<': '>', '>': '<', '≤': '≥', '≥': '≤' }[c]!)) : s.includes('=') ? s.replace('=', '=7*') : `(${s})+x^7`;
-          expect(validateAnswer(p, wrong), `${p.problemText} accepted ${wrong}`).toBe(false);
-          expect(validateAnswer(p, '0/0')).toBe(false);
-        } else {
-          const f = p.correctAnswer as FractionAnswer;
-          expect(validateAnswer(p, `${f.numerator}/${f.denominator}`)).toBe(true);
-          expect(validateAnswer(p, `${f.numerator + f.denominator}/${f.denominator}`)).toBe(false);
+        const correct = canonicalInput(p.answer);
+        expect(validateAnswer(p, correct), `${p.problemText} rejected ${JSON.stringify(correct)}`).toBe(true);
+        for (const wrong of wrongInputs(p.answer)) {
+          expect(validateAnswer(p, wrong), `${p.problemText} accepted ${JSON.stringify(wrong)}`).toBe(false);
         }
+        // a single string for a multipart answer, or several strings for a single one, is never an answer
+        if (Array.isArray(correct)) expect(validateAnswer(p, correct.join(' '))).toBe(false);
+        else expect(validateAnswer(p, [correct])).toBe(false);
+        expect(validateAnswer(p, '0/0')).toBe(false);
+        expect(validateAnswer(p, '')).toBe(false);
       }
     });
   }
