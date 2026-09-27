@@ -27,6 +27,10 @@ export const checkSpec = (spec: AnswerSpec, path = 'answer'): string[] => {
   const out: string[] = [];
   const bad = (msg: string) => out.push(`${path}: ${msg}`);
   switch (spec.kind) {
+    case 'limit':
+      if (spec.value !== null && Number.isNaN(spec.value)) bad('limit value is NaN (use null for "does not exist")');
+      out.push(...checkSpec({ kind: 'number', value: spec.value ?? 0, tolerance: spec.tolerance, extended: true }, path));
+      break;
     case 'number': {
       if (Number.isNaN(spec.value) || (!Number.isFinite(spec.value) && !spec.extended)) bad(`value ${spec.value} is not a finite number (set extended for ±∞)`);
       const t = spec.tolerance;

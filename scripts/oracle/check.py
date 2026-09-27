@@ -112,16 +112,22 @@ def check(claim):
             return 'refuted'
         return 'proved'
     if kind == 'limit':
+        # value: a number, 'oo' / '-oo', or 'none' (no limit, finite or infinite)
         v = ev(claim['x'])
         at = ev(claim['at'])
         try:
-            value = limit(ev(claim['expr']), v, at)
-        except Exception:  # noqa: BLE001 - no limit (e.g. oscillation)
-            value = None
-        finite = value is not None and not isinstance(value, AccumBounds) and value.is_finite
+            # a sequence's limit over the integers: (-3/4)**n -> 0, (-2)**n has none
+            value = sympy.limit_seq(ev(claim['expr']), v) if v == n and at == oo else limit(ev(claim['expr']), v, at)
+        except Exception:  # noqa: BLE001 - SymPy could not decide
+            return 'unproven'
+        none = value is None or isinstance(value, AccumBounds) or value in (zoo, nan)
         if claim['value'] == 'none':
-            return 'refuted' if finite else 'proved'
-        return 'proved' if finite and close(value, ev(claim['value'])) else 'refuted'
+            return 'proved' if none else 'refuted'
+        if none:
+            return 'refuted'
+        if claim['value'] in ('oo', '-oo'):
+            return 'proved' if value == ev(claim['value']) else 'refuted'
+        return 'proved' if value.is_finite and close(value, ev(claim['value'])) else 'refuted'
     if kind == 'sum':
         value = summation(ev(claim['term']), (n, claim['start'], oo))
         return 'proved' if value.is_finite and close(value, ev(claim['value'])) else 'refuted'

@@ -1,6 +1,6 @@
 # Tuning the mastery rules
 
-Status: proposed · Baseline: `main` at ce06b61 (PLAN Phases 1–4 merged)
+Status: Phases 0–1 done; Phases 2–4 proposed · Baseline: `main` at ce06b61 (PLAN Phases 1–4 merged)
 
 "Proficient" claims that the student will probably solve a fresh problem of this skill
 unaided. "Mastered" claims they still can after a delay. Tuning means making those claims
@@ -60,13 +60,30 @@ time, and even on typed items one success is weak evidence of retention.
 
 ## Phase 0: guessability gate (no data needed)
 
-Add `services/learning/guessing.test.ts`, which runs the simulation above for every topic.
+Add a gate that runs the simulation above for every topic.
 The strategies are uniform random choice and each constant option. Typed answers count as
 wrong. Assert: **P(proficient within 200 attempts) ≤ 1% for every strategy on every
 topic.** This fails today on series-convergence. It becomes a CI gate, so a future
 generator or rule change cannot reintroduce the hole.
 
 Acceptance: the test exists, fails on `main`, and passes after Phases 1–2.
+
+**Done** (`services/learning/guessing.gate.ts`, run by `npm run test:sweep`, about 30 s).
+As built:
+- The guessers know a problem's template (the prompt shows it) but not its numbers. One
+  types the answer that is right most often for that template ("modal"). The other does
+  the same but picks verdict words at random ("vocabulary").
+- A template with fewer than 5 distinct instances is a fixed item (an identity, a named
+  fact). Answering it is recall, so the guesser is scored wrong on it. Without this rule
+  every trig identity "failed" the gate.
+- Most topics are settled by proof. For each strategy, the gate takes the largest per-template
+  success rate (its 95% Wilson upper bound) as a bound on every attempt. The Cramér–Lundberg
+  bound for the evidence random walk then caps P(proficient within 200 attempts). Other
+  topics are simulated 400 times with the scheduler's policy, over pools of generated
+  problems whose correctness is precomputed.
+- On `main` it fails series-convergence (100% of runs: "diverges" answers every nth-term
+  question) and exponents (3.3%: the product-rule exponent is "6" a third of the time). Both
+  pass after Phase 1 and a wider exponent range.
 
 ## Phase 1: remove two-option answers (content)
 
@@ -100,6 +117,37 @@ slower for students and still teaches less.
 
 Acceptance: no template is answerable by option choice alone, and the Phase 0 gate passes
 on content alone (before Phase 2).
+
+**Decided: typed answers everywhere; no multiple choice.** **Done.** As built:
+- There are no answer buttons. A closed-vocabulary word ("converges", "increasing",
+  "inconclusive") is typed, and is always graded together with the typed quantity that
+  decides it.
+- A new answer kind, `limit`: a typed number, ±∞, or DNE, in one input, so the input never
+  reveals which. It is used for every sequence limit, improper-integral value, ratio-test L
+  and nth-term limit.
+- Templates as in the table, with these changes:
+  - improper integrals also ask for the partial integral I(b) (or I(a)) as an expression,
+    because "∞" alone is right for every divergent integral;
+  - the integral test asks for I(b), the integral's value, and the verdict;
+  - alternating series ask for bₙ = |aₙ| rather than lim |aₙ|, which is 0 for most
+    instances;
+  - geometric-limit and power-limit sequences gained a shift k, so that "0" and "∞" are not
+    the answer to most instances;
+  - MCT sequences have limits 1–6;
+  - power-series radii come from more families (R = 1/c, c, 4, 1/4, 0, ∞);
+  - exponent problems use wider ranges.
+- Each changed template is recomputed in `mathCorrectness.test.ts` and proved by the oracle
+  (3,790 claims, all proved; polar curve identification gained a claim). The oracle's limit
+  claim now distinguishes ∞, −∞ and "no limit", using `limit_seq` for sequences.
+- Found along the way:
+  - **Grader:** `comparePoints` judged every sample against the largest value at any point,
+    so e^{4b} ≈ 10¹⁰ excused an error of 1 (I(b) + 1 was accepted). Tolerance is now
+    per point, in both the expression and the equation comparison.
+  - **Display:** the geometric series printed a coefficient next to an integer base
+    ("52^n" for 5·2ⁿ); it is now "5 \cdot 2^n".
+  - **Tests:** the old nth-term recomputation never ran: its regex (`nth\$-term`) did not
+    match the prompt ("$n$th-term"), so those problems fell through to the p-series branch
+    and passed by coincidence.
 
 ## Phase 2: evidence as a likelihood ratio (principled weights, no data needed)
 
@@ -221,8 +269,7 @@ because data collection is the long pole.
 
 ## Decisions needed
 
-1. **Two-option answers:** replace them all as in Phase 1 (recommended), or keep some and
-   rely on chance-corrected weights.
+1. ~~Two-option answers~~: decided: typed answers everywhere (Phase 1, done).
 2. **What "proficient" must exclude:** the accuracy a student can have and still *not* be
    proficient ($p_0$). 0.5 is fast (about 18 problems for a 85% student at $h = 6$), but
    a 70% student passes almost surely. 0.7 excludes 70% students (3.6% false passes at

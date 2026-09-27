@@ -7,7 +7,7 @@
  * claim symbolically, and mathCorrectness.test.ts recomputes it from the
  * prompt text.
  */
-import type { AnswerSpec, SolutionStep } from '../../types';
+import type { AnswerPartSpec, AnswerSpec, SolutionStep } from '../../types';
 import type { Draft, GeneratorDef } from './context';
 import {
   choice, degrees, exact, latexFrac, latexFraction, latexPolynomial, latexPower, ordinalSuffix, roundedTo,
@@ -96,27 +96,75 @@ const antiderivative = (integrand: string, reference: string): AnswerSpec =>
 
 const verdictChoice = (converges: boolean): AnswerSpec => choice(['converges', 'diverges'], converges ? 'converges' : 'diverges');
 
+/** A typed limit: a real number, ±∞, or null when the limit does not exist. */
+const limitOf = (value: number | null): AnswerSpec => ({ kind: 'limit', value, tolerance: { kind: 'exact' } });
+
 /**
- * "Does it converge? If so, to what?" as two parts: a verdict and a value
- * that is asked for (and graded) only when "converges" is chosen. Every such
- * question has this shape, so the shape never reveals the verdict.
+ * An expression in one variable, graded where the problem defines it: on
+ * [lo, hi) (or (lo, hi) when `loClosed` is false). Outside that set two
+ * correct forms may differ (b^{1/3} is complex for b < 0 in the parser, a
+ * cube root is not), which is not the student's concern here.
  */
-const convergence = (
-  templateId: string, text: string, value: number | null, valueLabel: string, valueTex: string | null,
-  explanation: string, hint: string,
+const onDomain = (reference: string, lo: number, loClosed = true, hi = Infinity): AnswerSpec => ({
+  kind: 'expression', reference, domain: { intervals: [{ lo, hi, loClosed, hiClosed: false }] }, domainPolicy: 'onDeclaredDomain',
+});
+
+const LIMIT_NOTE = '(Type a number, ∞ or −∞, or DNE if the limit does not exist.)';
+
+/** "k + term" (or "k − term") as LaTeX; just the term when k = 0. */
+const shifted = (k: number, term: string, sign: 1 | -1 = 1): string =>
+  (k === 0 ? `${sign < 0 ? '-' : ''}${term}` : `${k} ${sign < 0 ? '-' : '+'} ${term}`);
+
+/** "Find lim a_n": one typed answer, the same control for a finite, infinite or nonexistent limit. */
+const sequenceLimit = (
+  templateId: string, body: string, value: number | null, tex: string | null, why: string, hint: string, text?: string,
+): Draft => ({
+  templateId,
+  problemText: text ?? `Find $\\lim_{n\\to\\infty} a_n$ for $a_n = ${body}$.\n${LIMIT_NOTE}`,
+  answer: limitOf(value),
+  displayAnswer: value === null ? 'The limit does not exist' : `$${tex}$`,
+  explanation: why,
+  hint,
+});
+
+/**
+ * ∫ x^{−p} over [1, v] ('upper') or [v, 1] ('lower') for p = n/d ≠ 1:
+ * (v^{1−p} − 1)/(1 − p), resp. (1 − v^{1−p})/(1 − p), as a parser reference
+ * and as LaTeX with a positive leading coefficient.
+ */
+const partialPower = (v: string, n: number, d: number, end: 'upper' | 'lower'): { ref: string; tex: string } => {
+  const e = simplifyFraction(d - n, d); // 1 − p
+  const eTex = latexFraction(e.numerator, e.denominator);
+  const power = `${v}^{${eTex}}`;
+  const ref = end === 'upper'
+    ? `(${v}^((${d - n})/${d}) - 1)/((${d - n})/${d})`
+    : `(1 - ${v}^((${d - n})/${d}))/((${d - n})/${d})`;
+  const positive = d - n > 0; // p < 1
+  const coef = positive ? coefTex(d, d - n) : coefTex(d, n - d);
+  const inner = end === 'upper'
+    ? (positive ? `${power} - 1` : `1 - ${power}`)
+    : (positive ? `1 - ${power}` : `${power} - 1`);
+  return { ref, tex: `${coef}\\left(${inner}\\right)` };
+};
+
+/** An improper integral as its partial integral I(v) (typed expression) and its value (typed limit). */
+const improper = (
+  templateId: string, text: string, partial: AnswerSpec, partialTex: string, v: string,
+  value: number, valueTex: string, solution: SolutionStep[],
 ): Draft => ({
   templateId,
   problemText: text,
   answer: {
     kind: 'multipart',
     parts: [
-      { label: 'Verdict', spec: verdictChoice(value !== null) },
-      { label: valueLabel, spec: value === null ? null : exact(value), when: { part: 0, equals: 'converges' } },
+      { label: `I(${v})`, spec: partial },
+      { label: 'Value of the integral', spec: limitOf(value) },
     ],
   },
-  displayAnswer: value === null ? 'Diverges' : `Converges, to $${valueTex ?? value}$`,
-  explanation,
-  hint,
+  displayAnswer: `$I(${v}) = ${partialTex}$; the integral ${Number.isFinite(value) ? `converges to $${valueTex}$` : 'diverges ($\\infty$)'}`,
+  explanation: solution.map(s => (s.kind === 'step' ? s.text : s.conclusion)).join(' '),
+  hint: IMPROPER_HINT,
+  solution,
 });
 
 /** A radius of convergence: a nonnegative extended real (∞ allowed; the input is the same either way). */
@@ -377,58 +425,82 @@ export const partialFractions: GeneratorDef = {
 // ---------------------------------------------------------------------------
 
 const IMPROPER_TEMPLATES = ['p-infinite', 'p-at-zero', 'exponential', 'p-threshold'] as const;
-const ASK_VALUE = 'converge or diverge? If it converges, give its value.';
 const IMPROPER_HINT = 'Replace the improper limit by a variable, integrate, and take the limit.';
 
 export const improperIntegrals: GeneratorDef = {
   topicId: 'improper-integrals',
-  version: 3,
+  version: 4,
   templates: IMPROPER_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(IMPROPER_TEMPLATES);
     if (template === 'p-infinite') {
-      // ∫_1^∞ x^{−p} dx = 1/(p − 1) for p > 1; diverges for p ≤ 1
-      const [n, d] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1], [4, 1], [5, 2]] as const);
+      // I(b) = ∫_1^b x^{−p} dx = (b^{1−p} − 1)/(1 − p) (ln b for p = 1); the integral is lim I(b) = 1/(p − 1) for p > 1, else ∞
+      const [n, d] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1], [4, 1], [5, 2], [2, 3], [4, 3]] as const);
       const p = latexFraction(n, d);
-      const text = `Does $\\displaystyle\\int_1^{\\infty} \\frac{1}{${powTex('x', n, d)}}\\,dx$ ${ASK_VALUE}`;
-      if (n === d) return convergence(template, text, null, 'Value', null, '$\\int_1^b \\frac{dx}{x} = \\ln b \\to \\infty$, so the integral diverges.', IMPROPER_HINT);
-      const general = `For $p = ${p} \\neq 1$, $\\int_1^b x^{-p}\\,dx = \\frac{b^{1-p} - 1}{1 - p}$.`;
-      if (n < d) return convergence(template, text, null, 'Value', null, `${general} Since $p < 1$, $b^{1-p} \\to \\infty$: the integral diverges.`, IMPROPER_HINT);
+      const f = `\\frac{1}{${powTex('x', n, d)}}`;
+      const integral = `\\displaystyle\\int_1^{\\infty} ${f}\\,dx`;
+      const I = n === d ? { ref: 'log(b)', tex: '\\ln(b)' } : partialPower('b', n, d, 'upper');
+      const converges = n > d;
       const value = simplifyFraction(d, n - d);
-      const tex = latexFraction(value.numerator, value.denominator);
-      return convergence(template, text, d / (n - d), 'Value', tex,
-        `${general} Since $p > 1$, $b^{1-p} \\to 0$, so the integral converges to $\\frac{1}{p - 1} = ${tex}$.`, IMPROPER_HINT);
+      const valueTex = converges ? latexFraction(value.numerator, value.denominator) : '\\infty';
+      return improper(template,
+        `Let $I(b) = \\displaystyle\\int_1^{b} ${f}\\,dx$ for $b > 1$.\nFind $I(b)$, and the value of $${integral} = \\lim_{b\\to\\infty} I(b)$ (type ∞ if it diverges).`,
+        onDomain(I.ref, 1), I.tex, 'b', converges ? d / (n - d) : Infinity, valueTex,
+        [
+          step(n === d ? '$\\int_1^b \\frac{dx}{x} = \\ln(b) - \\ln(1) = \\ln(b)$.' : `For $p = ${p} \\neq 1$: $\\int_1^b x^{-p}\\,dx = \\left[\\frac{x^{1-p}}{1-p}\\right]_1^b = ${I.tex}$.`),
+          step(n === d ? '$\\ln(b) \\to \\infty$ as $b \\to \\infty$: the integral diverges.'
+            : converges ? `Since $p > 1$, the exponent $1 - p$ is negative and $b^{1-p} \\to 0$: $I(b) \\to \\frac{1}{p - 1} = ${valueTex}$.`
+              : `Since $p < 1$, the exponent $1 - p$ is positive and $b^{1-p} \\to \\infty$: the integral diverges.`),
+        ]);
     }
     if (template === 'p-at-zero') {
-      // ∫_0^1 x^{−p} dx = 1/(1 − p) for p < 1; diverges for p ≥ 1
-      const [n, d] = ctx.pick([[1, 3], [1, 2], [2, 3], [1, 1], [3, 2], [2, 1]] as const);
+      // I(a) = ∫_a^1 x^{−p} dx = (1 − a^{1−p})/(1 − p) (−ln a for p = 1); the integral is lim_{a→0+} I(a) = 1/(1 − p) for p < 1, else ∞
+      const [n, d] = ctx.pick([[1, 3], [1, 2], [2, 3], [3, 4], [1, 4], [1, 1], [3, 2], [2, 1], [4, 3]] as const);
       const p = latexFraction(n, d);
-      const text = `Does $\\displaystyle\\int_0^{1} \\frac{1}{${powTex('x', n, d)}}\\,dx$ ${ASK_VALUE}`;
-      if (n === d) return convergence(template, text, null, 'Value', null, '$\\int_a^1 \\frac{dx}{x} = -\\ln a \\to \\infty$ as $a \\to 0^+$, so the integral diverges.', IMPROPER_HINT);
-      const general = `For $p = ${p} \\neq 1$, $\\int_a^1 x^{-p}\\,dx = \\frac{1 - a^{1-p}}{1 - p}$.`;
-      if (n > d) return convergence(template, text, null, 'Value', null, `${general} Since $p > 1$, $a^{1-p} \\to \\infty$ as $a \\to 0^+$: the integral diverges.`, IMPROPER_HINT);
+      const f = `\\frac{1}{${powTex('x', n, d)}}`;
+      const integral = `\\displaystyle\\int_0^{1} ${f}\\,dx`;
+      const I = n === d ? { ref: '-log(a)', tex: '-\\ln(a)' } : partialPower('a', n, d, 'lower');
+      const converges = n < d;
       const value = simplifyFraction(d, d - n);
-      const tex = latexFraction(value.numerator, value.denominator);
-      return convergence(template, text, d / (d - n), 'Value', tex,
-        `${general} Since $p < 1$, $a^{1-p} \\to 0$ as $a \\to 0^+$, so the integral converges to $\\frac{1}{1 - p} = ${tex}$.`, IMPROPER_HINT);
+      const valueTex = converges ? latexFraction(value.numerator, value.denominator) : '\\infty';
+      return improper(template,
+        `Let $I(a) = \\displaystyle\\int_a^{1} ${f}\\,dx$ for $0 < a < 1$.\nFind $I(a)$, and the value of $${integral} = \\lim_{a\\to 0^+} I(a)$ (type ∞ if it diverges).`,
+        onDomain(I.ref, 0, false, 1), I.tex, 'a', converges ? d / (d - n) : Infinity, valueTex,
+        [
+          step(n === d ? '$\\int_a^1 \\frac{dx}{x} = \\ln(1) - \\ln(a) = -\\ln(a)$.' : `For $p = ${p} \\neq 1$: $\\int_a^1 x^{-p}\\,dx = \\left[\\frac{x^{1-p}}{1-p}\\right]_a^1 = ${I.tex}$.`),
+          step(n === d ? '$-\\ln(a) \\to \\infty$ as $a \\to 0^+$: the integral diverges.'
+            : converges ? `Since $p < 1$, the exponent $1 - p$ is positive and $a^{1-p} \\to 0$ as $a \\to 0^+$: $I(a) \\to \\frac{1}{1 - p} = ${valueTex}$.`
+              : `Since $p > 1$, the exponent $1 - p$ is negative and $a^{1-p} \\to \\infty$ as $a \\to 0^+$: the integral diverges.`),
+        ]);
     }
     if (template === 'exponential') {
       const c = ctx.int(1, 6);
       const k = ctx.int(1, 5);
       const cTex = c === 1 ? '' : `${c}`;
       const kTex = k === 1 ? '' : `${k}`;
+      const ck = simplifyFraction(c, k);
+      const ckTex = latexFraction(ck.numerator, ck.denominator);
+      const coef = ckTex === '1' ? '' : ckTex;
       if (ctx.bool(0.7)) {
-        // ∫_0^∞ c e^{−kx} dx = c/k
-        const value = simplifyFraction(c, k);
-        const tex = latexFraction(value.numerator, value.denominator);
+        // I(b) = ∫_0^b c e^{−kx} dx = (c/k)(1 − e^{−kb}) → c/k
         const e = `e^{-${kTex}x}`;
-        return convergence(template, `Does $\\displaystyle\\int_0^{\\infty} ${cTex}${e}\\,dx$ ${ASK_VALUE}`, c / k, 'Value', tex,
-          `$\\int_0^b ${cTex}${e}\\,dx = \\left[-${overTex(e, c, k)}\\right]_0^b = ${tex === '1' ? '' : tex}\\left(1 - e^{-${kTex}b}\\right) \\to ${tex}$ as $b \\to \\infty$.`, IMPROPER_HINT);
+        return improper(template,
+          `Let $I(b) = \\displaystyle\\int_0^{b} ${cTex}${e}\\,dx$ for $b > 0$.\nFind $I(b)$, and the value of $\\displaystyle\\int_0^{\\infty} ${cTex}${e}\\,dx = \\lim_{b\\to\\infty} I(b)$ (type ∞ if it diverges).`,
+          onDomain(`(${c}/${k})*(1 - e^(-${k}*b))`, 0, false), `${coef}\\left(1 - e^{-${kTex}b}\\right)`, 'b', c / k, ckTex,
+          [
+            step(`$I(b) = \\left[-${overTex(e, c, k)}\\right]_0^b = ${coef}\\left(1 - e^{-${kTex}b}\\right)$.`),
+            step(`$e^{-${kTex}b} \\to 0$ as $b \\to \\infty$, so $I(b) \\to ${ckTex}$.`),
+          ]);
       }
-      // ∫_0^∞ c e^{kx} dx diverges
-      const tex = latexFraction(c, k);
-      return convergence(template, `Does $\\displaystyle\\int_0^{\\infty} ${cTex}e^{${kTex}x}\\,dx$ ${ASK_VALUE}`, null, 'Value', null,
-        `$\\int_0^b ${cTex}e^{${kTex}x}\\,dx = ${tex === '1' ? '' : tex}\\left(e^{${kTex}b} - 1\\right) \\to \\infty$ as $b \\to \\infty$: the integral diverges.`, IMPROPER_HINT);
+      // I(b) = ∫_0^b c e^{kx} dx = (c/k)(e^{kb} − 1) → ∞
+      const e = `e^{${kTex}x}`;
+      return improper(template,
+        `Let $I(b) = \\displaystyle\\int_0^{b} ${cTex}${e}\\,dx$ for $b > 0$.\nFind $I(b)$, and the value of $\\displaystyle\\int_0^{\\infty} ${cTex}${e}\\,dx = \\lim_{b\\to\\infty} I(b)$ (type ∞ if it diverges).`,
+        onDomain(`(${c}/${k})*(e^(${k}*b) - 1)`, 0, false), `${coef}\\left(e^{${kTex}b} - 1\\right)`, 'b', Infinity, '\\infty',
+        [
+          step(`$I(b) = \\left[${overTex(e, c, k)}\\right]_0^b = ${coef}\\left(e^{${kTex}b} - 1\\right)$.`),
+          step(`$e^{${kTex}b} \\to \\infty$ as $b \\to \\infty$: the integral diverges.`),
+        ]);
     }
     // For which p does the p-integral converge? (all real p)
     if (ctx.bool()) {
@@ -455,11 +527,10 @@ export const improperIntegrals: GeneratorDef = {
 // ---------------------------------------------------------------------------
 
 const SEQ_TEMPLATES = ['arithmetic-nth-term', 'geometric-nth-term', 'rational-limit', 'geometric-limit', 'power-limit', 'mct', 'monotonic'] as const;
-const ASK_LIMIT = 'converge or diverge? If it converges, give its limit.';
 
 export const sequences: GeneratorDef = {
   topicId: 'sequences',
-  version: 3,
+  version: 4,
   templates: SEQ_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(SEQ_TEMPLATES);
@@ -495,80 +566,91 @@ export const sequences: GeneratorDef = {
       ctx.require(!(d <= -c && d % c === 0), 'nonZeroDenominator'); // cn + d ≠ 0 for every n ≥ 1
       const limit = simplifyFraction(a, c);
       const tex = latexFraction(limit.numerator, limit.denominator);
-      return convergence(template,
-        `Does the sequence $a_n = \\frac{${latexPolynomial([[a, 'n'], [b, '']])}}{${latexPolynomial([[c, 'n'], [d, '']])}}$ ${ASK_LIMIT}`,
-        a / c, 'Limit', tex,
-        `Divide numerator and denominator by $n$: $a_n = \\frac{${perN(a, b)}}{${perN(c, d)}} \\to \\frac{${a}}{${c}}${tex === `\\frac{${a}}{${c}}` ? '' : ` = ${tex}`}$.`,
-        'Divide the numerator and denominator by the highest power of $n$.');
+      const why = `Divide numerator and denominator by $n$: $a_n = \\frac{${perN(a, b)}}{${perN(c, d)}} \\to \\frac{${a}}{${c}}${tex === `\\frac{${a}}{${c}}` ? '' : ` = ${tex}`}$.`;
+      return sequenceLimit(template, `\\frac{${latexPolynomial([[a, 'n'], [b, '']])}}{${latexPolynomial([[c, 'n'], [d, '']])}}`,
+        a / c, tex, why, 'Divide the numerator and denominator by the highest power of $n$.');
     }
     if (template === 'geometric-limit') {
-      const [p, q] = ctx.pick([[1, 2], [2, 3], [-1, 2], [3, 4], [-2, 3], [1, 1], [-1, 1], [3, 2], [2, 1], [-2, 1], [5, 4]] as const);
+      // a_n = k + rⁿ: → k for |r| < 1, k + 1 for r = 1, ∞ for r > 1, no limit for r ≤ −1
+      const [p, q] = ctx.pick([[1, 2], [2, 3], [-1, 2], [3, 4], [-2, 3], [1, 3], [-3, 4], [1, 1], [-1, 1], [3, 2], [2, 1], [-2, 1], [5, 4]] as const);
+      const k = ctx.int(-4, 4);
       const r = p / q;
-      const text = `Does the sequence $a_n = ${baseTex(p, q)}^n$ ${ASK_LIMIT}`;
+      const absR = latexFraction(Math.abs(p), q);
+      const body = shifted(k, `${baseTex(p, q)}^n`);
       const hint = 'Compare $|r|$ with $1$, and check the cases $r = 1$ and $r = -1$ separately.';
-      if (Math.abs(r) < 1) return convergence(template, text, 0, 'Limit', '0', `$|r| = ${latexFraction(Math.abs(p), q)} < 1$, so $r^n \\to 0$.`, hint);
-      if (r === 1) return convergence(template, text, 1, 'Limit', '1', 'Every term is $1^n = 1$: the sequence is constant and converges to $1$.', hint);
-      if (r === -1) return convergence(template, text, null, 'Limit', null, 'The terms alternate $-1, 1, -1, \\ldots$ and approach no single value: the sequence diverges.', hint);
-      return convergence(template, text, null, 'Limit', null, `$|r| = ${latexFraction(Math.abs(p), q)} > 1$, so $|r^n| \\to \\infty$: the sequence diverges.`, hint);
+      if (Math.abs(r) < 1) return sequenceLimit(template, body, k, `${k}`, `$|r| = ${absR} < 1$, so $r^n \\to 0$ and $a_n \\to ${k}$.`, hint);
+      if (r === 1) return sequenceLimit(template, body, k + 1, `${k + 1}`, `$1^n = 1$ for every $n$: the sequence is constant, $a_n = ${k + 1}$.`, hint);
+      if (r === -1) return sequenceLimit(template, body, null, null, `$(-1)^n$ alternates $-1, 1, -1, \\ldots$, so $a_n$ alternates between $${k - 1}$ and $${k + 1}$ and has no limit.`, hint);
+      if (r > 1) return sequenceLimit(template, body, Infinity, '\\infty', `$r = ${absR} > 1$, so $r^n \\to \\infty$ and $a_n \\to \\infty$.`, hint);
+      return sequenceLimit(template, body, null, null, `$r = -${absR} < -1$: $|r^n| \\to \\infty$ while the sign alternates, so $a_n$ has no limit (not even $\\pm\\infty$).`, hint);
     }
     if (template === 'power-limit') {
-      // c·n^k → 0 for k < 0, diverges for k > 0
+      // a_n = k ± c·n^e: → k for e < 0, ±∞ for e > 0
       const c = ctx.int(1, 9);
-      const [n, d] = ctx.pick([[-2, 1], [-1, 1], [-1, 2], [1, 2], [1, 1], [2, 1]] as const);
-      const hint = 'What happens to a positive power of $n$ as $n \\to \\infty$?';
+      const k = ctx.int(-5, 5);
+      const sign = ctx.pick([1, -1] as const);
+      const [n, d] = ctx.pick([[-2, 1], [-1, 1], [-1, 2], [-3, 2], [1, 2], [1, 1], [2, 1], [3, 2]] as const);
+      const hint = 'What happens to a positive power of $n$, and to its reciprocal, as $n \\to \\infty$?';
       if (n < 0) {
-        const body = `\\frac{${c}}{${powTex('n', -n, d)}}`;
-        return convergence(template, `Does the sequence $a_n = ${body}$ ${ASK_LIMIT}`, 0, 'Limit', '0',
-          `$${powTex('n', -n, d)} \\to \\infty$, so $${body} \\to 0$.`, hint);
+        const term = `\\frac{${c}}{${powTex('n', -n, d)}}`;
+        return sequenceLimit(template, shifted(k, term, sign), k, `${k}`,
+          `$${powTex('n', -n, d)} \\to \\infty$, so $${term} \\to 0$ and $a_n \\to ${k}$.`, hint);
       }
-      const body = `${c === 1 ? '' : c}${powTex('n', n, d)}`;
-      return convergence(template, `Does the sequence $a_n = ${body}$ ${ASK_LIMIT}`, null, 'Limit', null,
-        `$${body} \\to \\infty$: the sequence has no finite limit, so it diverges.`, hint);
+      const term = `${c === 1 ? '' : c}${powTex('n', n, d)}`;
+      return sequenceLimit(template, shifted(k, term, sign), sign * Infinity, sign > 0 ? '\\infty' : '-\\infty',
+        `$${term} \\to \\infty$, so $a_n \\to ${sign > 0 ? '\\infty' : '-\\infty'}$.`, hint);
     }
     if (template === 'mct') {
-      const hint = 'A bounded, monotonic sequence converges. Then find the limit by dividing by $n$.';
-      if (ctx.bool()) {
-        // n/(n + c): increasing (a_{n+1} − a_n = c/((n+c)(n+1+c)) > 0), bounded above by 1 → 1
-        const c = ctx.int(1, 5);
-        return solved(convergence(template,
-          `The sequence $a_n = \\frac{n}{n + ${c}}$ is increasing and bounded above by $1$.\nBy the Monotone Convergence Theorem, does it converge? If it converges, give its limit.`,
-          1, 'Limit', '1',
-          `The MCT guarantees convergence; the limit is $\\lim \\frac{n}{n + ${c}} = \\lim \\frac{1}{1 + ${c}/n} = 1$.`, hint),
-        theorem('Monotone Convergence Theorem', [
-          ['$(a_n)$ is increasing', `$a_{n+1} - a_n = \\frac{${c}}{(n + ${c})(n + ${c + 1})} > 0$ for every $n \\geq 1$`],
-          ['$(a_n)$ is bounded above', `$\\frac{n}{n + ${c}} < \\frac{n + ${c}}{n + ${c}} = 1$ for every $n \\geq 1$`],
-        ], '$(a_n)$ converges.'),
-        step(`Its limit: $\\lim \\frac{n}{n + ${c}} = \\lim \\frac{1}{1 + ${c}/n} = 1$.`));
-      }
-      // kn/(n + 1): increasing, bounded above by k → k
-      const k = ctx.int(2, 6);
-      return solved(convergence(template,
-        `The sequence $a_n = \\frac{${k}n}{n + 1}$ is increasing and bounded above by $${k}$.\nBy the Monotone Convergence Theorem, does it converge? If it converges, give its limit.`,
-        k, 'Limit', `${k}`,
-        `The MCT guarantees convergence; the limit is $\\lim \\frac{${k}n}{n + 1} = \\lim \\frac{${k}}{1 + 1/n} = ${k}$. (A bound need not be the limit; here it is.)`, hint),
-      theorem('Monotone Convergence Theorem', [
-        ['$(a_n)$ is increasing', `$a_{n+1} - a_n = \\frac{${k}}{(n + 1)(n + 2)} > 0$ for every $n \\geq 1$`],
-        ['$(a_n)$ is bounded above', `$\\frac{${k}n}{n + 1} < \\frac{${k}(n + 1)}{n + 1} = ${k}$ for every $n \\geq 1$`],
-      ], '$(a_n)$ converges.'),
-      step(`Its limit: $\\lim \\frac{${k}n}{n + 1} = \\lim \\frac{${k}}{1 + 1/n} = ${k}$. (A bound need not be the limit; here it is.)`));
+      // kn/(n + c): increasing (a_{n+1} − a_n = kc/((n+c)(n+c+1)) > 0), bounded above by k, limit k
+      const k = ctx.int(1, 6);
+      const c = ctx.int(1, 5);
+      const kTex = k === 1 ? '' : `${k}`;
+      const body = `\\frac{${kTex}n}{n + ${c}}`;
+      return {
+        ...sequenceLimit(template, body, k, `${k}`,
+          `The MCT guarantees a limit; it is $\\lim \\frac{${kTex}n}{n + ${c}} = \\lim \\frac{${k}}{1 + ${c}/n} = ${k}$.`,
+          'A bounded, monotonic sequence converges. Then find the limit by dividing by $n$.',
+          `The sequence $a_n = ${body}$ is increasing and bounded above by $${k}$, so by the Monotone Convergence Theorem it converges.\nFind its limit.`),
+        solution: [
+          theorem('Monotone Convergence Theorem', [
+            ['$(a_n)$ is increasing', `$a_{n+1} - a_n = \\frac{${k * c}}{(n + ${c})(n + ${c + 1})} > 0$ for every $n \\geq 1$`],
+            ['$(a_n)$ is bounded above', `$\\frac{${kTex}n}{n + ${c}} < \\frac{${k === 1 ? '' : k}(n + ${c})}{n + ${c}} = ${k}$ for every $n \\geq 1$`],
+          ], '$(a_n)$ converges.'),
+          step(`Its limit: $\\lim \\frac{${kTex}n}{n + ${c}} = \\lim \\frac{${k}}{1 + ${c}/n} = ${k}$. (A bound need not be the limit; here it is.)`),
+        ],
+      };
     }
-    // Is a_n monotonic?
-    const c = ctx.int(1, 6);
-    const family = ctx.pick(['c/n', 'alt-c/n', 'n/(n+c)', 'alt', 'cn^2'] as const);
+    // monotonic: a_{n+1} − a_n, then increasing / decreasing / neither
+    const family = ctx.pick(['c/n', 'c/n^2', 'n/(n+c)', 'cn^2', '(n-c)^2', 'n+c/n'] as const);
+    const c = family === '(n-c)^2' ? ctx.int(2, 6) : family === 'n+c/n' ? ctx.int(3, 8) : ctx.int(1, 6);
+    const cTex = c === 1 ? '' : `${c}`;
     const cases = {
-      'c/n': { formula: `\\frac{${c}}{n}`, monotonic: true, why: `$a_{n+1} = \\frac{${c}}{n+1} < \\frac{${c}}{n} = a_n$ for every $n$: the sequence is decreasing, hence monotonic.` },
-      'alt-c/n': { formula: `\\frac{(-1)^n${c === 1 ? '' : ` \\cdot ${c}`}}{n}`, monotonic: false, why: 'The terms alternate in sign (negative, positive, negative, …), so the sequence is neither increasing nor decreasing. (It still converges to $0$.)' },
-      'n/(n+c)': { formula: `\\frac{n}{n + ${c}}`, monotonic: true, why: `$a_{n+1} - a_n = \\frac{${c}}{(n + ${c})(n + ${c + 1})} > 0$: the sequence is increasing, hence monotonic.` },
-      alt: { formula: '(-1)^n', monotonic: false, why: 'The terms are $-1, 1, -1, 1, \\ldots$: the sequence goes up and down, so it is not monotonic.' },
-      'cn^2': { formula: `${c === 1 ? '' : c}n^2`, monotonic: true, why: `$a_{n+1} - a_n = ${c === 1 ? '' : c}(2n + 1) > 0$: the sequence is increasing, hence monotonic.` },
+      'c/n': { formula: `\\frac{${c}}{n}`, ref: `${c}/(n+1) - ${c}/n`, diff: `-\\frac{${c}}{n(n+1)}`, answer: 'decreasing',
+        why: `$a_{n+1} - a_n = \\frac{${c}}{n+1} - \\frac{${c}}{n} = -\\frac{${c}}{n(n+1)} < 0$ for every $n \\geq 1$: decreasing.` },
+      'c/n^2': { formula: `\\frac{${c}}{n^2}`, ref: `${c}/(n+1)^2 - ${c}/n^2`, diff: `-\\frac{${cTex}(2n+1)}{n^2(n+1)^2}`, answer: 'decreasing',
+        why: `$a_{n+1} - a_n = \\frac{${c}}{(n+1)^2} - \\frac{${c}}{n^2} = -\\frac{${cTex}(2n+1)}{n^2(n+1)^2} < 0$ for every $n \\geq 1$: decreasing.` },
+      'n/(n+c)': { formula: `\\frac{n}{n + ${c}}`, ref: `(n+1)/(n+1+${c}) - n/(n+${c})`, diff: `\\frac{${c}}{(n + ${c})(n + ${c + 1})}`, answer: 'increasing',
+        why: `$a_{n+1} - a_n = \\frac{n+1}{n + ${c + 1}} - \\frac{n}{n + ${c}} = \\frac{${c}}{(n + ${c})(n + ${c + 1})} > 0$ for every $n \\geq 1$: increasing.` },
+      'cn^2': { formula: `${cTex}n^2`, ref: `${c}*(n+1)^2 - ${c}*n^2`, diff: `${cTex}(2n + 1)`, answer: 'increasing',
+        why: `$a_{n+1} - a_n = ${cTex}(n+1)^2 - ${cTex}n^2 = ${cTex}(2n + 1) > 0$ for every $n \\geq 1$: increasing.` },
+      '(n-c)^2': { formula: `(n - ${c})^2`, ref: `(n+1-${c})^2 - (n-${c})^2`, diff: `2n + 1 - ${2 * c}`, answer: 'neither',
+        why: `$a_{n+1} - a_n = 2n + 1 - ${2 * c}$: negative at $n = 1$ ($${3 - 2 * c}$) and positive for $n \\geq ${c}$. The terms fall and then rise, so the sequence is neither increasing nor decreasing.` },
+      'n+c/n': { formula: `n + \\frac{${c}}{n}`, ref: `(n+1) + ${c}/(n+1) - n - ${c}/n`, diff: `1 - \\frac{${c}}{n(n+1)}`, answer: 'neither',
+        why: `$a_{n+1} - a_n = 1 - \\frac{${c}}{n(n+1)}$: at $n = 1$ it is $1 - \\frac{${c}}{2} < 0$, and it is positive once $n(n+1) > ${c}$. The terms fall and then rise, so the sequence is neither increasing nor decreasing.` },
     }[family];
     return {
       templateId: template,
-      problemText: `Is the sequence $a_n = ${cases.formula}$ (for $n \\geq 1$) monotonic?`,
-      answer: choice(['yes', 'no'], cases.monotonic ? 'yes' : 'no'),
-      displayAnswer: cases.monotonic ? 'Yes' : 'No',
+      problemText: `Let $a_n = ${cases.formula}$ for $n \\geq 1$.\nFind $a_{n+1} - a_n$ (as an expression in $n$), and say whether the sequence is increasing, decreasing, or neither.`,
+      answer: {
+        kind: 'multipart',
+        parts: [
+          { label: 'a(n+1) − a(n)', spec: onDomain(cases.ref, 1) },
+          { label: 'Increasing, decreasing or neither', spec: choice(['increasing', 'decreasing', 'neither'], cases.answer) },
+        ],
+      },
+      displayAnswer: `$a_{n+1} - a_n = ${cases.diff}$; ${cases.answer}`,
       explanation: cases.why,
-      hint: 'Check whether $a_{n+1} \\geq a_n$ for all $n$, or $a_{n+1} \\leq a_n$ for all $n$.',
+      hint: 'Simplify $a_{n+1} - a_n$ and look at its sign for every $n \\geq 1$.',
     };
   },
 };
@@ -578,20 +660,33 @@ export const sequences: GeneratorDef = {
 // ---------------------------------------------------------------------------
 
 const SERIES_TEMPLATES = ['geometric', 'p-series', 'ratio-test', 'nth-term', 'alternating', 'integral-test'] as const;
-const ASK_VERDICT = 'Does the series converge or diverge?';
 
 const NTH_TERM_TEST = '$n$th-term test for divergence';
 const NTH_TERM_HYPOTHESIS = '$\\lim_{n\\to\\infty} a_n \\neq 0$, or the limit does not exist';
+const VERDICT_PART = 'Converges or diverges';
+const NTH_TERM_PART = 'What the test concludes';
+const ALTERNATING_PART = 'Absolutely, conditionally, or diverges';
+
+/** (ln 2)^e for a rational exponent e = n/d > 0, as LaTeX. */
+const ln2Power = (n: number, d: number): string => {
+  const e = simplifyFraction(n, d);
+  if (e.denominator === 1) return e.numerator === 1 ? '\\ln 2' : `(\\ln 2)^{${e.numerator}}`;
+  if (e.numerator === 1 && e.denominator === 2) return '\\sqrt{\\ln 2}';
+  return `(\\ln 2)^{${e.numerator}/${e.denominator}}`;
+};
 
 export const seriesConvergence: GeneratorDef = {
   topicId: 'series-convergence',
-  version: 4,
+  version: 5,
   templates: SERIES_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(SERIES_TEMPLATES);
-    const verdict = (converges: boolean, text: string, explanation: string, hint: string, solution: SolutionStep[]): Draft => ({
-      templateId: template, problemText: text, answer: verdictChoice(converges),
-      displayAnswer: converges ? 'Converges' : 'Diverges', explanation, hint, solution,
+    /** A typed quantity (or several) and a typed verdict, graded together. */
+    const decided = (text: string, quantities: AnswerPartSpec[], verdictSpec: AnswerSpec, display: string,
+      explanation: string, hint: string, solution: SolutionStep[], verdictLabel = VERDICT_PART): Draft => ({
+      templateId: template, problemText: text,
+      answer: { kind: 'multipart', parts: [...quantities, { label: verdictLabel, spec: verdictSpec }] },
+      displayAnswer: display, explanation, hint, solution,
     });
     if (template === 'geometric') {
       // Σ_{n≥0} a rⁿ = a/(1 − r) for |r| < 1; diverges for |r| ≥ 1
@@ -599,31 +694,45 @@ export const seriesConvergence: GeneratorDef = {
       const a = ctx.int(1, 5);
       const r = latexFraction(p, q);
       const absR = latexFraction(Math.abs(p), q);
-      const text = `Does $\\displaystyle\\sum_{n=0}^{\\infty} ${a === 1 ? '' : a}${baseTex(p, q)}^n$ converge or diverge? If it converges, give its sum.`;
-      const hint = 'A geometric series $\\sum_{n=0}^{\\infty} ar^n$ converges exactly when $|r| < 1$, to $\\frac{a}{1-r}$.';
+      const converges = Math.abs(p) < q;
+      const sum = simplifyFraction(a * q, q - p);
+      const tex = latexFraction(sum.numerator, sum.denominator);
       const form: [string, string] = ['The series is $\\sum_{n=0}^{\\infty} ar^n$ with $a \\neq 0$', `$a = ${a}$ and $r = ${r}$`];
-      if (Math.abs(p) < q) {
-        const sum = simplifyFraction(a * q, q - p);
-        const tex = latexFraction(sum.numerator, sum.denominator);
-        return solved(convergence(template, text, (a * q) / (q - p), 'Sum', tex,
-          `Geometric with $a = ${a}$ and $r = ${r}$, $|r| < 1$: the sum is $\\frac{a}{1 - r} = \\frac{${a}}{1 - ${p < 0 ? `(${r})` : r}} = ${tex}$.`, hint),
-        theorem('Geometric series test', [form, ['$|r| < 1$', `$|r| = ${absR} < 1$`]],
-          `The series converges, to $\\frac{a}{1 - r} = \\frac{${a}}{1 - ${p < 0 ? `(${r})` : r}} = ${tex}$.`));
-      }
-      return solved(convergence(template, text, null, 'Sum', null,
-        `Geometric with $r = ${r}$ and $|r| ${Math.abs(p) === q ? '=' : '>'} 1$: the terms do not tend to $0$, so the series diverges.`, hint),
-      theorem('Geometric series test', [form, ['$|r| \\geq 1$', `$|r| = ${absR} ${Math.abs(p) === q ? '=' : '>'} 1$`]],
-        'The terms $ar^n$ do not tend to $0$, so the series diverges.'));
+      // "5 \\cdot 2^n", never "52^n"
+      const text = `Consider $\\displaystyle\\sum_{n=0}^{\\infty} ${a === 1 ? '' : `${a} \\cdot `}${baseTex(p, q)}^n$.\nFind its common ratio $r$, say whether it converges or diverges, and if it converges give its sum.`;
+      const hint = 'A geometric series $\\sum_{n=0}^{\\infty} ar^n$ converges exactly when $|r| < 1$, to $\\frac{a}{1-r}$.';
+      const sumText = `\\frac{${a}}{1 - ${p < 0 ? `(${r})` : r}} = ${tex}`;
+      return {
+        templateId: template,
+        problemText: text,
+        answer: {
+          kind: 'multipart',
+          parts: [
+            { label: 'Common ratio r', spec: exact(p / q) },
+            { label: VERDICT_PART, spec: verdictChoice(converges) },
+            { label: 'Sum', spec: converges ? exact((a * q) / (q - p)) : null, when: { part: 1, equals: 'converges' } },
+          ],
+        },
+        displayAnswer: converges ? `$r = ${r}$; converges, to $${tex}$` : `$r = ${r}$; diverges`,
+        explanation: converges
+          ? `Geometric with $a = ${a}$ and $r = ${r}$, $|r| < 1$: the sum is $\\frac{a}{1 - r} = ${sumText}$.`
+          : `Geometric with $r = ${r}$ and $|r| ${Math.abs(p) === q ? '=' : '>'} 1$: the terms do not tend to $0$, so the series diverges.`,
+        hint,
+        solution: [converges
+          ? theorem('Geometric series test', [form, ['$|r| < 1$', `$|r| = ${absR} < 1$`]], `The series converges, to $\\frac{a}{1 - r} = ${sumText}$.`)
+          : theorem('Geometric series test', [form, ['$|r| \\geq 1$', `$|r| = ${absR} ${Math.abs(p) === q ? '=' : '>'} 1$`]], 'The terms $ar^n$ do not tend to $0$, so the series diverges.')],
+      };
     }
     if (template === 'p-series') {
-      const [n, d] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1], [4, 3], [2, 3]] as const);
+      const [n, d] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1], [4, 3], [2, 3], [5, 2], [3, 4], [5, 4]] as const);
       const c = ctx.int(1, 5);
       const converges = n > d;
       const pTex = latexFraction(n, d);
       const pow = powTex('n', n, d);
       const outcome = converges ? 'converges' : 'diverges';
-      return verdict(converges,
-        `Consider $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{${c}}{${pow}}$.\n${ASK_VERDICT}`,
+      return decided(
+        `Consider $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{${c}}{${pow}}$.\nWrite it as a multiple of $\\sum \\frac{1}{n^p}$: what is $p$? Does the series converge or diverge?`,
+        [{ label: 'p', spec: exact(n / d) }], verdictChoice(converges), `$p = ${pTex}$; ${outcome}`,
         `This is ${c === 1 ? 'a' : `$${c}$ times a`} $p$-series with $p = ${pTex}$, which converges exactly when $p > 1$. Here $p ${converges ? '>' : '\\leq'} 1$, so it ${outcome}.`,
         'Identify $p$ in $\\sum \\frac{1}{n^p}$; a constant factor does not change convergence.',
         [
@@ -640,14 +749,15 @@ export const seriesConvergence: GeneratorDef = {
       const k = ctx.int(1, 3);
       const family = ctx.pick(['poly/exp', 'exp/fact', 'fact/exp', 'exp/poly', 'fact/power'] as const);
       const f = {
-        'poly/exp': { term: `\\frac{${latexPower('n', k)}}{${c}^n}`, ratio: `${powOf('\\frac{n+1}{n}', k)} \\cdot \\frac{1}{${c}}`, L: `\\frac{1}{${c}}`, compare: `$L = \\frac{1}{${c}} < 1$`, converges: true },
-        'exp/fact': { term: `\\frac{${c}^n}{n!}`, ratio: `\\frac{${c}}{n+1}`, L: '0', compare: '$L = 0 < 1$', converges: true },
-        'fact/exp': { term: `\\frac{n!}{${c}^n}`, ratio: `\\frac{n+1}{${c}}`, L: '\\infty', compare: '$L = \\infty$', converges: false },
-        'exp/poly': { term: `\\frac{${c}^n}{${latexPower('n', k)}}`, ratio: `${c} \\cdot ${powOf('\\frac{n}{n+1}', k)}`, L: `${c}`, compare: `$L = ${c} > 1$`, converges: false },
-        'fact/power': { term: '\\frac{n!}{n^n}', ratio: '\\frac{(n+1)!}{(n+1)^{n+1}} \\cdot \\frac{n^n}{n!} = \\left(\\frac{n}{n+1}\\right)^n = \\frac{1}{\\left(1 + \\frac{1}{n}\\right)^n}', L: '\\frac{1}{e}', compare: '$L = \\frac{1}{e} < 1$, since $e > 1$', converges: true },
+        'poly/exp': { term: `\\frac{${latexPower('n', k)}}{${c}^n}`, ratio: `${powOf('\\frac{n+1}{n}', k)} \\cdot \\frac{1}{${c}}`, L: `\\frac{1}{${c}}`, value: 1 / c, compare: `$L = \\frac{1}{${c}} < 1$`, converges: true },
+        'exp/fact': { term: `\\frac{${c}^n}{n!}`, ratio: `\\frac{${c}}{n+1}`, L: '0', value: 0, compare: '$L = 0 < 1$', converges: true },
+        'fact/exp': { term: `\\frac{n!}{${c}^n}`, ratio: `\\frac{n+1}{${c}}`, L: '\\infty', value: Infinity, compare: '$L = \\infty$', converges: false },
+        'exp/poly': { term: `\\frac{${c}^n}{${latexPower('n', k)}}`, ratio: `${c} \\cdot ${powOf('\\frac{n}{n+1}', k)}`, L: `${c}`, value: c, compare: `$L = ${c} > 1$`, converges: false },
+        'fact/power': { term: '\\frac{n!}{n^n}', ratio: '\\frac{(n+1)!}{(n+1)^{n+1}} \\cdot \\frac{n^n}{n!} = \\left(\\frac{n}{n+1}\\right)^n = \\frac{1}{\\left(1 + \\frac{1}{n}\\right)^n}', L: '\\frac{1}{e}', value: Math.exp(-1), compare: '$L = \\frac{1}{e} < 1$, since $e > 1$', converges: true },
       }[family];
-      return verdict(f.converges,
-        `Use the Ratio Test on $\\displaystyle\\sum_{n=1}^{\\infty} ${f.term}$.\n${ASK_VERDICT}`,
+      return decided(
+        `Use the Ratio Test on $\\displaystyle\\sum_{n=1}^{\\infty} ${f.term}$.\nFind $L = \\lim_{n\\to\\infty} \\left|\\frac{a_{n+1}}{a_n}\\right|$ (type ∞ if it is infinite). Does the series converge or diverge?`,
+        [{ label: 'L', spec: limitOf(f.value) }], verdictChoice(f.converges), `$L = ${f.L}$; ${f.converges ? 'converges' : 'diverges'}`,
         `$\\lim_{n\\to\\infty} \\left|\\frac{a_{n+1}}{a_n}\\right| = ${f.L}$, which is ${f.converges ? '$< 1$: the series converges' : '$> 1$: the series diverges'}.`,
         'Compute $L = \\lim \\left|\\frac{a_{n+1}}{a_n}\\right|$: $L < 1$ converges, $L > 1$ diverges.',
         [theorem('Ratio Test', [
@@ -657,81 +767,129 @@ export const seriesConvergence: GeneratorDef = {
         ], f.converges ? 'The series converges (absolutely).' : 'The series diverges.')]);
     }
     if (template === 'nth-term') {
+      const ask = 'Find $\\lim_{n\\to\\infty} a_n$, and what the $n$th-term test concludes: diverges, or inconclusive.';
+      const conclusion = (inconclusive: boolean): AnswerSpec => choice(['diverges', 'inconclusive'], inconclusive ? 'inconclusive' : 'diverges');
+      if (ctx.bool(0.25)) {
+        // a_n → 0: the test says nothing (whether the series converges is a different question)
+        const c = ctx.int(1, 5);
+        const d = ctx.int(0, 5);
+        const squared = ctx.bool();
+        const den = latexPolynomial([[1, squared ? 'n^2' : 'n'], [d, '']]);
+        const term = `\\frac{${c}}{${den}}`;
+        return decided(`Apply the $n$th-term test to $\\displaystyle\\sum_{n=1}^{\\infty} ${term}$.\n${ask}`,
+          [{ label: 'Limit of the terms', spec: limitOf(0) }], conclusion(true), '$\\lim a_n = 0$; the test is inconclusive',
+          `$\\lim_{n\\to\\infty} a_n = 0$, so the $n$th-term test is inconclusive: it can only show divergence.`,
+          'The $n$th-term test concludes only when $\\lim a_n \\neq 0$.',
+          [
+            step(`$${den} \\to \\infty$, so $a_n = ${term} \\to 0$.`),
+            step('The $n$th-term test needs $\\lim a_n \\neq 0$ (or no limit) to conclude anything; with $\\lim a_n = 0$ it is inconclusive.'),
+            step(squared
+              ? `(By comparison with the $p$-series $\\sum \\frac{1}{n^2}$ this series in fact converges, but the $n$th-term test cannot show that.)`
+              : `(By limit comparison with $\\sum \\frac{1}{n}$ this series in fact diverges, but the $n$th-term test cannot show that.)`),
+          ], NTH_TERM_PART);
+      }
       const [a, b, c, d] = [ctx.int(1, 5), ctx.int(0, 5), ctx.int(1, 5), ctx.int(1, 5)];
       const limit = simplifyFraction(a, c);
       const limitTex = latexFraction(limit.numerator, limit.denominator);
       const term = `\\frac{${latexPolynomial([[a, 'n'], [b, '']])}}{${latexPolynomial([[c, 'n'], [d, '']])}}`;
-      return verdict(false,
-        `Apply the $n$th-term test to $\\displaystyle\\sum_{n=1}^{\\infty} ${term}$.\n${ASK_VERDICT}`,
+      return decided(`Apply the $n$th-term test to $\\displaystyle\\sum_{n=1}^{\\infty} ${term}$.\n${ask}`,
+        [{ label: 'Limit of the terms', spec: limitOf(a / c) }], conclusion(false), `$\\lim a_n = ${limitTex}$; diverges`,
         `$\\lim_{n\\to\\infty} a_n = ${limitTex} \\neq 0$, so by the $n$th-term test the series diverges.`,
         'If $\\lim a_n \\neq 0$, the series cannot converge.',
         [theorem(NTH_TERM_TEST, [
           [NTH_TERM_HYPOTHESIS, `dividing the numerator and denominator by $n$, $a_n = \\frac{${perN(a, b)}}{${perN(c, d)}} \\to ${limitTex} \\neq 0$`],
-        ], 'The series diverges.')]);
+        ], 'The series diverges.')], NTH_TERM_PART);
     }
     if (template === 'integral-test') {
-      // Σ_{n≥2} 1/(n (ln n)^p): with u = ln x the integral is ∫_{ln 2}^∞ u^{-p} du, finite exactly when p > 1
-      const [pn, pd] = ctx.pick([[1, 2], [1, 1], [3, 2], [2, 1], [3, 1]] as const);
+      // Σ_{n≥2} 1/(n (ln n)^p): I(b) = ∫_2^b dx/(x (ln x)^p) = ((ln b)^{1−p} − (ln 2)^{1−p})/(1 − p) (ln ln b − ln ln 2 for p = 1)
+      const [pn, pd] = ctx.pick([[1, 3], [1, 2], [2, 3], [1, 1], [4, 3], [3, 2], [2, 1], [3, 1]] as const);
       const converges = pn > pd;
       const pTex = latexFraction(pn, pd);
-      const exponent = pd === 1 ? `${pn}` : `${pn}/${pd}`;
-      const lnPow = (v: string) => (pn === pd ? `\\ln(${v})` : pn === 1 && pd === 2 ? `\\sqrt{\\ln(${v})}` : `(\\ln(${v}))^{${exponent}}`);
+      const lnPow = (v: string) => (pn === pd ? `\\ln(${v})` : pn === 1 && pd === 2 ? `\\sqrt{\\ln(${v})}` : `(\\ln(${v}))^{${pd === 1 ? pn : `${pn}/${pd}`}}`);
       const fx = `\\frac{1}{x\\,${lnPow('x')}}`;
-      const uPow = pn === pd ? 'u' : pn === 1 && pd === 2 ? '\\sqrt{u}' : `u^{${exponent}}`;
+      const e = simplifyFraction(pd - pn, pd); // 1 − p
+      const eTex = latexFraction(e.numerator, e.denominator);
+      const coef = simplifyFraction(pd, pd - pn); // 1/(1 − p)
+      const I = pn === pd
+        ? { ref: 'log(log(b)) - log(log(2))', tex: '\\ln(\\ln b) - \\ln(\\ln 2)' }
+        : {
+          ref: `((log(b))^(${pd - pn}/${pd}) - (log(2))^(${pd - pn}/${pd}))/((${pd - pn})/${pd})`,
+          tex: converges
+            ? `${coefTex(pd, pn - pd)}\\left((\\ln 2)^{${eTex}} - (\\ln b)^{${eTex}}\\right)`
+            : `${coefTex(coef.numerator, coef.denominator)}\\left((\\ln b)^{${eTex}} - (\\ln 2)^{${eTex}}\\right)`,
+        };
+      const coefConv = simplifyFraction(pd, pn - pd);
+      const valueTex = converges
+        ? `\\frac{${coefConv.numerator}}{${coefConv.denominator === 1 ? '' : coefConv.denominator}${ln2Power(pn - pd, pd)}}`
+        : '\\infty';
+      const value = converges ? Math.pow(Math.LN2, 1 - pn / pd) / (pn / pd - 1) : Infinity;
       const outcome = converges ? 'converges' : 'diverges';
-      const evaluate = {
-        '1/2': '$\\int_{\\ln 2}^{b} \\frac{du}{\\sqrt{u}} = 2\\sqrt{b} - 2\\sqrt{\\ln 2} \\to \\infty$ as $b \\to \\infty$: the integral diverges.',
-        '1/1': '$\\int_{\\ln 2}^{b} \\frac{du}{u} = \\ln(b) - \\ln(\\ln 2) \\to \\infty$ as $b \\to \\infty$: the integral diverges.',
-        '3/2': '$\\int_{\\ln 2}^{\\infty} \\frac{du}{u^{3/2}} = \\left[-\\frac{2}{\\sqrt{u}}\\right]_{\\ln 2}^{\\infty} = \\frac{2}{\\sqrt{\\ln 2}}$: the integral converges.',
-        '2/1': '$\\int_{\\ln 2}^{\\infty} \\frac{du}{u^{2}} = \\left[-\\frac{1}{u}\\right]_{\\ln 2}^{\\infty} = \\frac{1}{\\ln 2}$: the integral converges.',
-        '3/1': '$\\int_{\\ln 2}^{\\infty} \\frac{du}{u^{3}} = \\left[-\\frac{1}{2u^{2}}\\right]_{\\ln 2}^{\\infty} = \\frac{1}{2(\\ln 2)^{2}}$: the integral converges.',
-      }[`${pn}/${pd}` as '1/2' | '1/1' | '3/2' | '2/1' | '3/1'];
-      return verdict(converges,
-        `Use the Integral Test on $\\displaystyle\\sum_{n=2}^{\\infty} \\frac{1}{n\\,${lnPow('n')}}$.\n${ASK_VERDICT}`,
-        `$f(x) = ${fx}$ is positive, continuous and decreasing on $[2, \\infty)$. With $u = \\ln(x)$, $\\int_2^{\\infty} f(x)\\,dx = \\int_{\\ln 2}^{\\infty} \\frac{du}{${uPow}}$, which ${outcome} since $p = ${pTex} ${converges ? '>' : '\\leq'} 1$. By the Integral Test the series ${outcome}.`,
-        'Check that $f(x)$ is positive, continuous and decreasing, then substitute $u = \\ln(x)$ in $\\int_2^{\\infty} f(x)\\,dx$.',
-        [
+      return {
+        templateId: template,
+        problemText: `Use the Integral Test on $\\displaystyle\\sum_{n=2}^{\\infty} \\frac{1}{n\\,${lnPow('n')}}$.\nWith $f(x) = ${fx}$, find $I(b) = \\int_2^b f(x)\\,dx$, the value of $\\int_2^{\\infty} f(x)\\,dx$ (type ∞ if it diverges), and whether the series converges or diverges.`,
+        answer: {
+          kind: 'multipart',
+          parts: [
+            { label: 'I(b)', spec: onDomain(I.ref, 2) },
+            { label: 'Value of the integral', spec: limitOf(value) },
+            { label: VERDICT_PART, spec: verdictChoice(converges) },
+          ],
+        },
+        displayAnswer: `$I(b) = ${I.tex}$; the integral is $${valueTex}$; the series ${outcome}`,
+        explanation: `$f(x) = ${fx}$ is positive, continuous and decreasing on $[2, \\infty)$. With $u = \\ln(x)$, $I(b) = ${I.tex}$, which tends to $${valueTex}$ since $p = ${pTex} ${converges ? '>' : '\\leq'} 1$. By the Integral Test the series ${outcome}.`,
+        hint: 'Check that $f(x)$ is positive, continuous and decreasing, then substitute $u = \\ln(x)$ in $\\int_2^b f(x)\\,dx$.',
+        solution: [
           theorem('Integral Test', [
             [`$f(x) = ${fx}$ is positive on $[2, \\infty)$`, 'for $x \\geq 2$, $x > 0$ and $\\ln(x) \\geq \\ln(2) > 0$'],
             ['$f$ is continuous on $[2, \\infty)$', 'its denominator is continuous and nonzero there'],
             ['$f$ is decreasing on $[2, \\infty)$', `$x$ and $${lnPow('x')}$ are positive and increasing there, so their product increases and $f$ decreases`],
           ], '$\\sum_{n=2}^{\\infty} f(n)$ and $\\int_2^{\\infty} f(x)\\,dx$ both converge or both diverge.'),
-          step(`Substitute $u = \\ln(x)$, $du = \\frac{dx}{x}$: $\\int_2^{\\infty} ${fx}\\,dx = \\int_{\\ln 2}^{\\infty} \\frac{du}{${uPow}}$.`),
-          step(evaluate),
-          step(`So the series ${outcome}.`),
-        ]);
+          step(pn === pd
+            ? 'Substitute $u = \\ln(x)$, $du = \\frac{dx}{x}$: $I(b) = \\int_{\\ln 2}^{\\ln b} \\frac{du}{u} = \\ln(\\ln b) - \\ln(\\ln 2)$.'
+            : `Substitute $u = \\ln(x)$, $du = \\frac{dx}{x}$: $I(b) = \\int_{\\ln 2}^{\\ln b} u^{-${pTex}}\\,du = \\left[\\frac{u^{${eTex}}}{${eTex}}\\right]_{\\ln 2}^{\\ln b} = ${I.tex}$.`),
+          step(converges
+            ? `Since $p = ${pTex} > 1$, the exponent $1 - p = ${eTex}$ is negative, so $(\\ln b)^{${eTex}} \\to 0$ as $b \\to \\infty$ and $I(b) \\to ${valueTex}$: the integral converges.`
+            : `Since $p = ${pTex} \\leq 1$, $I(b) \\to \\infty$ as $b \\to \\infty$: the integral diverges.`),
+          step(`So the series ${outcome}. (The Integral Test gives only the verdict: the sum of the series is not the value of the integral.)`),
+        ],
+      };
     }
-    // alternating series
-    if (ctx.bool(0.65)) {
-      const [n, d] = ctx.pick([[1, 2], [1, 1], [2, 1], [3, 1]] as const);
+    // alternating series: b_n = |a_n|, then absolutely / conditionally / diverges
+    const verdicts = ['converges absolutely', 'converges conditionally', 'diverges'];
+    if (ctx.bool(0.7)) {
+      const [n, d] = ctx.pick([[1, 2], [1, 1], [2, 1], [3, 1], [3, 2], [1, 3]] as const);
       const pow = powTex('n', n, d);
       const pTex = latexFraction(n, d);
-      return verdict(true,
-        `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{${pow}}$.\n${ASK_VERDICT}`,
-        `Alternating Series Test: $b_n = \\frac{1}{${pow}}$ is decreasing and $b_n \\to 0$, so the series converges.${n <= d ? ' (Only conditionally: the series of absolute values is a divergent $p$-series.)' : ''}`,
-        'Check the Alternating Series Test: is $b_n$ decreasing with limit $0$?',
+      const absolute = n > d;
+      const answer = absolute ? verdicts[0] : verdicts[1];
+      return decided(
+        `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} \\frac{(-1)^{n+1}}{${pow}}$.\nFind $b_n = |a_n|$ (as an expression in $n$), and say whether the series converges absolutely, converges conditionally, or diverges.`,
+        [{ label: 'b(n) = |a(n)|', spec: onDomain(`1/n^(${n}/${d})`, 1) }], choice(verdicts, answer), `$b_n = \\frac{1}{${pow}}$; ${answer}`,
+        `Alternating Series Test: $b_n = \\frac{1}{${pow}}$ is decreasing and $b_n \\to 0$, so the series converges. ${absolute ? `It converges absolutely: $\\sum b_n$ is a $p$-series with $p = ${pTex} > 1$.` : `Only conditionally: $\\sum b_n$ is a $p$-series with $p = ${pTex} \\leq 1$, which diverges.`}`,
+        'Check the Alternating Series Test (is $b_n$ decreasing with limit $0$?), then test $\\sum b_n$.',
         [
           theorem('Alternating Series Test', [
             ['The series is $\\sum (-1)^{n+1} b_n$ with $b_n > 0$', `$b_n = \\frac{1}{${pow}} > 0$ for $n \\geq 1$`],
             ['$b_n$ is decreasing', `$${n === d ? 'n + 1 > n' : `(n+1)^{${pTex}} > n^{${pTex}}`}$, so $b_{n+1} < b_n$`],
             ['$b_n \\to 0$', `$${pow} \\to \\infty$, so $b_n \\to 0$`],
           ], 'The series converges.'),
-          step(n <= d
-            ? `The convergence is only conditional: $\\sum |a_n| = \\sum \\frac{1}{${pow}}$ is a $p$-series with $p = ${pTex} \\leq 1$, which diverges.`
-            : `The convergence is absolute: $\\sum |a_n| = \\sum \\frac{1}{${pow}}$ is a $p$-series with $p = ${pTex} > 1$.`),
-        ]);
+          step(absolute
+            ? `The convergence is absolute: $\\sum |a_n| = \\sum \\frac{1}{${pow}}$ is a $p$-series with $p = ${pTex} > 1$.`
+            : `The convergence is only conditional: $\\sum |a_n| = \\sum \\frac{1}{${pow}}$ is a $p$-series with $p = ${pTex} \\leq 1$, which diverges.`),
+        ], ALTERNATING_PART);
     }
-    const c = ctx.int(1, 4);
-    return verdict(false,
-      `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} (-1)^n \\frac{n}{n + ${c}}$.\n${ASK_VERDICT}`,
-      `$\\frac{n}{n + ${c}} \\to 1$, so the terms $(-1)^n \\frac{n}{n + ${c}}$ do not tend to $0$: by the $n$th-term test the series diverges. (The Alternating Series Test does not apply, since $b_n \\not\\to 0$.)`,
+    const c = ctx.int(1, 6);
+    return decided(
+      `Consider the alternating series $\\displaystyle\\sum_{n=1}^{\\infty} (-1)^n \\frac{n}{n + ${c}}$.\nFind $b_n = |a_n|$ (as an expression in $n$), and say whether the series converges absolutely, converges conditionally, or diverges.`,
+      [{ label: 'b(n) = |a(n)|', spec: onDomain(`n/(n+${c})`, 1) }], choice(verdicts, 'diverges'), `$b_n = \\frac{n}{n + ${c}}$; diverges`,
+      `$b_n = \\frac{n}{n + ${c}} \\to 1$, so the terms $(-1)^n \\frac{n}{n + ${c}}$ do not tend to $0$: by the $n$th-term test the series diverges. (The Alternating Series Test does not apply, since $b_n \\not\\to 0$.)`,
       'Before any other test, check whether the terms tend to $0$.',
       [
         step(`The Alternating Series Test does not apply: it needs $b_n \\to 0$, and $b_n = \\frac{n}{n + ${c}} \\to 1$.`),
         theorem(NTH_TERM_TEST, [
           [NTH_TERM_HYPOTHESIS, `$|a_n| = \\frac{n}{n + ${c}} \\to 1$ while the sign alternates, so $a_n$ has no limit`],
         ], 'The series diverges.'),
-      ]);
+      ], ALTERNATING_PART);
   },
 };
 
@@ -744,7 +902,7 @@ const R_HINT = 'Use the Ratio Test: if $\\left|\\frac{a_{n+1}}{a_n}\\right| \\to
 
 export const powerSeries: GeneratorDef = {
   topicId: 'power-series',
-  version: 3,
+  version: 4,
   templates: POWER_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(POWER_TEMPLATES);
@@ -777,31 +935,53 @@ export const powerSeries: GeneratorDef = {
           [geometric(`${c}^n x^n = (${c}x)^n`, `${c}x`, `$|${c}x| < 1$, i.e. $|x| < \\frac{1}{${c}}$, so $R = \\frac{1}{${c}}$`)]);
     }
     if (template === 'polynomial-coefficient') {
-      const f = ctx.pick(['n^k', '1/n^k', '1/(n c^n)'] as const);
+      const f = ctx.pick(['n^k', 'n^k c^n', 'n^k/c^n', '1/((n+1)c^n)', 'c^n/(n+1)^k'] as const);
+      const nk = latexPower('n', k);
+      const up = powOf('\\frac{n+1}{n}', k);
       if (f === 'n^k') {
-        return q(`${latexPower('n', k)} x^n`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\left(\\frac{n+1}{n}\\right)^{${k}} \\to 1$, so $R = 1$.`,
-          [ratio(`$a_n = ${latexPower('n', k)} > 0$ for $n \\geq 1$`, powOf('\\frac{n+1}{n}', k), '1', '$R = \\frac{1}{L} = 1$.')]);
+        return q(`${nk} x^n`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = ${up} \\to 1$, so $R = 1$.`,
+          [ratio(`$a_n = ${nk} > 0$ for $n \\geq 1$`, up, '1', '$R = \\frac{1}{L} = 1$.')]);
       }
-      if (f === '1/n^k') {
-        const denominator = `(n+1)${k === 1 ? '' : `^{${k}}`}`;
-        return q(`\\frac{x^n}{${denominator}}`, 1, '1', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\left(\\frac{n+1}{n+2}\\right)^{${k}} \\to 1$, so $R = 1$.`,
-          [ratio(`$a_n = \\frac{1}{${denominator}} > 0$`, powOf('\\frac{n+1}{n+2}', k), '1', '$R = \\frac{1}{L} = 1$.')]);
+      if (f === 'n^k c^n') {
+        return q(`${c}^n \\cdot ${nk}\\, x^n`, 1 / c, `\\frac{1}{${c}}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = ${c} \\cdot ${up} \\to ${c}$, so $R = \\frac{1}{${c}}$.`,
+          [ratio(`$a_n = ${c}^n \\cdot ${nk} > 0$ for $n \\geq 1$`, `${c} \\cdot ${up}`, `${c}`, `$R = \\frac{1}{L} = \\frac{1}{${c}}$.`)]);
       }
-      return q(`\\frac{x^n}{(n+1)${c}^n}`, c, `${c}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{n+1}{${c}(n+2)} \\to \\frac{1}{${c}}$, so $R = ${c}$.`,
-        [ratio(`$a_n = \\frac{1}{(n+1)${c}^n} > 0$`, `\\frac{n+1}{${c}(n+2)}`, `\\frac{1}{${c}}`, `$R = \\frac{1}{L} = ${c}$.`)]);
+      if (f === 'n^k/c^n') {
+        return q(`\\frac{${nk}}{${c}^n} x^n`, c, `${c}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{1}{${c}} \\cdot ${up} \\to \\frac{1}{${c}}$, so $R = ${c}$.`,
+          [ratio(`$a_n = \\frac{${nk}}{${c}^n} > 0$ for $n \\geq 1$`, `\\frac{1}{${c}} \\cdot ${up}`, `\\frac{1}{${c}}`, `$R = \\frac{1}{L} = ${c}$.`)]);
+      }
+      if (f === '1/((n+1)c^n)') {
+        return q(`\\frac{x^n}{(n+1)${c}^n}`, c, `${c}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{n+1}{${c}(n+2)} \\to \\frac{1}{${c}}$, so $R = ${c}$.`,
+          [ratio(`$a_n = \\frac{1}{(n+1)${c}^n} > 0$`, `\\frac{n+1}{${c}(n+2)}`, `\\frac{1}{${c}}`, `$R = \\frac{1}{L} = ${c}$.`)]);
+      }
+      const denominator = `(n+1)${k === 1 ? '' : `^{${k}}`}`;
+      const down = powOf('\\frac{n+1}{n+2}', k);
+      return q(`\\frac{${c}^n x^n}{${denominator}}`, 1 / c, `\\frac{1}{${c}}`, `$\\left|\\frac{a_{n+1}}{a_n}\\right| = ${c} \\cdot ${down} \\to ${c}$, so $R = \\frac{1}{${c}}$.`,
+        [ratio(`$a_n = \\frac{${c}^n}{${denominator}} > 0$`, `${c} \\cdot ${down}`, `${c}`, `$R = \\frac{1}{L} = \\frac{1}{${c}}$.`)]);
     }
     if (template === 'factorial') {
-      const f = ctx.pick(['1/n!', 'c^n/n!', 'n!'] as const);
-      if (f === '1/n!') {
-        return q('\\frac{x^n}{n!}', Infinity, '\\infty', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{1}{n+1} \\to 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^x$).',
-          [ratio('$a_n = \\frac{1}{n!} > 0$', '\\frac{1}{n+1}', '0', '$L = 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^x$).')]);
-      }
+      const f = ctx.pick(['c^n/n!', 'n!/c^n', '(n!)^2/(2n)!', '(2n)!/(n!)^2'] as const);
+      const b = ctx.int(1, 5);
       if (f === 'c^n/n!') {
-        return q(`\\frac{${c}^n x^n}{n!}`, Infinity, '\\infty', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{${c}}{n+1} \\to 0$, so $R = \\infty$ (it is the series of $e^{${c}x}$).`,
-          [ratio(`$a_n = \\frac{${c}^n}{n!} > 0$`, `\\frac{${c}}{n+1}`, '0', `$L = 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $e^{${c}x}$).`)]);
+        const series = b === 1 ? '\\frac{x^n}{n!}' : `\\frac{${b}^n x^n}{n!}`;
+        const coef = b === 1 ? '\\frac{1}{n!}' : `\\frac{${b}^n}{n!}`;
+        const fn = b === 1 ? 'e^x' : `e^{${b}x}`;
+        return q(series, Infinity, '\\infty', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{${b}}{n+1} \\to 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $${fn}$).`,
+          [ratio(`$a_n = ${coef} > 0$`, `\\frac{${b}}{n+1}`, '0', `$L = 0$, so the series converges for every $x$: $R = \\infty$ (it is the series of $${fn}$).`)]);
       }
-      return q('n!\\, x^n', 0, '0', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = n + 1 \\to \\infty$, so the series converges only at $x = 0$: $R = 0$.',
-        [ratio('$a_n = n! > 0$', 'n + 1', '\\infty', '$L = \\infty$, so the series converges only at $x = 0$: $R = 0$.')]);
+      if (f === 'n!/c^n') {
+        const series = b === 1 ? 'n!\\, x^n' : `\\frac{n!}{${b}^n} x^n`;
+        const coef = b === 1 ? 'n!' : `\\frac{n!}{${b}^n}`;
+        const r = b === 1 ? 'n + 1' : `\\frac{n + 1}{${b}}`;
+        return q(series, 0, '0', `$\\left|\\frac{a_{n+1}}{a_n}\\right| = ${r} \\to \\infty$, so the series converges only at $x = 0$: $R = 0$.`,
+          [ratio(`$a_n = ${coef} > 0$`, r, '\\infty', '$L = \\infty$, so the series converges only at $x = 0$: $R = 0$.')]);
+      }
+      if (f === '(n!)^2/(2n)!') {
+        return q('\\frac{(n!)^2}{(2n)!} x^n', 4, '4', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{(n+1)^2}{(2n+2)(2n+1)} = \\frac{n+1}{2(2n+1)} \\to \\frac{1}{4}$, so $R = 4$.',
+          [ratio('$a_n = \\frac{(n!)^2}{(2n)!} > 0$', '\\frac{(n+1)^2}{(2n+2)(2n+1)} = \\frac{n+1}{2(2n+1)}', '\\frac{1}{4}', '$R = \\frac{1}{L} = 4$.')]);
+      }
+      return q('\\frac{(2n)!}{(n!)^2} x^n', 1 / 4, '\\frac{1}{4}', '$\\left|\\frac{a_{n+1}}{a_n}\\right| = \\frac{(2n+2)(2n+1)}{(n+1)^2} = \\frac{2(2n+1)}{n+1} \\to 4$, so $R = \\frac{1}{4}$.',
+        [ratio('$a_n = \\frac{(2n)!}{(n!)^2} > 0$', '\\frac{(2n+2)(2n+1)}{(n+1)^2} = \\frac{2(2n+1)}{n+1}', '4', '$R = \\frac{1}{L} = \\frac{1}{4}$.')]);
     }
     // shifted centre: Σ (x − a)ⁿ / cⁿ, R = c (the centre does not change the radius)
     const a = ctx.pick([-4, -3, -2, -1, 1, 2, 3, 4]);
@@ -1046,7 +1226,7 @@ const surdTimes = (r: number, [sign, k]: [number, number]): { tex: string; value
 
 export const polarCoordinates: GeneratorDef = {
   topicId: 'polar-coordinates',
-  version: 3,
+  version: 4,
   templates: POLAR_TEMPLATES,
   generate: (ctx) => {
     const template = ctx.pick(POLAR_TEMPLATES);
@@ -1098,23 +1278,31 @@ export const polarCoordinates: GeneratorDef = {
         hint: `$${isX ? 'x' : 'y'} = r\\${fn}(\\theta)$`,
       };
     }
-    // identify the curve
+    // identify the curve: its Cartesian equation, typed
     const a = ctx.int(1, 6);
-    const m = ctx.pick([3, 4, 6]);
+    const m = ctx.pick([3, 4, 6] as const);
     const variant = ctx.pick(['r=c', 'theta=c', 'r=acos', 'r=asin', 'rcos=a', 'rsin=a'] as const);
+    const aTex = a === 1 ? '' : `${a}`;
+    const slope = { 3: { ref: 'sqrt(3)', tex: '\\sqrt{3}' }, 4: { ref: '1', tex: '' }, 6: { ref: '1/sqrt(3)', tex: '\\frac{1}{\\sqrt{3}}' } }[m];
     const curves = {
-      'r=c': { eq: `$r = ${a + 1}$`, answer: 'circle', why: `Every point is at distance $${a + 1}$ from the origin: the circle $x^2 + y^2 = ${(a + 1) ** 2}$.` },
-      'theta=c': { eq: `$\\theta = \\frac{\\pi}{${m}}$ (with $r$ allowed to be negative)`, answer: 'line', why: '$\\theta$ constant with $r \\in \\mathbb{R}$ is a full line through the origin ($r < 0$ gives the opposite ray); with $r \\geq 0$ only, it would be a ray.' },
-      'r=acos': { eq: `$r = ${a}\\cos(\\theta)$`, answer: 'circle', why: `Multiply by $r$: $x^2 + y^2 = ${a === 1 ? '' : a}x$, a circle through the origin with centre $(${latexFraction(a, 2)}, 0)$.` },
-      'r=asin': { eq: `$r = ${a}\\sin(\\theta)$`, answer: 'circle', why: `Multiply by $r$: $x^2 + y^2 = ${a === 1 ? '' : a}y$, a circle through the origin with centre $(0, ${latexFraction(a, 2)})$.` },
-      'rcos=a': { eq: `$r\\cos(\\theta) = ${a}$`, answer: 'line', why: `$r\\cos\\theta = x$, so this is the vertical line $x = ${a}$.` },
-      'rsin=a': { eq: `$r\\sin(\\theta) = ${a}$`, answer: 'line', why: `$r\\sin\\theta = y$, so this is the horizontal line $y = ${a}$.` },
+      'r=c': { eq: `$r = ${a + 1}$`, lhs: 'x^2 + y^2', rhs: `${(a + 1) ** 2}`, tex: `x^2 + y^2 = ${(a + 1) ** 2}`, name: `the circle of radius $${a + 1}$ centred at the origin`,
+        why: `$r^2 = x^2 + y^2$, so $r = ${a + 1}$ is $x^2 + y^2 = ${(a + 1) ** 2}$.` },
+      'theta=c': { eq: `$\\theta = \\frac{\\pi}{${m}}$ (with $r$ allowed to be negative)`, lhs: 'y', rhs: `${slope.ref}*x`, tex: `y = ${slope.tex}x`, name: 'a line through the origin',
+        why: `Every point has $\\frac{y}{x} = \\tan\\frac{\\pi}{${m}}$ (or is the origin), so the curve is $y = ${slope.tex}x$. With $r \\in \\mathbb{R}$ it is the whole line; with $r \\geq 0$ only, it would be a ray.` },
+      'r=acos': { eq: `$r = ${aTex}\\cos(\\theta)$`, lhs: 'x^2 + y^2', rhs: `${a}*x`, tex: `x^2 + y^2 = ${aTex}x`, name: `a circle through the origin, centre $(${latexFraction(a, 2)}, 0)$`,
+        why: `Multiply by $r$: $r^2 = ${aTex}r\\cos\\theta$, that is $x^2 + y^2 = ${aTex}x$. (Multiplying by $r$ adds only the origin, which is already on the curve at $\\theta = \\frac{\\pi}{2}$.)` },
+      'r=asin': { eq: `$r = ${aTex}\\sin(\\theta)$`, lhs: 'x^2 + y^2', rhs: `${a}*y`, tex: `x^2 + y^2 = ${aTex}y`, name: `a circle through the origin, centre $(0, ${latexFraction(a, 2)})$`,
+        why: `Multiply by $r$: $r^2 = ${aTex}r\\sin\\theta$, that is $x^2 + y^2 = ${aTex}y$. (Multiplying by $r$ adds only the origin, which is already on the curve at $\\theta = 0$.)` },
+      'rcos=a': { eq: `$r\\cos(\\theta) = ${a}$`, lhs: 'x', rhs: `${a}`, tex: `x = ${a}`, name: 'a vertical line',
+        why: `$r\\cos\\theta = x$, so this is the vertical line $x = ${a}$.` },
+      'rsin=a': { eq: `$r\\sin(\\theta) = ${a}$`, lhs: 'y', rhs: `${a}`, tex: `y = ${a}`, name: 'a horizontal line',
+        why: `$r\\sin\\theta = y$, so this is the horizontal line $y = ${a}$.` },
     }[variant];
     return {
       templateId: template,
-      problemText: `What type of curve is ${curves.eq}?`,
-      answer: choice(['circle', 'line'], curves.answer),
-      displayAnswer: `A ${curves.answer}`,
+      problemText: `Write the polar curve ${curves.eq} as an equation in $x$ and $y$.`,
+      answer: { kind: 'equation', lhs: curves.lhs, rhs: curves.rhs },
+      displayAnswer: `$${curves.tex}$: ${curves.name}`,
       explanation: curves.why,
       hint: 'Convert with $x = r\\cos\\theta$, $y = r\\sin\\theta$, $x^2 + y^2 = r^2$.',
     };

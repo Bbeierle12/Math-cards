@@ -7,8 +7,8 @@
  */
 import { parse, type MathNode } from 'mathjs';
 import type { AnswerSpec, Interval } from '../../types';
-import { normalizeMathExpr } from './normalize';
-import { parseInfinity } from './grade';
+import { normalizeMathExpr, normalizeWord } from './normalize';
+import { DOES_NOT_EXIST, parseInfinity } from './grade';
 import { finiteSetItems, parseIntervalSet } from './sets';
 
 export type Preview = { tex: string } | { error: string } | null;
@@ -66,6 +66,12 @@ export const previewInput = (spec: AnswerSpec | null, input: string): Preview =>
     return tex === null ? { error: INCOMPLETE } : { tex: degree ? `${tex}^{\\circ}` : tex };
   }
   switch (s.kind) {
+    case 'limit': {
+      if (DOES_NOT_EXIST.test(normalizeWord(input))) return { tex: '\\text{does not exist}' };
+      const inf = parseInfinity(input);
+      if (inf !== null) return { tex: inf > 0 ? '\\infty' : '-\\infty' };
+      return fromTex(expressionTex(input));
+    }
     case 'expression':
     case 'antiderivative': {
       const assigned = input.match(/^\s*([a-zA-Z])\s*=(.*)$/);

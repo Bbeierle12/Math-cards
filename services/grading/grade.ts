@@ -64,6 +64,9 @@ export const parseInfinity = (raw: string): number | null => {
   return m[1] === '-' ? -Infinity : Infinity;
 };
 
+/** "DNE", "does not exist": the answer for a limit that does not exist. */
+export const DOES_NOT_EXIST = /^(dne|does not exist|the limit does not exist)$/;
+
 const assertNever = (x: never): never => { throw new Error(`unhandled answer kind: ${JSON.stringify(x)}`); };
 
 const bigGcd = (a: bigint, b: bigint): bigint => {
@@ -122,6 +125,14 @@ export const grade = (spec: AnswerSpec, input: AnswerInput, ctx: GradeContext = 
         if (inf !== null || !Number.isFinite(spec.value)) return inf !== null && inf === spec.value;
       }
       const v = parseNumericInput(typed, spec.form ?? 'any');
+      return v !== null && Math.abs(v - spec.value) <= toleranceFor(spec.tolerance, spec.value);
+    }
+    case 'limit': {
+      if (DOES_NOT_EXIST.test(normalizeWord(input))) return spec.value === null;
+      if (spec.value === null) return false;
+      const inf = parseInfinity(input);
+      if (inf !== null || !Number.isFinite(spec.value)) return inf !== null && inf === spec.value;
+      const v = parseNumericInput(input);
       return v !== null && Math.abs(v - spec.value) <= toleranceFor(spec.tolerance, spec.value);
     }
     case 'fraction':

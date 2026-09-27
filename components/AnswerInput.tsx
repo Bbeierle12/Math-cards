@@ -8,7 +8,7 @@ import MathText from './MathText';
  * Answer controls, derived from the problem's answer contract. The parent
  * keeps one string per input slot in `values`:
  *  - fraction: [numerator, denominator]
- *  - choice: [selected option]
+ *  - choice: [typed word] (there are no answer buttons)
  *  - multipart: one entry per part
  *  - everything else: [text]
  */
@@ -67,6 +67,8 @@ const typedInput = (spec: AnswerSpec | null): { inputMode: 'decimal' | 'text'; p
       : { inputMode: 'decimal', placeholder: 'Your answer (e.g. 12, -3, 3/5, 0.75)' };
   }
   switch (s.kind) {
+    case 'limit': return { inputMode: 'text', placeholder: 'A number, ∞, −∞, or DNE' };
+    case 'choice': return { inputMode: 'text', placeholder: `Type ${s.options.slice(0, -1).join(', ')}${s.options.length > 1 ? ' or ' : ''}${s.options[s.options.length - 1]}` };
     case 'interval': return { inputMode: 'text', placeholder: 'e.g. x < 3, or (-inf, 3]' };
     case 'finiteSet': return { inputMode: 'text', placeholder: 'e.g. 2, -3' };
     default: return { inputMode: 'text', placeholder: 'Your answer...' };
@@ -91,6 +93,7 @@ export const symbolsFor = (spec: AnswerSpec | null): string[] => {
     case 'antiderivative':
     case 'equation':
       return ['π', '√', '^', ...(JSON.stringify(s).includes('theta') ? ['θ'] : [])];
+    case 'limit': return ['π', '√', '^', '∞'];
     case 'interval': return ['≤', '≥', '∞', '∪'];
     case 'finiteSet': return ['π', '√'];
     default: return [];
@@ -137,33 +140,6 @@ const textInputClass = (status: AnswerInputProps['status'], animate: boolean, wi
   `${width} text-xl p-4 bg-slate-700 border-2 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all disabled:opacity-50 ${
     status === 'incorrect' ? `border-red-500 ${animate ? 'animate-shake' : ''}` : 'border-slate-600'
   }`;
-
-function ChoiceButtons({ options, value, onSelect, disabled, label }: {
-  options: string[]; value: string; onSelect: (v: string) => void; disabled: boolean; label: string;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap justify-center gap-2">
-      {options.map(opt => {
-        const selected = value === opt;
-        return (
-          <button
-            key={opt}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={disabled}
-            onClick={() => onSelect(opt)}
-            className={`min-w-[8rem] px-5 py-3 rounded-lg text-lg font-semibold capitalize border-2 transition-colors disabled:opacity-60 ${
-              selected ? 'bg-cyan-600 border-cyan-400 text-white' : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
-            }`}
-          >
-            {opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function AnswerInput({ problem, values, onChange, disabled, status, animate }: AnswerInputProps) {
   const set = (i: number, v: string) => {
@@ -217,19 +193,9 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
     );
   }
 
-  if (spec.kind === 'choice') {
-    return (
-      <ChoiceButtons
-        options={spec.options} value={values[0] ?? ''}
-        onSelect={v => set(0, v)} disabled={disabled} label="Answer"
-      />
-    );
-  }
-
   if (spec.kind === 'multipart') {
     const { parts } = spec;
-    const typedParts = parts.map((part, i) => ({ part, i }))
-      .filter(({ part, i }) => partIsActive(parts, i, values) && (part.spec === null || controlSpec(part.spec).kind !== 'choice'));
+    const typedParts = parts.map((part, i) => ({ part, i })).filter(({ i }) => partIsActive(parts, i, values));
     const symbols = [...new Set(typedParts.flatMap(({ part }) => symbolsFor(part.spec)))];
     if (typedParts.length > 0 && !typedParts.some(({ i }) => i === activeSlot.current)) activeSlot.current = typedParts[0].i;
     return (
@@ -241,21 +207,13 @@ export default function AnswerInput({ problem, values, onChange, disabled, statu
           return (
             <div key={i} className="flex flex-col items-center gap-2">
               <span className="text-sm font-medium text-slate-300">{part.label}</span>
-              {partSpec?.kind === 'choice' ? (
-                <ChoiceButtons
-                  options={partSpec.options} value={values[i] ?? ''}
-                  onSelect={v => set(i, v)} disabled={disabled} label={part.label}
-                />
-              ) : (
-                <>
-                  <input
-                    type="text" inputMode={typed.inputMode} autoComplete="off" spellCheck={false} aria-label={part.label}
-                    value={values[i] ?? ''} onChange={e => set(i, e.target.value)} disabled={disabled}
-                    placeholder={typed.placeholder} className={textInputClass(status, animate, 'w-64')} {...typedProps(i)}
-                  />
-                  <InputPreview spec={part.spec} value={values[i] ?? ''} />
-                </>
-              )}
+              <input
+                type="text" inputMode={typed.inputMode} autoComplete="off" spellCheck={false} aria-label={part.label}
+                value={values[i] ?? ''} onChange={e => set(i, e.target.value)} disabled={disabled}
+                placeholder={typed.placeholder} className={textInputClass(status, animate, 'w-72')} {...typedProps(i)}
+                autoFocus={i === 0}
+              />
+              {partSpec?.kind !== 'choice' && <InputPreview spec={part.spec} value={values[i] ?? ''} />}
             </div>
           );
         })}

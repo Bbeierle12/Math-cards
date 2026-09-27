@@ -16,7 +16,7 @@ import { parse } from 'mathjs';
 import { GENERATORS, generateProblem } from '../../services/generators';
 import { normalizeMathExpr, referenceNumber } from '../../services/grading';
 import { coef, latexToExpr, terms } from '../../services/testing/latex';
-import type { Problem } from '../../types';
+import type { AnswerSpec, Problem } from '../../types';
 
 const SEEDS = Number(process.env.ORACLE_SEEDS || 300);
 const OUT = process.env.ORACLE_OUT || 'scripts/oracle/out/claims.json';
@@ -47,6 +47,7 @@ const sym = (expr: string): string => {
   return node.toString({ implicit: 'show', parenthesis: 'keep' })
     .replace(/\be\b/g, 'E')
     .replace(/\babs\(/g, 'Abs(')
+    .replace(/\(([^()]*)\)!/g, 'factorial($1)')
     .replace(/\b(\w+)!/g, 'factorial($1)')
     .replace(/\^/g, '**');
 };
@@ -58,16 +59,30 @@ const num = (p: Problem): string => {
   if (v === null) throw new Error(`not numeric: ${p.problemText}`);
   return String(v);
 };
-const verdict = (p: Problem): string | null => (p.answer.kind === 'choice' ? p.answer.answer : null);
 /** Displayed LaTeX → SymPy text. */
 const texSym = (tex: string): string => sym(latexToExpr(tex));
-/** The key of a convergence question: its value as a string, or null for "diverges". */
-const convergenceValue = (p: Problem): string | null => {
-  if (p.answer.kind !== 'multipart') throw new Error(`not a convergence question: ${p.problemText}`);
-  const [v, value] = p.answer.parts;
-  if (v.spec?.kind !== 'choice') throw new Error('no verdict');
-  return v.spec.answer === 'diverges' ? null : value.spec && value.spec.kind === 'number' ? String(value.spec.value) : 'nan';
+/** Part i of a multipart answer. */
+const part = (p: Problem, i: number): AnswerSpec => {
+  if (p.answer.kind !== 'multipart' || !p.answer.parts[i]?.spec) throw new Error(`no part ${i}: ${p.problemText}`);
+  return p.answer.parts[i].spec!;
 };
+/** A typed limit as a claim value: a number, 'oo', '-oo', or 'none'. */
+const limitValue = (spec: AnswerSpec): string => {
+  if (spec.kind !== 'limit') throw new Error(`not a limit: ${JSON.stringify(spec)}`);
+  if (spec.value === null) return 'none';
+  if (!Number.isFinite(spec.value)) return spec.value > 0 ? 'oo' : '-oo';
+  return String(spec.value);
+};
+const word = (spec: AnswerSpec): string => {
+  if (spec.kind !== 'choice') throw new Error(`not a verdict word: ${JSON.stringify(spec)}`);
+  return spec.answer;
+};
+const expressionRef = (spec: AnswerSpec): string => {
+  if (spec.kind !== 'expression') throw new Error(`not an expression: ${JSON.stringify(spec)}`);
+  return spec.reference;
+};
+/** An expression answer in variable v, as SymPy text in x. */
+const inX = (spec: AnswerSpec, v: string): string => sym(expressionRef(spec)).replace(new RegExp(`\\b${v}\\b`, 'g'), 'x');
 const m = (p: Problem, re: RegExp): RegExpMatchArray => {
   const r = p.problemText.match(re);
   if (!r) throw new Error(`unparsed prompt for ${p.topicId}/${p.templateId}: ${p.problemText}`);
@@ -162,9 +177,16 @@ const claimsFor = (p: Problem): Claim[] | null => {
           ? claim(pw, atInfinity ? '1' : '0', atInfinity ? 'oo' : '1', value)
           : { type: 'value', expr: '0', value: '1' }));
       }
-      const [, lo, hi, integrand] = m(p, /\\int_(\d)\^\{(\\infty|1)\} (.+?)\\,dx\$ converge/);
-      const value = convergenceValue(p);
-      return [{ type: 'definite', f: texSym(integrand), x: 'x', a: lo, b: hi === '1' ? '1' : 'oo', value: value === null ? 'oo' : value }];
+      const [, lo, hi, integrand] = m(p, /value of \$\\displaystyle\\int_(\d)\^\{(\\infty|1)\} (.+?)\\,dx = \\lim/);
+      const f = texSym(integrand);
+      const lower = lo === '0' && hi === '1'; // I(a) = ∫_a^1, else I(b) = ∫_lo^b
+      const I = inX(part(p, 0), lower ? 'a' : 'b');
+      return [
+        { type: 'definite', f, x: 'x', a: lo, b: hi === '1' ? '1' : 'oo', value: limitValue(part(p, 1)) },
+        // I is the integral with a variable end: its derivative is ±f and it vanishes at the fixed end
+        { type: 'derivative', f: I, g: lower ? `-(${f})` : f, x: 'x' },
+        { type: 'value', expr: `(${I}).subs(x, ${lower ? 1 : lo})`, value: '0' },
+      ];
     }
     case 'partial-fractions': {
       if (p.templateId.startsWith('distinct-linear')) {
@@ -181,31 +203,85 @@ const claimsFor = (p: Problem): Claim[] | null => {
     }
     case 'sequences': {
       let r: RegExpMatchArray | null;
-      if ((r = p.problemText.match(/Does the sequence \$a_n = (.+)\$ converge or diverge/))) {
-        return [{ type: 'limit', expr: texSym(r[1]), x: 'n', at: 'oo', value: convergenceValue(p) ?? 'none' }];
+      if ((r = p.problemText.match(/Find \$\\lim_\{n\\to\\infty\} a_n\$ for \$a_n = (.+)\$\.\n/))) {
+        return [{ type: 'limit', expr: texSym(r[1]), x: 'n', at: 'oo', value: limitValue(p.answer) }];
       }
       if ((r = p.problemText.match(/The sequence \$a_n = (.+)\$ is increasing and bounded above by \$(\d+)\$/))) {
         return [
           { type: 'monotonic', expr: texSym(r[1]), n: 'n', value: true },
           { type: 'value', expr: `Piecewise((1, Max(*[(${texSym(r[1])}).subs(n, k) for k in range(1, 200)]) <= ${r[2]}), (0, True))`, value: '1' },
-          { type: 'limit', expr: texSym(r[1]), x: 'n', at: 'oo', value: convergenceValue(p) ?? 'none' },
+          { type: 'limit', expr: texSym(r[1]), x: 'n', at: 'oo', value: limitValue(p.answer) },
         ];
       }
-      if ((r = p.problemText.match(/Is the sequence \$a_n = (.+)\$ \(for \$n \\geq 1\$\) monotonic\?/))) {
-        return [{ type: 'monotonic', expr: texSym(r[1]), n: 'n', value: verdict(p) === 'yes' }];
+      if ((r = p.problemText.match(/Let \$a_n = (.+)\$ for \$n \\geq 1\$\.\nFind \$a_\{n\+1\} - a_n\$/))) {
+        const a = texSym(r[1]);
+        const difference = sym(expressionRef(part(p, 0)));
+        const direction = word(part(p, 1));
+        const steps = `[(${difference}).subs(n, k) for k in range(1, 200)]`;
+        return [
+          { type: 'identity', a: difference, b: `(${a}).subs(n, n + 1) - (${a})` },
+          { type: 'monotonic', expr: a, n: 'n', value: direction !== 'neither' },
+          ...(direction === 'neither' ? [] : [{
+            type: 'value' as const,
+            expr: `Piecewise((1, ${direction === 'increasing' ? `Min(*${steps}) > 0` : `Max(*${steps}) < 0`}), (0, True))`,
+            value: '1',
+          }]),
+        ];
       }
       return null; // n-th term questions: arithmetic, recomputed in mathCorrectness.test.ts
     }
     case 'series-convergence': {
-      const [, start, term] = m(p, /\\sum_\{n=(\d)\}\^\{\\infty\} (.+?)\$/);
-      const v = verdict(p);
-      if (v === null) {
-        const value = convergenceValue(p);
-        return value === null
-          ? [{ type: 'converges', term: texSym(term), n: 'n', start: Number(start), value: false }]
-          : [{ type: 'sum', term: texSym(term), n: 'n', start: Number(start), value }];
+      const [, startText, termTex] = m(p, /\\sum_\{n=(\d)\}\^\{\\infty\} (.+?)\$/);
+      const start = Number(startText);
+      const term = texSym(termTex);
+      const converges = (value: boolean, t = term): Claim => ({ type: 'converges', term: t, n: 'n', start, value });
+      if (/common ratio/.test(p.problemText)) {
+        const verdictWord = word(part(p, 1));
+        return [
+          { type: 'value', expr: `(${term}).subs(n, ${start + 1})/(${term}).subs(n, ${start})`, value: String(referenceNumber(part(p, 0))) },
+          verdictWord === 'converges'
+            ? { type: 'sum', term, n: 'n', start, value: String(referenceNumber(part(p, 2))) }
+            : converges(false),
+        ];
       }
-      return [{ type: 'converges', term: texSym(term), n: 'n', start: Number(start), value: v === 'converges' }];
+      if (/Ratio Test/.test(p.problemText)) {
+        return [
+          { type: 'limit', expr: `Abs((${term}).subs(n, n + 1)/(${term}))`, x: 'n', at: 'oo', value: limitValue(part(p, 0)) },
+          converges(word(part(p, 1)) === 'converges'),
+        ];
+      }
+      if (/Integral Test/.test(p.problemText)) {
+        const f = term.replace(/\bn\b/g, 'x');
+        return [
+          { type: 'derivative', f: inX(part(p, 0), 'b'), g: f, x: 'x' },
+          { type: 'value', expr: `(${inX(part(p, 0), 'b')}).subs(x, 2)`, value: '0' },
+          { type: 'definite', f, x: 'x', a: '2', b: 'oo', value: limitValue(part(p, 1)) },
+          converges(word(part(p, 2)) === 'converges'),
+        ];
+      }
+      if (/\$n\$th-term test/.test(p.problemText)) {
+        const conclusion = word(part(p, 1));
+        return [
+          { type: 'limit', expr: term, x: 'n', at: 'oo', value: limitValue(part(p, 0)) },
+          // "diverges" is the test's conclusion only when the limit is not 0; "inconclusive" only when it is
+          { type: 'value', expr: `Piecewise((1, Eq(limit_seq(${term}, n), 0)), (0, True))`, value: conclusion === 'inconclusive' ? '1' : '0' },
+          ...(conclusion === 'diverges' ? [converges(false)] : []),
+        ];
+      }
+      if (/alternating series/.test(p.problemText)) {
+        const b = sym(expressionRef(part(p, 0)));
+        const verdictWord = word(part(p, 1));
+        return [
+          { type: 'value', expr: `Max(*[Abs((${b}).subs(n, k) - Abs((${term}).subs(n, k))) for k in range(1, 40)])`, value: '0' },
+          converges(verdictWord !== 'diverges'),
+          converges(verdictWord === 'converges absolutely', `Abs(${term})`),
+        ];
+      }
+      // p-series: c/n^p
+      return [
+        { type: 'limit', expr: `-log(${term})/log(n)`, x: 'n', at: 'oo', value: String(referenceNumber(part(p, 0))) },
+        converges(word(part(p, 1)) === 'converges'),
+      ];
     }
     case 'power-series': {
       const [, series] = m(p, /\\sum_\{n=0\}\^\{\\infty\} (.+)\$/);
@@ -346,7 +422,21 @@ const claimsFor = (p: Problem): Claim[] | null => {
       if ((r = p.problemText.match(/\(r=(\d+),\\; \\theta=(\d+)°\)\$ to Cartesian.\nWhat is \$(x|y)\$/))) {
         return [{ type: 'value', expr: `${r[1]}*${r[3] === 'x' ? 'cos' : 'sin'}(${r[2]}*pi/180)`, value: num(p) }];
       }
-      return null; // curve identification: recomputed in mathCorrectness.test.ts
+      if ((r = p.problemText.match(/Write the polar curve (.+) as an equation in \$x\$ and \$y\$\./)) && p.answer.kind === 'equation') {
+        // the Cartesian answer holds at every point of the polar curve
+        const eq = r[1];
+        let x: string; let y: string;
+        let q: RegExpMatchArray | null;
+        if ((q = eq.match(/^\$r = (\d+)\$$/))) [x, y] = [`${q[1]}*cos(t)`, `${q[1]}*sin(t)`];
+        else if ((q = eq.match(/^\$\\theta = \\frac\{\\pi\}\{(\d)\}\$/))) [x, y] = [`t*cos(pi/${q[1]})`, `t*sin(pi/${q[1]})`];
+        else if ((q = eq.match(/^\$r = (\d*)\\(cos|sin)\(\\theta\)\$$/))) [x, y] = [`${q[1] || 1}*${q[2]}(t)*cos(t)`, `${q[1] || 1}*${q[2]}(t)*sin(t)`];
+        else if ((q = eq.match(/^\$r\\(cos|sin)\(\\theta\) = (\d+)\$$/))) [x, y] = q[1] === 'cos' ? [q[2], `${q[2]}*tan(t)`] : [`${q[2]}/tan(t)`, q[2]];
+        else throw new Error(`unparsed polar curve: ${eq}`);
+        const { lhs, rhs } = p.answer;
+        const at = (e: string) => `(${sym(e)}).subs({x: ${x}, y: ${y}}, simultaneous=True)`;
+        return [{ type: 'identity', a: at(lhs), b: at(rhs) }];
+      }
+      return null;
     }
     default:
       return null; // families without a symbolic claim (arithmetic, geometry, word problems): covered by mathCorrectness.test.ts

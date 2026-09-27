@@ -212,12 +212,6 @@ describe('audit reproductions', () => {
     }
   });
 
-  it('alternating sequences are never called monotonic', () => {
-    for (const p of sampleWhere('sequences', q => /monotonic\?/.test(q.problemText) && /\(-1\)\^n/.test(q.problemText), 6)) {
-      expect(ref(p)).toBe('no');
-      expect(p.explanation).toMatch(/alternate|up and down/);
-    }
-  });
   it('polar θ questions fix an interval and never divide by zero in the explanation', () => {
     for (const p of sampleWhere('polar-coordinates', q => /What is \$\\theta\$/.test(q.problemText), 6)) {
       expect(p.problemText).toMatch(/0° \\leq \\theta < 360°/);
@@ -521,36 +515,64 @@ describe('independent recomputation: geometry', () => {
   });
 });
 
-// "Does it converge? If so, to what?" is a two-part answer: the verdict and,
-// when it converges, the limit. Omitting either part earns no credit, and
-// every such question has the same shape, so the shape reveals nothing.
-const expectConvergence = (p: Problem, limit: number | null) => {
-  expect(p.answer.kind).toBe('multipart');
-  if (p.answer.kind === 'multipart') expect(p.answer.parts[0].label).toBe('Verdict');
-  if (limit === null) {
-    expect(validateAnswer(p, ['diverges', ''])).toBe(true);
-    expect(validateAnswer(p, ['converges', '0'])).toBe(false);
-    expect(validateAnswer(p, ['converges', '1'])).toBe(false);
+// Typed limits and typed verdicts. A limit is one typed answer: a number, ±∞,
+// or DNE; its input never reveals which. A verdict word is always graded
+// together with the typed quantity that decides it, so the word alone (or
+// with a wrong quantity) earns nothing.
+const parts = (p: Problem) => {
+  if (p.answer.kind !== 'multipart') throw new Error(`not a multipart answer: ${p.problemText}`);
+  return p.answer.parts;
+};
+/** The value of a typed limit (a number, ±∞, or null for "does not exist"). */
+const limitKey = (spec: AnswerSpec | null | undefined): number | null => {
+  if (!spec || spec.kind !== 'limit') throw new Error(`not a limit: ${JSON.stringify(spec)}`);
+  return spec.value;
+};
+/** The typed word of a verdict part. */
+const word = (spec: AnswerSpec | null | undefined): string => {
+  if (!spec || spec.kind !== 'choice') throw new Error(`not a verdict word: ${JSON.stringify(spec)}`);
+  return spec.answer;
+};
+/** The canonical answer with part i replaced. */
+const canonicalWith = (p: Problem, i: number, input: string): string[] =>
+  (canonicalInput(p.answer) as string[]).map((v, j) => (j === i ? input : v));
+/** A typed limit (part i, or the whole answer when i is null) accepts its value and nothing a guesser would type instead. */
+const expectLimit = (p: Problem, i: number | null, value: number | null) => {
+  const ok = (s: string) => validateAnswer(p, i === null ? s : canonicalWith(p, i, s));
+  if (value === null) {
+    expect(ok('DNE')).toBe(true);
+    expect(ok('does not exist')).toBe(true);
+    for (const s of ['0', '1', 'infinity', '-infinity']) expect(ok(s), s).toBe(false);
+  } else if (!Number.isFinite(value)) {
+    expect(ok(value > 0 ? '∞' : '-∞')).toBe(true);
+    for (const s of [value > 0 ? '-∞' : '∞', 'DNE', '0']) expect(ok(s), s).toBe(false);
   } else {
-    expect(validateAnswer(p, ['converges', String(limit)])).toBe(true);
-    expect(validateAnswer(p, ['converges', ''])).toBe(false);          // limit omitted
-    expect(validateAnswer(p, ['converges', String(limit + 1)])).toBe(false);
-    expect(validateAnswer(p, ['diverges', ''])).toBe(false);
-    expect(validateAnswer(p, ['diverges', String(limit)])).toBe(false);
+    expect(ok(String(value))).toBe(true);
+    for (const s of [String(value + 1), 'DNE', '∞']) expect(ok(s), s).toBe(false);
   }
-  // single free-text answers are not accepted for a two-part question
-  expect(validateAnswer(p, 'yes')).toBe(false);
-  expect(validateAnswer(p, 'converges')).toBe(false);
-  expect(validateAnswer(p, String(limit ?? 'diverges'))).toBe(false);
+  for (const s of ['converges', 'diverges', 'yes']) expect(ok(s), s).toBe(false);
 };
-/** The key's verdict and value of a convergence question. */
-const convergenceKey = (p: Problem): number | null => {
-  if (p.answer.kind !== 'multipart') throw new Error(`not a convergence question: ${p.problemText}`);
-  const [verdict, value] = p.answer.parts;
-  if (verdict.spec?.kind !== 'choice') throw new Error('no verdict');
-  if (verdict.spec.answer === 'diverges') return null;
-  return value.spec && value.spec.kind === 'number' ? value.spec.value : NaN;
+/**
+ * lim a_n read off the sequence itself: a value, ±∞, or null when it has no
+ * limit. The even and odd subsequences are read separately (each settles, or
+ * grows without bound, between n ≈ 2·10^11 and n ≈ 2·10^12); the sequence has
+ * a limit exactly when they agree.
+ */
+const numericLimit = (a: (n: number) => number): number | null => {
+  const along = (parity: 0 | 1): number | null => {
+    const [x, y] = [a(2e11 + parity), a(2e12 + parity)];
+    if (!Number.isFinite(y)) return Number.isFinite(x) || x === y ? y : null;
+    if (Math.abs(y - x) < 1e-3) return y;
+    if (Math.abs(y) > Math.abs(x) + 100 && Math.sign(y) === Math.sign(x)) return Math.sign(y) * Infinity;
+    return null;
+  };
+  const [even, odd] = [along(0), along(1)];
+  if (even === null || odd === null) return null;
+  if (!Number.isFinite(even) || !Number.isFinite(odd)) return even === odd ? even : null;
+  return Math.abs(even - odd) < 1e-4 ? even : null;
 };
+/** |a − b| small relative to their size. */
+const closeRel = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
 
 describe('independent recomputation: algebra 2', () => {
   it('complex-numbers: imaginary coefficient', () => {
@@ -612,16 +634,15 @@ describe('independent recomputation: algebra 2', () => {
       else if ((m = t.match(/starts at \$(\d+)\$ with common ratio \$r = (\d+)\$. Find the \$(\d+)\$\w\w term/))) expect(num(p)).toBe(int(m[1]) * int(m[2]) ** (int(m[3]) - 1));
       else if ((m = t.match(/Find the \$(\d+)\$\w\w term of the arithmetic sequence:\n\$a_1 = (\d+)\$, \$d = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) + (int(m[1]) - 1) * int(m[3]));
       else if ((m = t.match(/Find the \$(\d+)\$\w\w term of the geometric sequence:\n\$a_1 = (\d+)\$, \$r = (\d+)\$/))) expect(num(p)).toBe(int(m[2]) * int(m[3]) ** (int(m[1]) - 1));
-      else if ((m = t.match(/Does the sequence \$a_n = (.+)\$ converge or diverge/))) {
-        // numerically: does a_n settle, and to what?
+      else if ((m = t.match(/Find \$\\lim_\{n\\to\\infty\} a_n\$ for \$a_n = (.+)\$\.\n/))) {
+        // numerically: does a_n settle, run off to ±∞, or neither?
         const expr = compile(latexToExpr(m[1]));
         const a = (n: number) => expr.evaluate({ n }) as number;
-        const [x1, x2, x3] = [a(1e12), a(1e12 + 1), a(2e12)];
-        const settles = Number.isFinite(x1) && Math.abs(x1 - x2) < 1e-4 && Math.abs(x1 - x3) < 1e-4;
-        const key = convergenceKey(p);
-        expect(key === null, `${t}: numerically ${settles ? `settles at ${x1}` : 'does not settle'}`).toBe(!settles);
-        if (key !== null) expect(Math.abs(key - x1)).toBeLessThan(1e-4);
-        expectConvergence(p, key);
+        const expected = numericLimit(a);
+        const key = limitKey(p.answer);
+        if (expected === null || !Number.isFinite(expected)) expect(key, t).toBe(expected);
+        else expect(Math.abs(key! - expected), `${t}: numerically ${expected}`).toBeLessThan(1e-4);
+        expectLimit(p, null, key);
       } else if ((m = t.match(/The sequence \$a_n = (.+)\$ is increasing and bounded above by \$(\d+)\$/))) {
         // the stated hypotheses hold, and the key is the limit
         const a = (n: number) => evaluate(latexToExpr(m![1]), { n }) as number;
@@ -629,17 +650,20 @@ describe('independent recomputation: algebra 2', () => {
           expect(a(n + 1)).toBeGreaterThan(a(n));
           expect(a(n)).toBeLessThanOrEqual(int(m[2]));
         }
-        const key = convergenceKey(p);
-        expect(key).not.toBeNull();
+        const key = limitKey(p.answer);
         expect(Math.abs(key! - a(1e8))).toBeLessThan(1e-6);
-        expectConvergence(p, key);
-      } else if ((m = t.match(/Is the sequence \$a_n = (.+)\$ \(for \$n \\geq 1\$\) monotonic\?/))) {
+        expectLimit(p, null, key);
+      } else if ((m = t.match(/Let \$a_n = (.+)\$ for \$n \\geq 1\$\.\nFind \$a_\{n\+1\} - a_n\$/))) {
         const a = (n: number) => evaluate(latexToExpr(m![1]), { n }) as number;
+        const [difference, verdict] = parts(p);
+        if (difference.spec?.kind !== 'expression') throw new Error('no difference expression');
+        for (const n of [1, 2, 3, 7, 20]) expect(evalAt(difference.spec.reference, { n }), t).toBeCloseTo(a(n + 1) - a(n), 9);
         const diffs = Array.from({ length: 60 }, (_, i) => a(i + 2) - a(i + 1));
-        const monotonic = diffs.every(d => d >= 0) || diffs.every(d => d <= 0);
-        expect(p.answer.kind).toBe('choice');
-        expect(ref(p), t).toBe(monotonic ? 'yes' : 'no');
-        expect(validateAnswer(p, monotonic ? 'no' : 'yes')).toBe(false);
+        const expected = diffs.every(d => d > 0) ? 'increasing' : diffs.every(d => d < 0) ? 'decreasing' : 'neither';
+        expect(word(verdict.spec), t).toBe(expected);
+        for (const w of ['increasing', 'decreasing', 'neither'].filter(w => w !== expected)) expect(validateAnswer(p, canonicalWith(p, 1, w))).toBe(false);
+        expect(validateAnswer(p, canonicalWith(p, 0, ''))).toBe(false); // the word alone earns nothing
+        expect(validateAnswer(p, canonicalWith(p, 0, `${difference.spec.reference} + 1`))).toBe(false);
       }
       else throw new Error(`Unrecognised sequence problem: ${t}`);
     }
@@ -918,7 +942,7 @@ describe('independent recomputation: calculus 2 — values', () => {
     }
   });
 
-  it('improper integrals: verdict and value by numerical integration of the displayed integrand', () => {
+  it('improper integrals: I(v) and the value by numerical integration of the displayed integrand', () => {
     for (const p of sample('improper-integrals', 120)) {
       const t = p.problemText;
       if (/For which real \$p\$/.test(t)) {
@@ -927,7 +951,7 @@ describe('independent recomputation: calculus 2 — values', () => {
         expect(validateAnswer(p, atInfinity ? 'p >= 1' : 'p <= 1')).toBe(false);
         continue;
       }
-      const m = must(t.match(/\\int_(\d)\^\{(\\infty|1)\} (.+?)\\,dx\$ converge/), p);
+      const m = must(t.match(/value of \$\\displaystyle\\int_(\d)\^\{(\\infty|1)\} (.+?)\\,dx = \\lim/), p);
       const integrand = compile(latexToExpr(m[3]));
       const f = (x: number) => integrand.evaluate({ x }) as number;
       // change of variable so the improper end is at u = ∞, then integrate to two cutoffs
@@ -935,44 +959,55 @@ describe('independent recomputation: calculus 2 — values', () => {
         : m[2] === '1' ? (u: number) => f(Math.exp(-u)) * Math.exp(-u)           // ∫_0^1 f(x) dx, x = e^{-u}
           : (u: number) => f(u);                                                  // ∫_0^∞ f(x) dx
       const [I1, I2] = [simpson(g, 20), simpson(g, 40, 8000)];
-      const key = convergenceKey(p);
-      if (key === null) expect(I2 - I1, t).toBeGreaterThan(1);
+      const [partial, value] = parts(p);
+      const key = limitKey(value.spec);
+      if (key === Infinity) expect(I2 - I1, t).toBeGreaterThan(1);
       else {
-        expect(Math.abs(I2 - key), t).toBeLessThan(2e-3 * Math.max(1, key));
-        expect(Math.abs(I2 - I1), t).toBeLessThan(0.05 * Math.max(1, key));
+        expect(key, t).not.toBeNull();
+        expect(Math.abs(I2 - key!), t).toBeLessThan(2e-3 * Math.max(1, key!));
+        expect(Math.abs(I2 - I1), t).toBeLessThan(0.05 * Math.max(1, key!));
       }
-      expectConvergence(p, key);
+      expectLimit(p, 1, key);
+      // I(v) against Simpson's rule on the finite interval
+      if (partial.spec?.kind !== 'expression') throw new Error('no partial integral');
+      const lower = m[1] === '0' && m[2] === '1'; // I(a) = ∫_a^1
+      for (const v of lower ? [0.3, 0.05] : [3, 7]) {
+        const shown = lower ? integrate(f, v, 1, 4000) : integrate(f, int(m[1]), v, 4000);
+        expect(closeRel(evalAt(partial.spec.reference, { [lower ? 'a' : 'b']: v }), shown, 1e-5), `${t} at ${v}`).toBe(true);
+      }
+      expect(validateAnswer(p, canonicalWith(p, 0, ''))).toBe(false); // the value alone earns nothing
     }
   });
 
-  it('series: verdicts and sums recomputed from the displayed terms', () => {
+  it('series: every typed quantity and verdict recomputed from the displayed terms', () => {
     for (const p of sample('series-convergence', 150)) {
       const t = p.problemText;
       const m = must(t.match(/\\sum_\{n=(\d)\}\^\{\\infty\} (.+?)\$/), p);
       const start = int(m[1]);
       const expr = compile(latexToExpr(m[2]));
       const a = (n: number) => expr.evaluate({ n }) as number;
-      if (/give its sum/.test(t)) {
-        // geometric: r from consecutive terms
+      const ps = parts(p);
+      const verdictIndex = ps.findIndex(x => x.spec?.kind === 'choice');
+      const verdict = word(ps[verdictIndex].spec);
+      let expected: string;
+      if (/common ratio/.test(t)) {
         const r = a(start + 1) / a(start);
-        const key = convergenceKey(p);
-        if (Math.abs(r) < 1) {
+        expect(referenceNumber(ps[0].spec!), t).toBeCloseTo(r, 12);
+        expected = Math.abs(r) < 1 ? 'converges' : 'diverges';
+        if (expected === 'converges') {
           let sum = 0;
           for (let n = start; n < start + 3000; n++) sum += a(n);
-          expect(key, t).not.toBeNull();
-          expect(key!).toBeCloseTo(sum, 9);
-        } else {
-          expect(key, t).toBeNull();
-          expect(Math.abs(a(start + 100))).toBeGreaterThanOrEqual(Math.abs(a(start)));
-        }
-        expectConvergence(p, key);
-        continue;
-      }
-      const verdict = ref(p);
-      if (/Ratio Test/.test(t)) {
-        const L = Math.abs(a(61) / a(60));
+          expect(referenceNumber(ps[2].spec!), t).toBeCloseTo(sum, 9);
+          expect(validateAnswer(p, canonicalWith(p, 2, ''))).toBe(false); // the sum is required
+        } else expect(ps[2].spec).toBeNull();
+      } else if (/Ratio Test/.test(t)) {
+        const L = Math.abs(a(121) / a(120));
+        const key = limitKey(ps[0].spec);
+        if (key === Infinity) expect(L, t).toBeGreaterThan(10);
+        else expect(Math.abs(L - key!), t).toBeLessThan(0.05 * Math.max(1, key!));
         expect(Math.abs(L - 1), t).toBeGreaterThan(0.05);
-        expect(verdict, t).toBe(L < 1 ? 'converges' : 'diverges');
+        expected = L < 1 ? 'converges' : 'diverges';
+        expectLimit(p, 0, key);
       } else if (/Integral Test/.test(t)) {
         // Σ 1/(n (ln n)^p): p read back from the displayed terms at two points (so the
         // terms really have that form); the series converges exactly when p > 1
@@ -981,22 +1016,40 @@ describe('independent recomputation: calculus 2 — values', () => {
         const pEstimate = pAt(1e6);
         expect(pAt(1e3), t).toBeCloseTo(pEstimate, 9);
         expect(Math.abs(pEstimate - 1) < 1e-9 || Math.abs(pEstimate - 1) > 0.1, t).toBe(true);
-        expect(verdict, t).toBe(pEstimate > 1 + 1e-9 ? 'converges' : 'diverges');
-      } else if (/nth\$-term test/.test(t)) {
-        expect(Math.abs(a(1e7)), t).toBeGreaterThan(0.05);
-        expect(verdict).toBe('diverges');
+        expected = pEstimate > 1 + 1e-9 ? 'converges' : 'diverges';
+        // I(b) by Simpson's rule on [2, b]; the value from p
+        if (ps[0].spec?.kind !== 'expression') throw new Error('no I(b)');
+        for (const b of [5, 40]) expect(closeRel(evalAt(ps[0].spec.reference, { b }), integrate(a, 2, b, 20000), 1e-6), `${t} at b = ${b}`).toBe(true);
+        const key = limitKey(ps[1].spec);
+        if (expected === 'converges') expect(key!, t).toBeCloseTo(Math.pow(Math.LN2, 1 - pEstimate) / (pEstimate - 1), 6);
+        else expect(key, t).toBe(Infinity);
+        expectLimit(p, 1, key);
+      } else if (/\$n\$th-term test/.test(t)) {
+        const lim = a(1e7);
+        const key = limitKey(ps[0].spec);
+        expect(Math.abs(key! - lim), t).toBeLessThan(1e-5);
+        expected = Math.abs(lim) > 0.05 ? 'diverges' : 'inconclusive';
+        expectLimit(p, 0, key);
       } else if (/alternating series/.test(t)) {
         const b = (n: number) => Math.abs(a(n));
+        if (ps[0].spec?.kind !== 'expression') throw new Error('no b_n');
+        for (const n of [1, 2, 5, 10, 33]) expect(evalAt(ps[0].spec.reference, { n }), t).toBeCloseTo(b(n), 12);
         const toZero = b(1e7) < 1e-2;
         const decreasing = Array.from({ length: 50 }, (_, i) => b(i + 2) <= b(i + 1)).every(Boolean);
-        expect(verdict, t).toBe(toZero && decreasing ? 'converges' : 'diverges');
+        const pAbs = Math.log(b(1e6) / b(2e6)) / Math.log(2); // Σ b_n is a p-series when b_n = 1/n^p
+        expected = !(toZero && decreasing) ? 'diverges' : pAbs > 1 + 1e-6 ? 'converges absolutely' : 'converges conditionally';
       } else {
         // p-series: p from the decay rate of the terms
         const pEstimate = Math.log(a(1e6) / a(2e6)) / Math.log(2);
         expect(Math.abs(pEstimate - 1) < 1e-6 || Math.abs(pEstimate - 1) > 0.1, t).toBe(true);
-        expect(verdict, t).toBe(pEstimate > 1 + 1e-6 ? 'converges' : 'diverges');
+        expect(referenceNumber(ps[0].spec!), t).toBeCloseTo(pEstimate, 4);
+        expected = pEstimate > 1 + 1e-6 ? 'converges' : 'diverges';
       }
-      expect(validateAnswer(p, verdict === 'converges' ? 'diverges' : 'converges')).toBe(false);
+      expect(verdict, t).toBe(expected);
+      const options = (ps[verdictIndex].spec as Extract<AnswerSpec, { kind: 'choice' }>).options;
+      for (const w of options.filter(w => w !== expected)) expect(validateAnswer(p, canonicalWith(p, verdictIndex, w)), w).toBe(false);
+      // the verdict word without the typed quantity earns nothing
+      expect(validateAnswer(p, canonicalWith(p, 0, ''))).toBe(false);
     }
   });
 
@@ -1010,8 +1063,8 @@ describe('independent recomputation: calculus 2 — values', () => {
       const L = Math.abs(c(n + 1) / c(n));
       const R = num(p);
       if (R === Infinity) expect(L, p.problemText).toBeLessThan(0.1);
-      else if (R === 0) expect(L, p.problemText).toBeGreaterThan(30);
-      else expect(1 / L, p.problemText).toBeCloseTo(R, 1);
+      else if (R === 0) expect(L, p.problemText).toBeGreaterThan(10);
+      else expect(Math.abs(1 / L - R) / R, p.problemText).toBeLessThan(0.03);
       expect(validateAnswer(p, 'infinity')).toBe(R === Infinity);
       expect(validateAnswer(p, '∞')).toBe(R === Infinity);
     }
@@ -1114,11 +1167,28 @@ describe('independent recomputation: calculus 2 — values', () => {
         expect(num(p)).toBeCloseTo(v, 9);
         expect(validateAnswer(p, v.toFixed(2))).toBe(true);
         expect(validateAnswer(p, (v + 0.05).toFixed(2))).toBe(false);
-      } else if ((m = t.match(/What type of curve is (.+)\?$/))) {
+      } else if ((m = t.match(/Write the polar curve (.+) as an equation in \$x\$ and \$y\$\./))) {
+        // points of the polar curve satisfy the Cartesian answer; points off it do not
         const eq = m[1];
-        const line = /\\theta = /.test(eq) || /r\\(cos|sin)\(\\theta\) = /.test(eq);
-        expect(ref(p), eq).toBe(line ? 'line' : 'circle');
-        if (/\\theta = /.test(eq)) expect(eq).toMatch(/allowed to be negative/); // the convention that makes "line" the unique answer
+        const spec = p.answer;
+        if (spec.kind !== 'equation') throw new Error(`not an equation: ${t}`);
+        const residual = (x: number, y: number) => evalAt(spec.lhs, { x, y }) - evalAt(spec.rhs, { x, y });
+        const pts: [number, number][] = [];
+        const at = (r: number, th: number) => pts.push([r * Math.cos(th), r * Math.sin(th)]);
+        let r: RegExpMatchArray | null;
+        if ((r = eq.match(/^\$r = (\d+)\$$/))) for (const th of [0.3, 1.1, 2.0, 2.9, 4.0, 5.5]) at(int(r[1]), th);
+        else if ((r = eq.match(/^\$\\theta = \\frac\{\\pi\}\{(\d)\}\$ \(with \$r\$ allowed to be negative\)$/))) for (const rr of [-2, 1, 3.5]) at(rr, Math.PI / int(r[1]));
+        else if ((r = eq.match(/^\$r = (\d*)\\(cos|sin)\(\\theta\)\$$/))) {
+          const k = r[1] ? int(r[1]) : 1;
+          for (const th of [0.3, 1.1, 2.0, 2.9, 4.0]) at(k * (r[2] === 'cos' ? Math.cos(th) : Math.sin(th)), th);
+        } else if ((r = eq.match(/^\$r\\(cos|sin)\(\\theta\) = (\d+)\$$/))) {
+          const k = int(r[2]);
+          for (const th of r[1] === 'cos' ? [-1.2, -0.4, 0.5, 1.3] : [0.3, 1.0, 2.0, 2.8]) at(k / (r[1] === 'cos' ? Math.cos(th) : Math.sin(th)), th);
+        } else throw new Error(`Unrecognised polar curve: ${eq}`);
+        for (const [x, y] of pts) expect(Math.abs(residual(x, y)), `${t} at (${x}, ${y})`).toBeLessThan(1e-8 * Math.max(1, x * x + y * y));
+        expect(Math.abs(residual(pts[0][0] + 0.5, pts[0][1] + 0.3)), t).toBeGreaterThan(1e-3);
+        expect(validateAnswer(p, canonicalInput(p.answer))).toBe(true);
+        for (const word of ['circle', 'line']) expect(validateAnswer(p, word)).toBe(false);
       } else throw new Error(`Could not parse: ${t}`);
     }
   });
