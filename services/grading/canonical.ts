@@ -40,6 +40,9 @@ export const canonicalInput = (spec: AnswerSpec): string | string[] => {
     case 'number':
       if (!Number.isFinite(spec.value)) return spec.value > 0 ? 'infinity' : '-infinity';
       return spec.tolerance.kind === 'decimalPlaces' ? spec.value.toFixed(spec.tolerance.places) : num(spec.value);
+    case 'limit':
+      if (spec.value === null) return 'DNE';
+      return canonicalInput({ kind: 'number', value: spec.value, tolerance: spec.tolerance, extended: true });
     case 'fraction': return `${spec.numerator}/${spec.denominator}`;
     case 'expression': return spec.reference;
     case 'equation': return `${spec.lhs} = ${spec.rhs}`;
@@ -68,6 +71,11 @@ export const wrongInputs = (spec: AnswerSpec): (string | string[])[] => {
         out.push((Number(spec.value.toFixed(spec.tolerance.places)) + 2 * unit).toFixed(spec.tolerance.places));
       }
       return out;
+    }
+    case 'limit': {
+      if (spec.value === null) return ['0', 'infinity', '-infinity', 'diverges'];
+      if (!Number.isFinite(spec.value)) return [spec.value > 0 ? '-infinity' : 'infinity', 'DNE', '0', 'diverges'];
+      return [...wrongInputs({ kind: 'number', value: spec.value, tolerance: spec.tolerance, extended: true }), 'DNE', 'converges'];
     }
     case 'fraction': {
       // off by one, and off by one unit in the numerator (never equal to the value, even for 0)
@@ -123,6 +131,7 @@ export const wrongInputs = (spec: AnswerSpec): (string | string[])[] => {
 export const referenceNumber = (spec: AnswerSpec): number | null => {
   switch (spec.kind) {
     case 'number': return spec.value;
+    case 'limit': return spec.value;
     case 'fraction': return spec.numerator / spec.denominator;
     case 'anyOf': return referenceNumber(spec.options[0]);
     default: return null;
@@ -157,6 +166,8 @@ export const displayOf = (spec: AnswerSpec): string => {
       return spec.tolerance.kind === 'decimalPlaces'
         ? `$${spec.value.toFixed(spec.tolerance.places)}$`
         : `$${texNumber(spec.value)}$`;
+    case 'limit':
+      return spec.value === null ? 'Does not exist' : displayOf({ kind: 'number', value: spec.value, tolerance: spec.tolerance, extended: true });
     case 'fraction':
       return spec.denominator === 1 ? `$${spec.numerator}$`
         : `$${spec.numerator < 0 ? '-' : ''}\\frac{${Math.abs(spec.numerator)}}{${spec.denominator}}$`;

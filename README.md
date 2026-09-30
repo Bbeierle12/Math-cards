@@ -41,6 +41,11 @@ answer the grader does not understand. The kinds:
     answers a different instruction.
   - `absolute` / `relative`: explicit tolerances.
   - `unit: 'degree'` allows a typed `°` (or "degrees") after the number.
+- **limit** — the limit of a sequence or the value of an improper integral,
+  typed: a number, `∞` / `-∞` (also `inf`, `infinity`), or `DNE` / "does not
+  exist". One input serves all three, so its shape never reveals whether the
+  limit is finite, infinite or nonexistent; `∞` is not `DNE`, and "diverges"
+  is not an answer.
 - **fraction** — an exact rational, compared in BigInt arithmetic
   (`n·D = N·d`). Any equivalent fraction is accepted unless `lowestTerms` is
   set, for "simplify" tasks, where `14/12` for `7/6` is wrong.
@@ -64,6 +69,9 @@ answer the grader does not understand. The kinds:
     **confirmation stream** keyed by the submission can only reject: a
     genuine identity holds everywhere, so a correct answer is never affected,
     but a function built to vanish on the published primary points is caught.
+  - Each sampled point is judged at its own magnitude (relative tolerance
+    10⁻⁸ of the larger side there, at least 10⁻⁸ absolute), so a large value
+    at one point (e^{4b} at b = 6) cannot excuse an error elsewhere.
   - No symbolic `simplify(user − reference) = 0` shortcut: it would identify
     `x/x` with `1`.
   - An assignment `u = x² + 5` is not an expression. It is accepted only when
@@ -86,13 +94,16 @@ answer the grader does not understand. The kinds:
   for ∫tan x (undefined where cos x < 0); `x ln|x| − x` passes for ∫ln x (only
   x > 0 is compared); `+ C` is allowed. The spec's reference antiderivative is
   an independent second vote.
-- **choice** — one of a closed list of options, chosen with buttons.
-- **text** — a word from a closed vocabulary (`circle`, `∞`).
+- **choice** — a word from a closed list ("converges", "increasing",
+  "inconclusive"), **typed**; there are no answer buttons. A verdict word is
+  never an answer on its own: it always sits in a multipart answer beside the
+  typed quantity that decides it (the ratio-test limit L, the exponent p, the
+  common ratio r, bₙ = |aₙ|, aₙ₊₁ − aₙ, the partial integral I(b)), so a guess
+  earns nothing.
+- **text** — a word from a closed vocabulary, typed.
 - **multipart** — graded all-or-nothing. A part may be conditional
-  (`when: { part, equals }`): "Does it converge? If so, to what?" is a verdict
-  choice plus a limit that is asked for only when "converges" is chosen; every
-  such question has this shape, so the shape reveals nothing, and a verdict
-  without its limit earns no credit.
+  (`when: { part, equals }`): a geometric series asks for its common ratio, the
+  verdict, and the sum only after "converges" is typed.
 - **anyOf** — any one of several acceptable answers of the same kind (e.g. the
   sine or the cosine substitution).
 
@@ -166,7 +177,13 @@ the whole history.
   structural checks and named invariants hold, each problem replays from its
   provenance, the canonical answer passes the production grader and every
   must-reject input fails; the independent recomputation suite runs on the
-  same number of seeds.
+  same number of seeds. It also runs the **guessability gate**
+  (`services/learning/guessing.gate.ts`): simulated students who ignore a
+  problem's numbers (typing, per problem type, the answer most often right,
+  or random verdict words) must reach proficiency in at most 1% of runs of
+  200 attempts, under the real scheduler and mastery rules. Most topics are
+  cleared by a proof (a Cramér–Lundberg bound on the evidence random walk)
+  rather than by simulation.
 - `npm run oracle` — development-only CAS oracle (needs `python3` with
   `sympy`): `scripts/oracle/export.eval.ts` turns generated problems into
   symbolic claims (derivatives, antiderivatives, definite and improper

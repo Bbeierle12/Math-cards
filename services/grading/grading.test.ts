@@ -191,6 +191,23 @@ describe('sampling: problem-seeded primary points, submission-keyed confirmation
   });
 });
 
+describe('tolerance is judged at each sample point', () => {
+  // A single global scale (the largest value at any point) let e^{4x} ≈ 10^10 at x = 6
+  // excuse an error of 1 everywhere: "(1/2)(e^{4b} − 1) + 1" was accepted for I(b).
+  it('a large value at one point does not excuse an error at another', () => {
+    expect(expressionsEquivalent('(1/2)*(e^(4*x) - 1) + 1', '(1/2)*(e^(4*x) - 1)')).toBe(false);
+    expect(expressionsEquivalent('e^(5*x) + x', 'e^(5*x)')).toBe(false);
+    expect(expressionsEquivalent('(1/2)*(e^(4*x) - 1)', 'e^(4*x)/2 - 1/2')).toBe(true);
+    expect(expressionsEquivalent('(1/2)*(e^(4*b) - 1) + 1', '(1/2)*(e^(4*b) - 1)', {
+      domain: { intervals: [{ lo: 0, hi: Infinity, loClosed: false, hiClosed: false }] }, domainPolicy: 'onDeclaredDomain',
+    })).toBe(false);
+  });
+  it('an equation is not satisfied by a residual that is only small next to a large one elsewhere', () => {
+    expect(expressionsEquivalent('y = e^(4*x) + 1', 'y = e^(4*x)')).toBe(false);
+    expect(expressionsEquivalent('2*y = 2*e^(4*x)', 'y = e^(4*x)')).toBe(true);
+  });
+});
+
 describe('domain: same partial function (pathological corpus)', () => {
   // submission, reference, verdict
   const corpus: [string, string, boolean][] = [

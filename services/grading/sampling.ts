@@ -110,8 +110,10 @@ export interface ComparisonOptions {
 export const comparePoints = (
   user: Compiled, reference: Compiled, vars: string[], pts: number[], opts: ComparisonOptions = {},
 ): PointVerdict => {
+  // Each difference is judged against the magnitude at its own point: a single
+  // global scale would let e^{4x} at x = 6 (≈ 10^10) excuse an error of 1 at x = 0.
   const diffs: number[] = [];
-  let scale = 1;
+  const scales: number[] = [];
   for (let i = 0; i < pts.length; i++) {
     const scope = vars.length === 0 ? { ...(opts.fixed ?? {}) } : scopeAt(vars, pts, i, opts.fixed);
     if (opts.domainGuard && evalReal(opts.domainGuard, scope) === null) continue;
@@ -125,15 +127,15 @@ export const comparePoints = (
       if ((rv === null) !== (uv === null)) return 'unequal'; // different domains
       if (rv === null || uv === null) continue;               // both undefined: consistent
     }
-    scale = Math.max(scale, Math.abs(rv), Math.abs(uv));
+    scales.push(Math.max(1, Math.abs(rv), Math.abs(uv)));
     diffs.push(uv - rv);
     if (vars.length === 0) break;
   }
   if (diffs.length === 0) return 'insufficient';
   if (vars.length > 0 && diffs.length < MIN_VALID_POINTS) return 'insufficient';
   const ok = opts.upToConstant
-    ? diffs.every(d => Math.abs(d - diffs[0]) <= REL_TOL * scale)
-    : diffs.every(d => Math.abs(d) <= REL_TOL * scale);
+    ? diffs.every((d, i) => Math.abs(d - diffs[0]) <= REL_TOL * Math.max(scales[i], scales[0]))
+    : diffs.every((d, i) => Math.abs(d) <= REL_TOL * scales[i]);
   return ok ? 'equal' : 'unequal';
 };
 
@@ -148,7 +150,6 @@ export const proportionalOnPoints = (
   if (vars.length === 0) return 'insufficient'; // an equation with no unknowns is not an answer
   let ratio: number | null = null;
   let valid = 0;
-  let scale = 1;
   for (let i = 0; i < pts.length; i++) {
     const scope = scopeAt(vars, pts, i);
     const rv = evalReal(reference, scope);
@@ -156,7 +157,8 @@ export const proportionalOnPoints = (
     if ((rv === null) !== (uv === null)) return 'unequal';
     if (rv === null || uv === null) continue;
     valid++;
-    scale = Math.max(scale, Math.abs(rv), Math.abs(uv));
+    // "zero" is judged at this point's own magnitude, never against a larger value elsewhere
+    const scale = Math.max(1, Math.abs(rv), Math.abs(uv));
     const rZero = Math.abs(rv) <= REL_TOL * scale;
     const uZero = Math.abs(uv) <= REL_TOL * scale;
     if (rZero !== uZero) return 'unequal'; // different solution sets

@@ -152,6 +152,13 @@ export type AnswerSpec =
    */
   | { kind: 'number'; value: number; tolerance: NumericTolerance; form?: NumberForm; unit?: 'degree'; extended?: boolean }
   /**
+   * A limit (of a sequence, a function or an improper integral), typed: a
+   * real number, ±∞, or `null` when the limit does not exist ("DNE"). One
+   * control serves every value, so its shape never reveals whether the limit
+   * is finite, infinite or nonexistent.
+   */
+  | { kind: 'limit'; value: number | null; tolerance: NumericTolerance }
+  /**
    * An exact rational entered as numerator/denominator. Any equivalent
    * fraction is accepted unless `lowestTerms` is set (for "simplify" tasks).
    */
@@ -182,7 +189,7 @@ export type AnswerSpec =
   | { kind: 'finiteSet'; elements: number[] }
   /** Any antiderivative of `integrand` on its domain. `reference` is a second vote. */
   | { kind: 'antiderivative'; integrand: string; variable: string; reference?: string }
-  /** One of a closed list of options, chosen with buttons. */
+  /** A word from a closed list of options, typed (e.g. "converges"); never on its own, always beside a typed quantity. */
   | { kind: 'choice'; options: string[]; answer: string }
   /** A word from a closed vocabulary, typed (e.g. "circle"). */
   | { kind: 'text'; accepted: string[] }

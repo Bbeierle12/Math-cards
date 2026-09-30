@@ -7,16 +7,29 @@ import { canonicalInput } from '../services/grading';
 import { GENERATORS } from '../services/generators';
 import { AnswerSpec, Problem } from '../types';
 
-const convergence = (want: 'converges' | 'diverges' | 'any' = 'any'): Problem[] => {
+/** Geometric-series questions: common ratio, verdict word, and the sum (asked only after "converges"). */
+const geometric = (want: 'converges' | 'diverges' | 'any' = 'any'): Problem[] => {
   const out: Problem[] = [];
-  for (let i = 0; i < 400 && out.length < 10; i++) {
-    const p = generateProblem('sequences', {}, `ai-${i}`);
-    if (p.answer.kind !== 'multipart') continue;
-    const verdict = p.answer.parts[0].spec;
+  for (let i = 0; i < 600 && out.length < 10; i++) {
+    const p = generateProblem('series-convergence', {}, `ai-${i}`);
+    if (p.templateId !== 'geometric' || p.answer.kind !== 'multipart') continue;
+    const verdict = p.answer.parts[1].spec;
     if (want === 'any' || (verdict?.kind === 'choice' && verdict.answer === want)) out.push(p);
   }
-  if (out.length === 0) throw new Error('no multipart sequence problem generated');
+  if (out.length === 0) throw new Error('no geometric series problem generated');
   return out;
+};
+
+/** Sequence-limit questions whose limit is finite, infinite, or does not exist. */
+const limitProblem = (want: 'finite' | 'infinite' | 'none'): Problem => {
+  for (let i = 0; i < 2000; i++) {
+    const p = generateProblem('sequences', {}, `al-${i}`);
+    if (p.answer.kind !== 'limit') continue;
+    const v = p.answer.value;
+    const kind = v === null ? 'none' : Number.isFinite(v) ? 'finite' : 'infinite';
+    if (kind === want) return p;
+  }
+  throw new Error(`no ${want} limit generated`);
 };
 
 describe('toSubmission', () => {
@@ -27,22 +40,26 @@ describe('toSubmission', () => {
     expect(toSubmission(p, [' 3 ', '4'])).toBe('3/4');
   });
 
-  it('requires the limit only when "converges" is selected', () => {
-    const [p] = convergence();
-    expect(emptyValues(p)).toEqual(['', '']);
-    expect(toSubmission(p, ['', ''])).toBeNull();
-    expect(toSubmission(p, ['converges', ''])).toBeNull();
-    expect(toSubmission(p, ['converges', ' 0 '])).toEqual(['converges', '0']);
-    // a limit typed before switching to "diverges" is dropped, not graded
-    expect(toSubmission(p, ['diverges', '5'])).toEqual(['diverges', '']);
+  it('requires the sum only when "converges" is typed', () => {
+    const [p] = geometric();
+    expect(emptyValues(p)).toEqual(['', '', '']);
+    expect(toSubmission(p, ['', '', ''])).toBeNull();
+    expect(toSubmission(p, ['', 'diverges', ''])).toBeNull();          // the ratio is always required
+    expect(toSubmission(p, ['1/2', 'converges', ''])).toBeNull();
+    expect(toSubmission(p, ['1/2', 'converges', ' 4 '])).toEqual(['1/2', 'converges', '4']);
+    // a sum typed before switching to "diverges" is dropped, not graded
+    expect(toSubmission(p, ['2', 'diverges', '5'])).toEqual(['2', 'diverges', '']);
   });
 
-  it('convergent and divergent questions have the same shape', () => {
-    const [c] = convergence('converges');
-    const [d] = convergence('diverges');
+  it('the shape of the answer never reveals it', () => {
+    const [c] = geometric('converges');
+    const [d] = geometric('diverges');
     expect(slotCount(c)).toBe(slotCount(d));
-    expect(toSubmission(d, ['converges', '1'])).toEqual(['converges', '1']);
-    expect(validateAnswer(d, ['converges', '1'])).toBe(false);
+    expect(validateAnswer(d, [canonicalInput(d.answer)[0], 'converges', '1'])).toBe(false);
+    // a finite, infinite or nonexistent limit is typed into the same single box
+    const limits = [limitProblem('finite'), limitProblem('infinite'), limitProblem('none')];
+    expect(new Set(limits.map(slotCount))).toEqual(new Set([1]));
+    expect(new Set(limits.map(q => JSON.stringify(symbolsFor(q.answer)))).size).toBe(1);
   });
 
   it('passes single answers through unchanged', () => {
@@ -71,10 +88,12 @@ describe('toSubmission', () => {
 
 describe('input preview and symbol keys', () => {
   it('symbol keys depend on the answer kind, never on the instance', () => {
-    const [c] = convergence('converges');
-    const [d] = convergence('diverges');
+    const [c] = geometric('converges');
+    const [d] = geometric('diverges');
     const keys = (p: Problem) => (p.answer.kind === 'multipart' ? p.answer.parts.map(part => symbolsFor(part.spec)) : [symbolsFor(p.answer)]);
     expect(keys(c)).toEqual(keys(d));
+    const limits = [limitProblem('finite'), limitProblem('infinite'), limitProblem('none')];
+    expect(limits.map(keys)).toEqual([keys(limits[0]), keys(limits[0]), keys(limits[0])]);
     expect(symbolsFor(generateProblem('addition', {}, 'k').answer)).toEqual([]);   // evaluated arithmetic: digits only
     for (let i = 0; i < 20; i++) {
       const p = generateProblem('power-series', {}, `k-${i}`);

@@ -85,13 +85,14 @@ export const systemsOfEquations: GeneratorDef = {
 
 export const exponents: GeneratorDef = {
   topicId: 'exponents',
-  version: 2,
+  version: 3,
   templates: ['product', 'quotient', 'power'],
   generate: (ctx) => {
-    const base = ctx.int(2, 5);
-    const exp1 = ctx.int(2, 4);
-    const exp2 = ctx.int(2, 4);
+    // wide exponent ranges, so that no single exponent is the answer to many problems
     const rule = ctx.pick(['product', 'quotient', 'power'] as const);
+    const base = ctx.int(2, 9);
+    const exp1 = rule === 'power' ? ctx.int(2, 7) : ctx.int(2, 12);
+    const exp2 = rule === 'power' ? ctx.int(2, 6) : ctx.int(2, 12);
     const forms = {
       product: {
         text: `$${base}^{${exp1}} \\times ${base}^{${exp2}}$`, answer: exp1 + exp2,
